@@ -1,7 +1,9 @@
 # myreminder 計画書
 
 > 完全個人用の、大学の課題・タスクリマインダー。
-> 作成: 2026-10-11 / 更新: 2026-10-11(取り込みを承認制に、すきま時間タスクを廃止し余裕リストを追加、行動科学とアルゴリズムの調査を反映)/ 状態: たたき台(未決事項は末尾)
+> 作成: 2026-10-11 / 更新: 2026-10-11(キャパの学習、作業記録の修正、webhook、デプロイ方法を追加)/ 状態: 仕様はほぼ確定、実装中(未決事項は末尾)
+>
+> タスクは GitHub の issue で管理する(https://github.com/tomo-x7/myreminder/issues)。§5 の各行が1つの issue に対応する。
 >
 > - 決定の経緯: [decisions.md](decisions.md)
 > - 調査メモ: [research/](research/)
@@ -34,6 +36,7 @@
 | 見積もりが楽観的 | 着手遅れ→徹夜 | 実績から見積もりを較正する(§3.4) |
 | 通知は無視しないが集中を削がれる | 本人申告 | 通知をまとめる、1日の上限、切れ目に送る、Discord 風のステータスで抑制 |
 | 仕組みづくりの手間は嫌うが、件数が少ないので登録の手間は惜しまない。ただし重複などのノイズは嫌う | 本人申告 | **手動登録が主役**。自動取り込みは承認制にする |
+| 死ぬ気でやれば何時間でもできる。1日の上限は決めたくない | 本人申告 | 固定の上限は設けず、普段のキャパを実績から学習する。普段のキャパで間に合わないときは「本気が必要」と明示する(§3.3) |
 
 環境: メインのスマホは Android。PC は Linux(CachyOS / fish)。pnpm、biome、Tailwind を使う。
 
@@ -111,37 +114,55 @@
 - **Android の共有メニューから PWA に送る**(Web Share Target)。テキストや URL を共有するだけで、上の貼り付けと同じ流れに入る
 - (後回し)スライドの写真 → 視覚モデルで抽出
 
-### 3.3 時間割・予定・睡眠・作業上限
+### 3.3 時間割・予定・睡眠・キャパ
 
 - 時間割: 曜日×時限で登録。学期の期間つき
 - 単発の予定(バイトなど)
-- 睡眠時間帯(既定 1:00–8:00 など)
-- **1日の作業上限**(平日/休日)。計画はこの範囲でしか組まない。最小の労力で済ませたい本人の方針を数値にしたもの
-- 以上から「使える時間」を作り、計画の基準にする
+- 睡眠時間帯(既定 1:00–8:00 など)。どのキャパにも含めない → **徹夜を構造的に禁止**
+- **キャパは固定の上限を設けず、2段階で考える**:
+
+| キャパ | 中身 | 使いみち |
+|---|---|---|
+| 普段のキャパ | 実績から学習した、1日に無理なく作業できる時間 | おすすめ着手時刻、余裕リスト、通常の計画 |
+| 本気のキャパ | 睡眠と予定を除いた空き時間すべて | 間に合うかどうかの判定 |
+
+- 普段のキャパの学習:
+  - 直近4週間の、作業した日の1日あたり作業時間の上のほう(P75 程度)を使う。作業しなかった日は除く(余裕があってやらなかっただけの日でキャパを低く見積もらないため)
+  - 平日と休日は分ける
+  - 初期値は平日 3h / 休日 5h(仮)
+  - 詳細は 2-1 で詰める
+- 判定:
+  - 普段のキャパで間に合う → 通常
+  - 普段のキャパでは無理だが、本気なら間に合う → 「本気が必要」として危険扱い
+  - 本気でも無理 → 致命扱いにして、捨てる候補を出す
 
 ### 3.4 見積もり(純粋関数。テスト対象)
 
 - 初期値は AI が推定する(似たタスクの実績を few-shot で渡す)か、手入力
 - 入力欄の横に、同じ種類の直近の実績を出す(参照クラス)
 - 学習の仕組み(詳細は [research/algorithms.md](research/algorithms.md#見積もり計画錯誤への対策)):
-  - 完了したタスクの `r = 実績 / 見積もり`。実績は作業中タイマーの合計
+  - 完了したタスクの `r = 実績 / 見積もり`。実績は「作業中」ステータスだった時間の合計(§3.7)
   - `ln r` を正規分布とみなし、正規–逆χ² で更新する(事前 μ0 = ln 1.3、σ0 = 0.5、擬似観測 2〜4件)
   - 区分は種類 × サイズ(〜1h / 1–3h / 3h〜)。データが少ない区分は全体の値に寄せる(縮小推定、k ≈ 5)。新しい実績ほど重く(半減期 15件)
   - **計画に使うのは P80** = 見積もり × exp(μ + 0.84σ)(下限は ×1.0)
 - 初期状態ではかなり保守的(約2倍)になる。実績がたまるほど本人に合ってくる
 - 残りの見積もりは、作業中を終えるときの「どれくらい進んだ?」(25/50/75/100%)で更新する
+- 確認待ちの作業記録(§3.7 の消し忘れ)は、確定するまで学習に使わない
 
 ### 3.5 スケジューラ(純粋関数。テスト対象)
 
 詳細と出典は [research/algorithms.md](research/algorithms.md)。
 
-1. **使える時間**: 14日先まで。空き時間のうち1日の作業上限までを使える時間とする(睡眠時間帯は含めない → **徹夜を構造的に禁止**)
+1. **使える時間**: 14日先まで。普段のキャパと本気のキャパ(§3.3)の2本を作る
 2. **締切ごとの余裕**(需要上限テスト): `s_i = 使える時間(今, d_i) − Σ{d_j ≤ d_i} 残りの P80`
+   - 普段のキャパと本気のキャパの両方で計算する
    - **山場** = 余裕が最小になる締切。「11/18 の週が山場、余裕 1.5h」のように見せる
 3. **具体的な配置**: EDF を締切側から逆向きに回し(ALAP / Earliest Deadline Last)、各タスクを使える時間に詰める
    - 最小の作業単位と公開日時を守る。守れない場合は EDF+修正パスで対処する(n ≤ 30 なら十分)
    - 結果として、各タスクの**着手デッドライン**(P80 で計算)と、おすすめ着手時刻(着手デッドライン − マージン)が出る
-4. **間に合わない場合**(どこかの s_i < 0): Moore–Hodgson で「間に合わないタスクの数が最小になる捨て方」を出す。手を抜く・延長を頼む候補として提示する
+4. **間に合わない場合**:
+   - 普段のキャパで s_i < 0 になる → 「本気が必要」と表示する
+   - 本気のキャパでも s_i < 0 になる → Moore–Hodgson で「間に合わないタスクの数が最小になる捨て方」を出す。手を抜く・延長を頼む候補として提示する
 5. **リスクレベル**(タスクごと): 着手デッドラインまでの、使える時間で測った余裕を使う。CCPM のバッファ消費率のように緑・黄・赤で見せる(§3.8)
 6. 再計画のタイミング: タスクや予定の変更時と、cron の毎時処理
 
@@ -165,19 +186,28 @@
   1. まとまった時間が要るタスク(将来の空き時間は細切れになりやすい)
   2. 見積もりが不確かなタスク(早く始めると読みが当たる)
   3. 山場の手前にあるタスク
-- 余裕リストからやった作業を、その日の作業上限に含めるかどうかは 2-1 で詰める
+- 計算には普段のキャパを使う。余裕リストからやった作業を、その日の普段のキャパの消費に数えるかどうかは 2-1 で詰める
 
 ### 3.7 ステータス(Discord 風・手動+自動ルール)
 
 | ステータス | 通知の扱い | 自動で切り替わる条件 |
 |---|---|---|
 | 🟢 通常 | 通常どおり | — |
-| 🛠 作業中: {タスク} | 致命以外は保留。タイマーで計測し、終了時に「どれくらい進んだ?」で残りを更新 | 通知の「始める」ボタン |
+| 🛠 作業中: {タスク} | 致命以外は保留。作業中だった時間がそのまま作業記録になる。終了時に「どれくらい進んだ?」で残りを更新 | 通知の「始める」ボタン |
 | 🔴 取り込み中 | 致命以外は保留 | 時間割の授業中、バイト中 |
 | 🌙 おやすみ | すべて保留して朝のダイジェストにまとめる | 睡眠時間帯 |
 
-- 手動で設定するときは期限つき(30分 / 1時間 / 今日中 / 解除するまで)
+- 手動で設定するときは期限つき(30分 / 1時間 / 今日中 / 解除するまで)。「作業中」だけは期限なしで、終了を押すまで続く
 - 保留が明けたら、保留中の通知は「保留中 N件」の1通にまとめる(連続で鳴らさない)
+- 別途スマホのタイマーなどを使う必要はない。「作業中」にする操作がそのまま計測になる
+
+**「作業中」の消し忘れ対策**(多発する前提で作る):
+
+- 作業中が、そのタスクの残り見積もり(P80)を超えた時点、または開始から3時間たった時点で、「まだやってる?」を1回だけ確認する([続けてる] [○分前に終わった])
+- 睡眠時間帯に入っても作業中のままなら「確認待ち」にする。次にアプリを開いたときに「いつ終わった?」を聞く
+  - 候補: 最後にアプリを操作した時刻 / 開始+見積もり / 手入力
+- 作業記録は後から編集・削除・追加できる(一覧から日ごとに見られる)
+- 確認待ちの記録は、確定するまで見積もりとキャパの学習に使わない
 
 ### 3.8 通知ポリシー
 
@@ -195,8 +225,8 @@
 |---|---|---|
 | 余裕 | 余裕が必要時間の2倍超 | 個別通知なし。ダイジェストと余裕リストに載るだけ |
 | 注意 | それ以下 | 本人が決めた着手時刻(なければおすすめ着手時刻)に1回+最初の一歩 |
-| 危険 | 着手デッドラインが24h以内 | 着手デッドラインに向けて、次の切れ目ごとに。文面は毎回変える |
-| 致命 | 締切3h以内で未提出 | 作業中・取り込み中でも通す(おやすみ中は設定次第)。FCM の `Urgency: high` |
+| 危険 | 普段のキャパでは間に合わない(本気が必要)、または着手デッドラインが24h以内 | 着手デッドラインに向けて、次の切れ目ごとに。文面は毎回変える |
+| 致命 | 本気のキャパでも間に合わない、または締切3h以内で未提出 | 作業中・取り込み中でも通す(おやすみ中は設定次第)。FCM の `Urgency: high` |
 
 **上限と例外**:
 
@@ -252,13 +282,25 @@
 - 日本語の品質はドキュメントに記載がない → 実際の告知文で試して選ぶ
 - 通知の送信処理(cron)では AI を呼ばない。文面は登録時やダイジェストの生成時に作って保存しておく
 
+### 3.11 Discord / Slack への報告(webhook)
+
+本人の要望: 課題が終わったことと、その日に課題に使った時間を投げたい。
+
+- 設定画面で webhook URL を登録する(種類は Discord / Slack)。複数登録でき、イベントごとに ON/OFF できる
+- イベント:
+  - 提出済みにしたとき: `✅ 情報倫理 レポート 提出(作業 2h10m / 見積もり 1h30m)`
+  - 1日の終わり(夜のダイジェストの時刻): `今日の課題時間 3h20m — 情報倫理 レポート 2h / 線形代数 演習 1h20m`。作業がなかった日は送らない
+- 送る形式: Discord は `{ "content": ... }`、Slack は `{ "text": ... }`
+- **webhook URL は秘密情報**: D1 に保存し、リポジトリには置かない(public リポジトリのため)。画面では末尾だけ表示する
+- 確認待ちの作業記録(§3.7)がある日は、1日の報告に「(未確定あり)」と付ける
+
 ## 4. 技術スタック
 
 ### 4.1 構成
 
 ```
                 ┌──────── Cloudflare Access (Zero Trust) ─────────┐
-Android PWA ──▶ │ 独自ドメイン                                      │
+Android PWA ──▶ │ reminder.tomo-x.win                               │
 (FCM SW)        │  ├─ 静的アセット (web/dist, SPA フォールバック)      │
                 │  └─ /api/* ──▶ Worker (Hono)                      │
 Apps Script ──▶ │       /api/ingest/* は Service Token (Service Auth) │
@@ -267,7 +309,8 @@ WebClass 拡張 ─▶ │                                                   │
                        Worker: fetch / scheduled (cron 毎分)
                          ├─ D1 (drizzle)
                          ├─ Workers AI
-                         └─ FCM HTTP v1 ──▶ 端末
+                         ├─ FCM HTTP v1 ──▶ 端末
+                         └─ webhook ──▶ Discord / Slack
 ```
 
 - **Worker は1つ**: Workers Static Assets で SPA を配信し、`/api/*` だけ Worker を通す(`run_worker_first: ["/api/*"]`)
@@ -305,7 +348,7 @@ export default {
 	"main": "src/index.ts",
 	"workers_dev": false, // Access を迂回させない
 	"preview_urls": false, // 同上(workers_dev だけでは塞がらない)
-	"routes": [{ "pattern": "<独自ドメイン>", "custom_domain": true }],
+	"routes": [{ "pattern": "reminder.tomo-x.win", "custom_domain": true }],
 	"assets": {
 		"directory": "../web/dist",
 		"not_found_handling": "single-page-application",
@@ -353,23 +396,37 @@ export default {
 
 - 時刻は D1 に epoch ミリ秒(integer)で保存する。日付の境界は JST(+09:00 固定、夏時間なし)で計算する
 - 開発: `pnpm web dev`(Vite)と `pnpm worker dev`(wrangler)を並行で起動し、Vite の proxy で `/api` を 8787 に流す
-- デプロイ: `pnpm -F web build && pnpm -F worker deploy`
 - lint・フォーマット: biome(既存の shared 設定)
+- **リポジトリは public**: 秘密情報はコミットしない
+  - Service Token、FCM のサービスアカウント、webhook URL は、Worker の secret か D1 に置く
+  - Firebase の Web 設定と VAPID 公開鍵は公開してよい値なので、コミットしてよい
+
+**デプロイ**(GitHub Actions):
+
+- `main` への push で動く: 型チェック・biome → `web` のビルド → `wrangler d1 migrations apply --remote` → `wrangler deploy`
+- 使うのは `cloudflare/wrangler-action`
+- 本人が一度だけやること:
+  - GitHub の secret に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` を登録する
+  - Worker の secret(FCM のサービスアカウントなど)を `wrangler secret put` で登録する
+- 手順は `docs/setup.md` にまとめる
+- 手元から `pnpm -F web build && pnpm -F worker deploy` でもデプロイできる
 - テスト: vitest で `worker/src/planner/` の純粋関数(見積もり、スケジューラ、余裕リストのスコア)だけ。必要になったら取り込みの正規化と重複排除も足す。それ以外は書かない
 
 ### 4.6 ディレクトリ
 
 ```
 myreminder/
+├─ .github/workflows/   deploy.yml(main への push でデプロイ)
 ├─ ai-docs/             エージェント向けのコンテキスト(計画書、決定ログ、調査メモ)
+├─ docs/                人間向けの手順書(Cloudflare / Firebase / Apps Script のセットアップ)
 ├─ web/                 Vite+React SPA / PWA / FCM の Service Worker
 ├─ worker/
 │  ├─ src/
 │  │  ├─ index.ts       fetch / scheduled
-│  │  ├─ routes/        tasks, ingest, inbox, status, schedule, push, settings
+│  │  ├─ routes/        tasks, sessions, ingest, inbox, status, schedule, push, webhooks, settings
 │  │  ├─ db/schema.ts   drizzle
 │  │  ├─ planner/       純粋関数: estimate, capacity, schedule, slack-gain(テストする場所)
-│  │  ├─ notify/        policy(誰にいつ何を送るか), fcm(送信とトークンキャッシュ)
+│  │  ├─ notify/        policy(誰にいつ何を送るか), fcm(送信とトークンキャッシュ), webhook
 │  │  ├─ ai/            parse(手動登録), estimate, prompts
 │  │  └─ ingest/        normalize, dedupe, diff
 │  └─ migrations/
@@ -385,14 +442,15 @@ myreminder/
 | `courses` | id, name, aliases(取り込み元ごとの表記揺れ), color |
 | `tasks` | id, course_id, title, category, due_at, release_at?, estimate_min, estimate_source, min_block_min, status, planned_start_at(本人が決めた着手時刻), first_step, note, submitted_at, created_at, updated_at |
 | `task_due_history` | task_id, old_due_at, new_due_at, changed_at, cause(manual/ingest) |
-| `sessions` | id, task_id, kind(planned/actual), start_at, end_at, progress |
+| `sessions` | id, task_id, kind(planned/actual), start_at, end_at, progress, review(confirmed/needs_review: 消し忘れの確認待ち), edited(手で直したか) |
 | `busy_blocks` | id, kind(class/job/event), weekday?, start, end, date_from?, date_to?, label |
 | `ingest_items` | id, source, external_id(source との組で一意), title, course_name, due_at, url, remote_state(提出状態など), payload_json, status(pending/linked/ignored), task_id?, pending_change_json?, first_seen_at, last_seen_at |
 | `user_status` | mode, task_id?, until(1行のみ) |
 | `notifications` | id, task_id?, kind(digest/start/risk/critical/due_change/submit_check/evening/weekly/inbox), priority, scheduled_at, status(pending/sent/deferred/merged/skipped), payload |
 | `push_tokens` | token, label, created_at, last_seen_at |
+| `webhooks` | id, kind(discord/slack), url(秘密情報), events(submitted/daily_summary), enabled, last_error |
 | `ai_log` | id, purpose, input_text, output_json, model, status, error(手動登録の解析のデバッグ用) |
-| `settings` | key, value(睡眠時間帯、1日の作業上限、見積もりの事前分布、通知の上限、FCM トークンのキャッシュなど) |
+| `settings` | key, value(睡眠時間帯、普段のキャパの初期値、見積もりの事前分布、通知の上限、FCM トークンのキャッシュなど) |
 
 通知の流れ:
 
@@ -403,7 +461,7 @@ myreminder/
 
 | リソース | 上限 | 想定使用量 |
 |---|---|---|
-| Workers リクエスト | 100,000/日 | cron 1,440 + API 数百 + Apps Script 24 ≈ 2,000 |
+| Workers リクエスト | 100,000/日 | cron 1,440 + API 数百 + Apps Script 24 ≈ 2,000(webhook の送信はサブリクエストなので数えない) |
 | Cron Trigger | 5本/アカウント | 1本 |
 | D1 | 読み取り 500万行/日、書き込み 10万行/日 | 誤差の範囲 |
 | Workers AI | 10,000 neurons/日 | 〜1,000 |
@@ -416,6 +474,8 @@ myreminder/
 
 ## 5. フェーズ分けとサブエージェントへの振り分け
 
+各行が GitHub の issue 1つに対応する。issue のラベル `agent:opus` / `agent:sonnet` / `agent:haiku` は担当の目安。
+
 担当の凡例:
 
 - **Opus**: 設計・仕様の確定・レビュー・統合
@@ -426,17 +486,17 @@ myreminder/
 
 | # | 作業 | 担当 |
 |---|---|---|
-| 0-1 | 依存の追加、wrangler.jsonc の整備、web の tsconfig を strict に、Tailwind の導入、Vite の proxy 設定 | Haiku |
+| 0-1 | 依存の追加、wrangler.jsonc の整備(ドメイン、assets、cron、AI、D1、`workers_dev` / `preview_urls` を false)、web の tsconfig を strict に、Tailwind v4 の導入、Vite の proxy 設定 | Haiku |
 | 0-2 | drizzle のスキーマ(§4.7)とマイグレーション、Hono のルート骨格(チェーン)、`AppType` の export、web 側の hc+TanStack Query、`/api/health` を端から端まで通す | Sonnet |
-| 0-3 | Cloudflare / Firebase の手動セットアップ手順書(Access アプリ、Service Token、D1 の作成、FCM プロジェクト、VAPID、サービスアカウント) | Haiku |
-| 0-4 | レビューと動作確認 | Opus |
+| 0-3 | `docs/setup.md`: 人間向けのセットアップ手順(Access アプリ2つ、Service Token、D1 の作成、FCM プロジェクト、VAPID、サービスアカウント、GitHub の secret、`wrangler secret`) | Haiku |
+| 0-4 | GitHub Actions のデプロイ(`.github/workflows/deploy.yml`) | Sonnet |
 
 ### Phase 1: MVP(手動登録だけで「見落とさない」が成立する状態)
 
 | # | 作業 | 担当 | 並行 |
 |---|---|---|---|
 | 1-1 | タスクの CRUD API + valibot | Sonnet | ○ |
-| 1-2 | web: ホーム(次の1件)/ 一覧 / 時間割・睡眠・作業上限の編集 | Sonnet | ○(1-1 の型が決まってから) |
+| 1-2 | web: ホーム(次の1件)/ 一覧 / 時間割・睡眠の編集 | Sonnet | ○(1-1 の型が決まってから) |
 | 1-3 | FCM: web の登録と SW、サーバー側の送信とトークンキャッシュ、毎分の cron 送信 | Sonnet | ○ |
 | 1-4 | AI による手動登録: 自然文1行の解析、貼り付けテキストからの複数抽出、確認カード(いつ始めるかも決める) | Sonnet | ○ |
 | 1-5 | Web Share Target(共有メニュー → 1-4 の流れ) | Sonnet | 1-3・1-4 の後 |
@@ -446,13 +506,15 @@ myreminder/
 
 | # | 作業 | 担当 | 並行 |
 |---|---|---|---|
-| 2-1 | 見積もり・スケジューラ・余裕リストのスコアの仕様を確定する(入出力の型、境界条件、テストケースの一覧、余裕リストでやった分の扱い) | Opus | — |
-| 2-2 | 見積もりモデル(§3.4)+vitest | Sonnet | ○ |
-| 2-3 | スケジューラ(使える時間、需要上限テスト、ALAP、Moore–Hodgson)+vitest | Sonnet | ○ |
+| 2-1 | 見積もり・キャパ・スケジューラ・余裕リストのスコアの仕様を確定する(入出力の型、境界条件、テストケースの一覧、余裕リストでやった分の扱い) | Opus | — |
+| 2-2 | 見積もりと普段のキャパの学習(§3.3・§3.4)+vitest | Sonnet | ○ |
+| 2-3 | スケジューラ(2段階のキャパ、需要上限テスト、ALAP、Moore–Hodgson)+vitest | Sonnet | ○ |
 | 2-4 | 余裕リストのスコア(反実仮想の再計画)+vitest | Sonnet | 2-3 の後 |
 | 2-5 | 通知ポリシーのエンジン(リスクレベル、切れ目での送信、上限、保留とまとめ、週の見通し) | Sonnet | 2-3 の後 |
-| 2-6 | web: ステータスの切り替え、作業中タイマー、時刻を決める後回し、夜の確認、余裕リスト画面、山場の表示 | Sonnet | 2-4 の後 |
-| 2-7 | 実際に使いながら、通知の頻度や文言、事前分布を調整する | Opus + 本人 | — |
+| 2-6 | ステータスと作業記録: 状態の切り替え、作業中の消し忘れ対策、作業記録の編集(API+web) | Sonnet | ○ |
+| 2-7 | web: 時刻を決める後回し、夜の確認、余裕リスト画面、山場の表示 | Sonnet | 2-4 の後 |
+| 2-8 | Discord / Slack への webhook(§3.11) | Sonnet | 2-6 の後 |
+| 2-9 | 実際に使いながら、通知の頻度や文言、事前分布、キャパの初期値を調整する | Opus + 本人 | — |
 
 ### Phase 3: 自動取り込み(費用対効果を見ながら、どこで止めてもよい)
 
@@ -467,14 +529,13 @@ myreminder/
 - 通知タイミングの学習(時間帯ごとの Thompson sampling。データが4週間分たまってから)
 - スライドの写真 → 視覚モデル
 - 週次のふりかえり(見積もりの精度、徹夜ゼロの日数)
-- Google Calendar の予定を「埋まっている時間」として取り込む(Apps Script から送れる)
+- カレンダーの取り込みはしない(Google Calendar はほぼ使っておらず、TimeTree は API が終了しているため)
 
 ## 6. 未決事項(本人に確認したいこと)
 
-1. **1日の作業上限**(平日/休日)の初期値。計画の基準になる。
-2. **起床・就寝の時刻**、朝・夜のダイジェストを送る時刻。
-3. **作業中タイマーを使う習慣が付きそうか**。見積もりの学習の前提になる。付かなそうなら、完了時に「何分かかった?」を聞く方式にする。
-4. **時間割**: 手入力でよいか。大学のポータルから取り込みたいか。
-5. **ゲーミフィケーション**: 調査では、ストリークは途切れたときに逆効果になるリスクがあった。既定はなしで進捗を見せるだけにする予定。欲しければ、修復できるストリークにする。
-6. **独自ドメイン**: アプリを置くドメイン(Cloudflare で管理しているもの。サブドメインでよい)。
-7. **WebClass のログイン方式**: 学内 ID で直接ログインするのか、SSO+MFA なのか(拡張を作る場合のみ必要)。
+どれも既定値で実装を進め、設定画面から変えられるようにする。
+
+1. **起床・就寝の時刻**と、朝・夜のダイジェストを送る時刻。既定は 就寝 1:00 / 起床 8:00 / 朝 8:00 / 夜 22:00。
+2. **時間割**: 手入力でよいか(既定は手入力)。
+3. **ゲーミフィケーション**: 調査では、ストリークは途切れたときに逆効果になるリスクがあった。既定はなしで、進捗を見せるだけにする。欲しければ修復できるストリークにする。
+4. **WebClass のログイン方式**: 学内 ID で直接ログインするのか、SSO+MFA なのか(拡張を作る場合のみ必要)。

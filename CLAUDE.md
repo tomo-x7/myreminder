@@ -18,7 +18,13 @@
 
 ## 作業の進め方
 
-- 本人とのやりとりは日本語
+- 本人とのやりとりは日本語。**コミットメッセージ・issue・PR も日本語**
+- タスクは GitHub の issue で管理する(https://github.com/tomo-x7/myreminder/issues)
+  - plan.md §5 の各行が issue 1つに対応する。ラベル `agent:*` は担当の目安、milestone はフェーズ
+  - 着手するときは issue を確認し、終わったらコミットで `closes #N` を付ける
+  - 途中で止めるときは、引き継げるよう issue にコメントで状況を残す
+- 少なくとも完成するまでは、原則 main に直接 push する
+- **リポジトリは public**。秘密情報(Service Token、FCM のサービスアカウント、webhook URL、API トークン)はコミットしない
 - 作業はサブエージェントに振り分ける
   - Sonnet: 機能の実装と調査
   - Haiku: 機械的な作業(設定、依存の追加、仕様が決まった小さなスクリプト、ドキュメントの参照)
