@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 import { EveningPage } from "./pages/EveningPage";
 import { HomePage } from "./pages/HomePage";
 import { InboxPage } from "./pages/InboxPage";
+import { ReviewPage } from "./pages/ReviewPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SharePage } from "./pages/SharePage";
 import { SlackPage } from "./pages/SlackPage";
@@ -40,6 +41,7 @@ export const ROUTES: readonly { path: string; component: ComponentType }[] = [
 	{ path: "/inbox", component: InboxPage },
 	{ path: "/slack", component: SlackPage },
 	{ path: "/evening", component: EveningPage },
+	{ path: "/review", component: ReviewPage },
 	{ path: "/status", component: StatusPage },
 	{ path: "/share", component: SharePage },
 	{ path: "/timetable", component: TimetablePage },

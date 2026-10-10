@@ -8,6 +8,7 @@ import { inbox } from "./routes/inbox";
 import { ingest } from "./routes/ingest";
 import { parse } from "./routes/parse";
 import { push } from "./routes/push";
+import { review } from "./routes/review";
 import { schedule } from "./routes/schedule";
 import { sessions } from "./routes/sessions";
 import { settings } from "./routes/settings";
@@ -30,7 +31,8 @@ const routes = app
 	.route("/sessions", sessions)
 	.route("/webhooks", webhooks)
 	.route("/ingest", ingest)
-	.route("/inbox", inbox);
+	.route("/inbox", inbox)
+	.route("/review", review);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 

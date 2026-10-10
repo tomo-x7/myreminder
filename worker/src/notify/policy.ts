@@ -632,7 +632,8 @@ function digestNotifications(input: PolicyInput, cal: Calendar): DesiredNotifica
 					payload: {
 						title: monday ? "今週の見通し" : outlook ? "おかえり、今日の見通し" : "今日のダイジェスト",
 						body: lines.join("\n"),
-						url: "/",
+						// 月曜の朝は、先週のふりかえり(#26)に飛ばす
+						url: monday ? "/review" : "/",
 					},
 				});
 			}

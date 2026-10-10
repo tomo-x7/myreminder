@@ -6,10 +6,13 @@ import { BottleneckCard, NextCard, PlanAlerts, pickNext, useSchedule } from "../
 import type { Plan } from "../features/schedule/hooks";
 import { StatusSwitcher } from "../features/status";
 import { AddTaskSheet } from "../features/tasks/AddTaskSheet";
+import { jstParts } from "../lib/date";
 import { type Course, useCourses, useTasks } from "../lib/queries";
 import { useNow } from "../lib/use-now";
 
 const linkClass = "rounded-lg border border-gray-300 bg-white px-4 py-3 text-base text-gray-800";
+
+const mondayLinkClass = "rounded-lg border border-blue-400 bg-blue-50 px-4 py-3 text-base font-semibold text-blue-900";
 
 function HomeBody({ plan, courses }: { plan: Plan; courses: readonly Course[] }) {
 	const now = useNow();
@@ -47,6 +50,10 @@ function HomeBody({ plan, courses }: { plan: Plan; courses: readonly Course[] })
 			</Link>
 			<Link href="/evening" className={linkClass}>
 				今日の確認(夜の確認)→
+			</Link>
+			{/* 月曜は新しい週のはじまりなので、先週のふりかえりを目立たせる */}
+			<Link href="/review" className={jstParts(now).weekday === 1 ? mondayLinkClass : linkClass}>
+				先週のふりかえり →
 			</Link>
 		</div>
 	);
