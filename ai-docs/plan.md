@@ -272,6 +272,8 @@
 - 締切が遅くなった、タイトルが変わった → 受信箱に「変更の提案」として出す
 - Classroom で `TURNED_IN` → `submitted` を自動で付ける。`RECLAIMED_BY_STUDENT` → `todo` に戻して通知する
 
+実装の仕様(API・差分の規則・重複の候補・Apps Script)は [specs/ingest.md](specs/ingest.md)。
+
 **WebClass の拡張を作る場合**: 既存の OSS の解析方法を参考にする([research/platform.md](research/platform.md#webclassデータパシフィック))。
 
 ### 3.10 AI(Workers AI 無料枠: 1日 10,000 neurons)
