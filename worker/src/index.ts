@@ -11,6 +11,7 @@ import { sessions } from "./routes/sessions";
 import { settings } from "./routes/settings";
 import { status } from "./routes/status";
 import { tasks } from "./routes/tasks";
+import { webhooks } from "./routes/webhooks";
 
 const app = new Hono<Env>().basePath("/api");
 
@@ -24,7 +25,8 @@ const routes = app
 	.route("/parse", parse)
 	.route("/schedule", schedule)
 	.route("/status", status)
-	.route("/sessions", sessions);
+	.route("/sessions", sessions)
+	.route("/webhooks", webhooks);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 
