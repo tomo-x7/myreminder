@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { CandidateCard } from "./CandidateCard";
 import { candidateToDraft, draftToInput, emptyDraft, hasProblems, validateDraft } from "./draft";
@@ -10,6 +10,12 @@ type Props = {
 	onConfirm: (inputs: TaskCreateInput[]) => Promise<void>;
 	/** 登録後・閉じるときに入力に戻したいとき用(任意) */
 	onCancel?: () => void;
+	/** 入力欄の初期値(Web Share Target などから渡す)。省略時は空 */
+	initialText?: string;
+	/** 最初の入力方法。省略時は 1 行入力 */
+	initialMode?: "line" | "text";
+	/** true なら、初期値を入れた状態で最初に一度だけ解析を始める(initialText が空なら何もしない) */
+	autoSubmit?: boolean;
 };
 
 type Mode = "line" | "text";
@@ -64,10 +70,10 @@ async function parseInput(mode: Mode, text: string): Promise<ParseOutcome> {
 	}
 }
 
-export function QuickAdd({ onConfirm, onCancel }: Props) {
+export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSubmit }: Props) {
 	const now = useNow();
-	const [mode, setMode] = useState<Mode>("line");
-	const [text, setText] = useState("");
+	const [mode, setMode] = useState<Mode>(initialMode ?? "line");
+	const [text, setText] = useState(initialText ?? "");
 	const [outcome, setOutcome] = useState<{ notice: string | null; startSuggestions: StartSuggestion[] } | null>(null);
 	const [drafts, setDrafts] = useState<Draft[]>([]);
 	const [showProblems, setShowProblems] = useState(false);
@@ -117,6 +123,15 @@ export function QuickAdd({ onConfirm, onCancel }: Props) {
 		if (!trimmed || parse.isPending) return;
 		parse.mutate({ mode, text: trimmed });
 	}
+
+	// 共有からの起動では、確認カードを最初から出す。StrictMode の二重実行でも解析は一度だけ
+	const autoSubmitted = useRef(false);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: 初回マウント時だけ実行する
+	useEffect(() => {
+		if (!autoSubmit || autoSubmitted.current) return;
+		autoSubmitted.current = true;
+		submit();
+	}, []);
 
 	function confirm() {
 		const problems = drafts.map(validateDraft);
