@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { CandidateCard } from "./CandidateCard";
 import { candidateToDraft, draftToInput, emptyDraft, hasProblems, validateDraft } from "./draft";
+import { resizeImage } from "./image";
 import type { Draft, StartSuggestion, TaskCreateInput } from "./types";
 
 type Props = {
@@ -16,6 +17,8 @@ type Props = {
 	initialMode?: "line" | "text";
 	/** true なら、初期値を入れた状態で最初に一度だけ解析を始める(initialText が空なら何もしない) */
 	autoSubmit?: boolean;
+	/** 共有メニューから届いた画像。渡されたら、最初に一度だけ写真として解析を始める */
+	initialImage?: Blob;
 };
 
 type Mode = "line" | "text";
@@ -70,7 +73,39 @@ async function parseInput(mode: Mode, text: string): Promise<ParseOutcome> {
 	}
 }
 
-export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSubmit }: Props) {
+const PHOTO_NOTICE = "写真から読み取りました。文字の読み違いがないか確認してください";
+
+/** 写真の解析 API を呼ぶ(縮小してから送る)。失敗しても例外にせず、手入力のカードを返す */
+async function parseImageInput(image: Blob): Promise<ParseOutcome> {
+	const fallback = (notice: string): ParseOutcome => ({
+		drafts: [emptyDraft("")],
+		startSuggestions: [],
+		now: Date.now(),
+		notice,
+	});
+	try {
+		const jpeg = await resizeImage(image);
+		const file = new File([jpeg], "slide.jpg", { type: "image/jpeg" });
+		const res = await api.api.parse.image.$post({ form: { image: file } });
+		if (res.status === 413) return fallback("画像が大きすぎます。手入力してください");
+		if (!res.ok) return fallback("解析できませんでした。手入力してください");
+		const data = await res.json();
+		if (data.candidates.length === 0) {
+			const out = fallback(data.error ?? "解析できませんでした。手入力してください");
+			return { ...out, startSuggestions: data.startSuggestions, now: data.now };
+		}
+		return {
+			drafts: data.candidates.map(candidateToDraft),
+			startSuggestions: data.startSuggestions,
+			now: data.now,
+			notice: PHOTO_NOTICE,
+		};
+	} catch {
+		return fallback("写真を読み込めませんでした。手入力してください");
+	}
+}
+
+export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSubmit, initialImage }: Props) {
 	const now = useNow();
 	const [mode, setMode] = useState<Mode>(initialMode ?? "line");
 	const [text, setText] = useState(initialText ?? "");
@@ -78,6 +113,14 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 	const [drafts, setDrafts] = useState<Draft[]>([]);
 	const [showProblems, setShowProblems] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
+	// 写真から追加したときのプレビュー(Object URL)
+	const [preview, setPreview] = useState<string | null>(null);
+	const fileInput = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (!preview) return;
+		return () => URL.revokeObjectURL(preview);
+	}, [preview]);
 
 	const coursesQuery = useQuery({
 		queryKey: ["courses"],
@@ -90,7 +133,8 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 	const courses = coursesQuery.data ?? [];
 
 	const parse = useMutation({
-		mutationFn: ({ mode, text }: { mode: Mode; text: string }) => parseInput(mode, text),
+		mutationFn: (input: { mode: Mode; text: string } | { image: Blob }) =>
+			"image" in input ? parseImageInput(input.image) : parseInput(input.mode, input.text),
 		onSuccess: (r) => {
 			setDrafts(r.drafts);
 			setOutcome({ notice: r.notice, startSuggestions: r.startSuggestions });
@@ -107,6 +151,7 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 
 	function reset() {
 		setText("");
+		setPreview(null);
 		setOutcome(null);
 		setDrafts([]);
 		setShowProblems(false);
@@ -124,13 +169,24 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 		parse.mutate({ mode, text: trimmed });
 	}
 
+	function submitImage(image: Blob) {
+		if (parse.isPending) return;
+		setPreview(URL.createObjectURL(image));
+		parse.mutate({ image });
+	}
+
 	// 共有からの起動では、確認カードを最初から出す。StrictMode の二重実行でも解析は一度だけ
 	const autoSubmitted = useRef(false);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: 初回マウント時だけ実行する
 	useEffect(() => {
-		if (!autoSubmit || autoSubmitted.current) return;
-		autoSubmitted.current = true;
-		submit();
+		if (autoSubmitted.current) return;
+		if (initialImage) {
+			autoSubmitted.current = true;
+			submitImage(initialImage);
+		} else if (autoSubmit) {
+			autoSubmitted.current = true;
+			submit();
+		}
 	}, []);
 
 	function confirm() {
@@ -146,6 +202,20 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 	const patchDraft = (key: string, patch: Partial<Draft>) =>
 		setDrafts((ds) => ds.map((d) => (d.key === key ? { ...d, ...patch } : d)));
 	const removeDraft = (key: string) => setDrafts((ds) => ds.filter((d) => d.key !== key));
+
+	// 写真を読み取っている間
+	if (outcome === null && parse.isPending && preview) {
+		return (
+			<div className="flex flex-col items-center gap-3 py-2" aria-live="polite">
+				<img
+					src={preview}
+					alt="選んだ写真"
+					className="max-h-64 rounded-md border border-gray-200 object-contain"
+				/>
+				<p className="text-sm text-gray-700">写真から課題を読み取っています…(数秒かかります)</p>
+			</div>
+		);
+	}
 
 	// 入力画面
 	if (outcome === null) {
@@ -214,6 +284,27 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 					</button>
 					<button
 						type="button"
+						onClick={() => fileInput.current?.click()}
+						disabled={parse.isPending}
+						className="rounded-md border border-gray-300 px-4 py-3 text-base text-gray-800"
+					>
+						写真から
+					</button>
+					<input
+						ref={fileInput}
+						type="file"
+						accept="image/*"
+						capture="environment"
+						hidden
+						aria-label="写真を選ぶ"
+						onChange={(e) => {
+							const file = e.target.files?.[0];
+							e.target.value = "";
+							if (file) submitImage(file);
+						}}
+					/>
+					<button
+						type="button"
 						onClick={startManual}
 						disabled={parse.isPending}
 						className="rounded-md border border-gray-300 px-4 py-3 text-base text-gray-800"
@@ -239,6 +330,13 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 				<p role="alert" className="rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900">
 					{outcome.notice}
 				</p>
+			)}
+			{preview && (
+				<img
+					src={preview}
+					alt="読み取った写真"
+					className="max-h-40 self-start rounded-md border border-gray-200 object-contain"
+				/>
 			)}
 			{drafts.length > 1 && (
 				<p className="text-sm text-gray-700">{drafts.length}件の課題を見つけました。内容を確認してください</p>

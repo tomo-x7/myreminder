@@ -86,8 +86,11 @@ function setup(): Messaging {
 	return messaging;
 }
 
-/** Service Worker に Firebase 設定をクエリで渡して登録する */
-async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
+/**
+ * Service Worker に Firebase 設定をクエリで渡して登録する。共有メニュー(POST の share_target)も
+ * この Service Worker が受けるので、通知の設定に関係なく起動時にも呼ぶ(main.tsx)。同じ URL なら登録し直しにならない
+ */
+export async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
 	const query = new URLSearchParams({
 		apiKey: firebaseConfig.apiKey,
 		projectId: firebaseConfig.projectId,

@@ -1,6 +1,7 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { PageHeader } from "../components/ui";
+import { takeSharedImage } from "../features/quick-add/image";
 import { QuickAdd } from "../features/quick-add/QuickAdd";
 import { useCreateTasks } from "../lib/queries";
 
@@ -22,12 +23,24 @@ export function combineShared(params: URLSearchParams): string {
 	return lines.join("\n").slice(0, SHARE_TEXT_MAX);
 }
 
-/** Web Share Target の受け口(`/share?title=&text=&url=`)。貼り付けと同じ確認カードを、解析済みの状態で開く */
+/**
+ * Web Share Target の受け口。貼り付けと同じ確認カードを、解析済みの状態で開く。
+ * - テキスト: `/share?title=&text=&url=`
+ * - 画像: `/share?image=1`。Service Worker が受けた画像を Cache に入れてここへ飛ばす
+ */
 export function SharePage() {
 	const [, navigate] = useLocation();
 	const create = useCreateTasks();
 	// 共有された内容は最初の描画で固定する(再描画で入力が書き換わらないように)
-	const shared = combineShared(new URLSearchParams(window.location.search));
+	const [params] = useState(() => new URLSearchParams(window.location.search));
+	const shared = combineShared(params);
+	const wantsImage = params.get("image") === "1";
+	// undefined: 読み込み中、null: 画像がなかった
+	const [image, setImage] = useState<Blob | null | undefined>(wantsImage ? undefined : null);
+	useEffect(() => {
+		if (!wantsImage) return;
+		void takeSharedImage().then(setImage);
+	}, [wantsImage]);
 
 	const save = useCallback(
 		async (inputs: Parameters<typeof create.mutateAsync>[0]) => {
@@ -41,13 +54,23 @@ export function SharePage() {
 	return (
 		<div className="flex flex-col gap-4">
 			<PageHeader title="共有から追加" />
-			<QuickAdd
-				onConfirm={save}
-				onCancel={cancel}
-				initialText={shared}
-				initialMode={shared ? "text" : "line"}
-				autoSubmit={shared !== ""}
-			/>
+			{image === undefined ? (
+				<p className="text-sm text-gray-700">共有された画像を読み込んでいます…</p>
+			) : (
+				<QuickAdd
+					onConfirm={save}
+					onCancel={cancel}
+					initialText={shared}
+					initialMode={shared ? "text" : "line"}
+					autoSubmit={shared !== ""}
+					initialImage={image ?? undefined}
+				/>
+			)}
+			{wantsImage && image === null && (
+				<p role="alert" className="rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900">
+					共有された画像を受け取れませんでした。アプリの「写真から」で選び直してください
+				</p>
+			)}
 		</div>
 	);
 }

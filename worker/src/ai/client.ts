@@ -8,7 +8,10 @@ import { aiLog } from "../db/schema";
 export const PRIMARY_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8";
 export const FALLBACK_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
-export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
+/** 画像付きメッセージ(OpenAI 互換)。url は data:image/jpeg;base64,… */
+export type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+
+export type ChatMessage = { role: "system" | "user" | "assistant"; content: string | ContentPart[] };
 
 export type RunJsonFailure = {
 	ok: false;
@@ -26,9 +29,11 @@ export type RunJsonOptions<S extends v.GenericSchema> = {
 	schema: S;
 	/** JSON mode に渡す JSON Schema */
 	jsonSchema: object;
-	/** ai_log.input_text。省略時は最後の user メッセージ */
+	/** ai_log.input_text。省略時は最後の user メッセージ(画像付きのときは必ず渡す。base64 をログに入れない) */
 	inputText?: string;
 	maxTokens?: number;
+	/** 試行の順番。省略時は文章用(主力2回 → 予備1回) */
+	attempts?: Attempt[];
 };
 
 /** テストで差し替えるための口 */
@@ -135,21 +140,40 @@ const QUOTA_RE = /neurons|allocation|quota|rate.?limit|too many requests|\b429\b
 
 const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e)).slice(0, 500);
 
-type Attempt = { model: string; jsonMode: boolean; temperature: number };
+export type Attempt = {
+	model: string;
+	jsonMode: boolean;
+	temperature: number;
+	/** 最後の user メッセージ(文字列)に /no_think を足す。Qwen3(30B)の思考モードを切るソフトスイッチ */
+	noThinkSwitch?: boolean;
+	/** response_format.json_schema の包み方。raw は JSON Schema そのまま(Qwen3-30B・Llama 3.3)、openai は {name, schema}(Gemma 4・Qwen3.8) */
+	schemaStyle?: "raw" | "openai";
+	/** そのまま入力に足す(chat_template_kwargs など) */
+	extra?: Record<string, unknown>;
+	maxTokens?: number;
+};
 
 const ATTEMPTS: Attempt[] = [
-	{ model: PRIMARY_MODEL, jsonMode: false, temperature: 0.1 },
+	{ model: PRIMARY_MODEL, jsonMode: false, temperature: 0.1, noThinkSwitch: true },
 	// 再試行は json_schema を付けて、出力の形を縛る
-	{ model: PRIMARY_MODEL, jsonMode: true, temperature: 0 },
+	{ model: PRIMARY_MODEL, jsonMode: true, temperature: 0, noThinkSwitch: true },
 	{ model: FALLBACK_MODEL, jsonMode: true, temperature: 0 },
 ];
+
+function responseFormat(a: Attempt, jsonSchema: object) {
+	return {
+		type: "json_schema",
+		json_schema: a.schemaStyle === "openai" ? { name: "candidates", schema: jsonSchema } : jsonSchema,
+	};
+}
 
 export async function runJson<S extends v.GenericSchema>(
 	env: CloudflareBindings,
 	opts: RunJsonOptions<S>,
 	deps: ClientDeps = defaultDeps(env),
 ): Promise<RunJsonResult<v.InferOutput<S>>> {
-	const inputText = opts.inputText ?? [...opts.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+	const lastUser = [...opts.messages].reverse().find((m) => m.role === "user")?.content;
+	const inputText = opts.inputText ?? (typeof lastUser === "string" ? lastUser : "");
 	let lastError = "";
 	let code: RunJsonFailure["code"] = "invalid_output";
 
@@ -161,20 +185,21 @@ export async function runJson<S extends v.GenericSchema>(
 		}
 	};
 
-	for (const attempt of ATTEMPTS) {
+	for (const attempt of opts.attempts ?? ATTEMPTS) {
 		let raw: unknown;
 		try {
 			const messages = opts.messages.map((m) => ({ ...m }));
-			if (attempt.model === PRIMARY_MODEL) {
-				// Qwen3 の思考モードを切るソフトスイッチ(切れていなくても stripThink で落とす)
+			if (attempt.noThinkSwitch) {
+				// 思考モードを切るソフトスイッチ(切れていなくても stripThink で落とす)
 				const last = messages.findLast((m) => m.role === "user");
-				if (last) last.content = `${last.content}\n/no_think`;
+				if (last && typeof last.content === "string") last.content = `${last.content}\n/no_think`;
 			}
 			raw = await deps.run(attempt.model, {
 				messages,
-				max_tokens: opts.maxTokens ?? 2000,
+				max_tokens: attempt.maxTokens ?? opts.maxTokens ?? 2000,
 				temperature: attempt.temperature,
-				...(attempt.jsonMode ? { response_format: { type: "json_schema", json_schema: opts.jsonSchema } } : {}),
+				...(attempt.jsonMode ? { response_format: responseFormat(attempt, opts.jsonSchema) } : {}),
+				...attempt.extra,
 			});
 		} catch (e) {
 			lastError = errorMessage(e);

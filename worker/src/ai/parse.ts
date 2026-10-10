@@ -153,7 +153,7 @@ const lineResponseSchema = v.pipe(
 
 export async function parseTasks(
 	env: CloudflareBindings,
-	input: { text: string; mode: ParseMode; now?: number },
+	input: { text: string; mode: Exclude<ParseMode, "image">; now?: number },
 	ctx: ParseContext,
 	deps?: ClientDeps,
 ): Promise<ParseResult> {
@@ -187,7 +187,7 @@ export async function parseTasks(
 	};
 }
 
-function failureMessage(code: "quota" | "invalid_output" | "upstream"): string {
+export function failureMessage(code: "quota" | "invalid_output" | "upstream"): string {
 	switch (code) {
 		case "quota":
 			return "AI の無料枠を使い切りました。手入力してください";

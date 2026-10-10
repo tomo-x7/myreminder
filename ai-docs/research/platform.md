@@ -129,6 +129,45 @@ https://developers.cloudflare.com/workers-ai/platform/pricing/
 - 埋め込み: `@cf/baai/bge-m3` は多言語対応で 1,075 neurons/100万トークン(ほぼ無料)。日本語特化の `@cf/plamo-embedding-1b` もある(コストは**未確認**)
 - AI Gateway は無料でキャッシュとログが使える。Workers AI バインディング経由で使えるかは**未確認**
 
+### 画像入力(Vision)に対応するモデル(2026-10-11 に確認、#25)
+
+- 無料枠で使える画像対応モデルの一覧(料金表 https://developers.cloudflare.com/workers-ai/platform/pricing/ 2026-10-09 更新、モデル一覧 https://developers.cloudflare.com/workers-ai/models/)
+  - 有料プラン(または AI Gateway の前払いクレジット)が必須のモデルは `kimi-k2.6` / `kimi-k2.7-code` / `glm-5.2` / `glm-5.3` / `glm-5.3-flash` / `deepseek-v4-*`。画像対応でも無料枠では使えない
+  - `@cf/google/gemma-3-12b-it`: 料金表には残っているが、モデルのページは「deprecated, removed, or not found」で、モデル一覧にも出ない。**使わない**
+- 画像の渡し方(モデルごとの API スキーマ `…/models/<名前>/sync-input.json` で確認)
+  - OpenAI 互換の `messages` で、`content` に `[{type:"text",text}, {type:"image_url", image_url:{url, detail?}}]` の配列を渡す。`url` は「data:image/jpeg;base64,… のようなデータ URI」(公式の API リファレンス https://developers.cloudflare.com/api/ の ai.run の messages 項、`llms-full.txt` にも同文)
+  - `gemma-4-26b-a4b-it` と `qwen3.8-27b` はこの形がスキーマに明記されている(`type` は text / image_url / video_url / input_audio / file)
+  - `llama-3.2-11b-vision-instruct`: スキーマは `prompt` + `image`(バイト配列かバイナリ文字列。「Deprecated, use image as a part of messages now」)。公式チュートリアルは `messages` と別に `image: "data:image/png;base64,…"` を渡している(https://developers.cloudflare.com/workers-ai/tutorials/llama-vision-tutorial/)。**初回に `{"prompt":"agree"}` を1回送ってライセンスに同意する必要がある**(2026-10 のモデルページにも同じ注記がある)
+  - `llama-4-scout-17b-16e-instruct`: ページは「Vision あり」だが、スキーマ(sync-input.json)に画像の欄がなく、画像の渡し方は公式ドキュメントでは**未確認**
+  - `mistral-small-3.1-24b-instruct`: 説明は「vision understanding」だが、スキーマに画像の欄もモデル一覧の Vision 表示もない。**未確認**
+  - `llava-1.5-7b-hf`: Image-to-Text、**Beta**。入力は画像のバイナリ文字列(または `prompt` を含むオブジェクト)。料金表に載っていない(コストは**未確認**)。JSON 出力の仕組みなし
+  - `moondream3.1-9B-A2B`: Image-to-Text。`image` は「公開 HTTPS URL か base64 のデータ URI」、`task` は query / caption / point / detect。自由な JSON 出力の仕組みは**未確認**
+- JSON mode / 構造化出力
+  - `gemma-4-26b-a4b-it`・`qwen3.8-27b`: `response_format: {type:"json_schema", json_schema:{name, schema, strict?}}`(OpenAI 形式。`name` が必須)がスキーマにある。`json_object` も可
+  - `llama-4-scout`: `response_format`(`json_object` / `json_schema`)と `guided_json` がある。ただし画像と組み合わせられるかは未確認
+  - `llama-3.2-11b-vision`: スキーマに `response_format` がない(**JSON mode なし**)
+  - `mistral-small-3.1`: `guided_json` のみ。`response_format` は**未確認**
+- 推論(thinking)の切り方: `gemma-4` と `qwen3.8` は `chat_template_kwargs: {enable_thinking: false}`(既定は true)。qwen3.8 は `reasoning_effort`(low / medium / xhigh、既定 xhigh)もある。公式チュートリアルも gemma-4 に `enable_thinking: false` を付けている
+- コスト(100万トークンあたりの neurons、入力 / 出力。料金表)
+
+| モデル | コスト(入 / 出) | 1枚(入力 約2,800 + 出力 約400トークン)の推定 |
+|---|---|---|
+| `@cf/google/gemma-4-26b-a4b-it` | 9,091 / 27,273 | ≈36 → 約270回/日 |
+| `@cf/meta/llama-3.2-11b-vision-instruct` | 4,410 / 61,493 | ≈37 |
+| `@cf/meta/llama-4-scout-17b-16e-instruct` | 24,545 / 77,273 | ≈100 |
+| `@cf/mistralai/mistral-small-3.1-24b-instruct` | 31,876 / 50,488 | ≈110 |
+| `@cf/qwen/qwen3.8-27b` | 40,909 / 290,909 | ≈230(思考を切れたとき)。切れずに2,000トークン出すと ≈700 |
+| `@cf/moondream/moondream3.1-9B-A2B` | 27,273 / 90,909 | ≈110 |
+
+- 見積もりの前提(推定であり、実測ではない)
+  - 入力 約2,800 = 画像 約1,100 + 既存の解析プロンプト(暦・時間割・科目・ルール)約1,700。出力は JSON 約400
+  - 画像が何トークンになるかは、Workers AI の料金表にも各モデルのページにも**書かれていない(未確認)**。Gemma 4 の本家は画像1枚あたりの視覚トークン予算を 70 / 140 / 280 / 560 / 1120 から選ぶとあり(https://ai.google.dev/gemma/docs/capabilities/vision)、最大の 1120 で見積もった。Cloudflare がどの予算を使っているかは未確認
+  - 実際の消費は、解析を1回走らせて Workers AI のダッシュボードで確認する
+- 日本語(画像内の文字)の読み取り品質
+  - Cloudflare のどのページにも書かれていない
+  - Gemma 4 26B-A4B: Google は「object detection and OCR に強い」と述べ、精度が要る視覚タスクでは高いトークン予算を勧めている(上のページ。OCR 専用の推奨はなし)。日本語のマルチモーダル評価では Heron-Bench(自由記述)で 3.602 と比較した2モデル(2.806 / 2.631)を上回り、JMMMU(選択式)は 0.438 でほぼ同等(DGX Spark での NVFP4 量子化による1回の検証。Cloudflare 上の挙動とは限らない。https://dev.classmethod.jp/en/articles/dgx-spark-nemotron3-nano-omni-japanese-multimodal-bench/)。OCR 単独の日本語ベンチは**見つからなかった**
+  - 講義スライドの写真での実測は**未確認**(Cloudflare のアカウントがない環境では試せていない)。実機で試すこと
+
 ## 取り込み元
 
 ### Google Classroom
