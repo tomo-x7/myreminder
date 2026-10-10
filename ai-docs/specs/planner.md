@@ -277,7 +277,9 @@ function plan(input: PlanInput): PlanOutput;
 
 ```ts
 type SlackGainInput = {
-	plan: PlanInput; // 現在の計画の入力
+	capacityInput: CapacityInput; // now' = now + spareMin で buildCapacity をやり直すため、組み立て前の入力を渡す
+	tasks: PlanTask[]; // 計画に含まれる全タスク(候補だけではない)
+	marginRatio: number; // plan() にそのまま渡す
 	candidateIds: string[]; // 余裕リストの対象(risk が relaxed のタスク)
 	spareMin: Minutes; // 次の空き時間の長さ(既定: 次の予定までの時間、上限90。30/60/90 から選べる)
 	tau?: number; // ストレスの尺度。既定 1(活動日1日分の普段のキャパで正規化した単位)
@@ -289,7 +291,7 @@ type SlackGainInput = {
 - `workedToday` はどちらも増やさない。余裕リストでやった分は「計画の外の時間」とみなす
   - 実際に作業した後の再計画では、作業記録に入るので数える
 - 評価は辞書式で、基準との差を取る:
-  1. 間に合わないタスクの数(usual のキャパで Moore–Hodgson が外す件数)の減少
+  1. 間に合わないタスクの数の減少。数えるのは「usual のキャパで Moore–Hodgson が外すタスク」+「残りを plan() で計画しても usual のモードで置けないタスク(minBlock・releaseAt・1日のキャパが原因)」。前者だけだと流体の量なので、まとまった時間が要るタスクの効果が現れない
   2. 山場の余裕(`bottleneck.slackUsual`)の増加
   3. ストレス `Σ_i exp(−(s_i(usual) / D) / tau)` の減少。D は今後の活動日の usualCap の平均
 - 並び順: 1 の減少が大きい順 → 2 の増加が大きい順 → 3 の減少が大きい順 → 締切が早い順 → remainingP80 が多い順 → ID
@@ -325,6 +327,16 @@ function slackGain(input: SlackGainInput): SlackGain[]; // 並べ替え済み
 - 将来の空きが細切れで、minBlock 120 の候補がある → 締切の早い小さなタスクより上に来ることがある(`big_block`)
 - 候補が空 → 空配列
 - 決定性
+
+### 実装で決めた細部(#15)
+
+- `now'` が次の活動日に入ったら、作り直すキャパの `workedToday` は 0 にする(どちらの分岐でも増やさない)
+- 候補に `releaseAt` があるときは、空き時間のうち `releaseAt` より後の分だけを作業として数える
+- 候補を終えてタスクがなくなり山場が null になったら、`bottleneckDeltaMin` はやった作業の分とする
+- D は `now'` で作ったキャパの活動日の usualCap の平均(下限 1)。両方の分岐で同じ D を使う
+- `before_peak` は今の計画(`now` 時点、全タスク)の山場で判定する
+- `big_block` は `now'` のキャパで、`now'` から min(候補の締切, 範囲の終わり) までの空きを見る
+- 並べ替えの前に、`bottleneckDeltaMin` を 1e-6、`stressDelta` を 1e-9 に丸める
 
 ## 5. この仕様で決めたこと(plan.md の未決だった点)
 
