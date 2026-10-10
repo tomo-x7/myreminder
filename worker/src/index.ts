@@ -6,7 +6,10 @@ import { courses } from "./routes/courses";
 import { health } from "./routes/health";
 import { parse } from "./routes/parse";
 import { push } from "./routes/push";
+import { schedule } from "./routes/schedule";
+import { sessions } from "./routes/sessions";
 import { settings } from "./routes/settings";
+import { status } from "./routes/status";
 import { tasks } from "./routes/tasks";
 
 const app = new Hono<Env>().basePath("/api");
@@ -18,7 +21,10 @@ const routes = app
 	.route("/busy-blocks", busyBlocks)
 	.route("/settings", settings)
 	.route("/push", push)
-	.route("/parse", parse);
+	.route("/parse", parse)
+	.route("/schedule", schedule)
+	.route("/status", status)
+	.route("/sessions", sessions);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 
