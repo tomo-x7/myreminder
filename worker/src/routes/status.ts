@@ -2,6 +2,7 @@ import { vValidator } from "@hono/valibot-validator";
 import { Hono } from "hono";
 import { getDb } from "../db";
 import type { Env } from "../env";
+import { triggerReplan } from "../notify/replan";
 import { statusSetSchema, workingStartSchema, workingStopSchema } from "../schemas/status";
 import { findOpenSessions, getEffectiveStatus, setManualStatus, startWorking, stopWorking } from "../services/status";
 
@@ -15,6 +16,7 @@ export const status = new Hono<Env>()
 		// 作業中は先に終わらせる(記録が宙に浮かないように)
 		if ((await findOpenSessions(db)).length > 0) return c.json({ error: "working" as const }, 409);
 		await setManualStatus(db, mode, until);
+		triggerReplan(c);
 		return c.json(await getEffectiveStatus(db, now), 200);
 	})
 	.post("/working", vValidator("json", workingStartSchema), async (c) => {
@@ -22,6 +24,7 @@ export const status = new Hono<Env>()
 		const now = Date.now();
 		const result = await startWorking(db, c.req.valid("json").taskId, now);
 		if (!result.ok) return c.json({ error: "not_found" as const }, 404);
+		triggerReplan(c);
 		return c.json(await getEffectiveStatus(db, now), 200);
 	})
 	.post("/working/stop", vValidator("json", workingStopSchema), async (c) => {
@@ -33,5 +36,6 @@ export const status = new Hono<Env>()
 				? c.json({ error: result.error }, 409)
 				: c.json({ error: result.error }, 400);
 		}
+		triggerReplan(c);
 		return c.json(await getEffectiveStatus(db, now), 200);
 	});

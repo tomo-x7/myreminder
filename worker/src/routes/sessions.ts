@@ -2,6 +2,7 @@ import { vValidator } from "@hono/valibot-validator";
 import { Hono } from "hono";
 import { getDb } from "../db";
 import type { Env } from "../env";
+import { triggerReplan } from "../notify/replan";
 import { sessionCreateSchema, sessionListQuerySchema, sessionUpdateSchema } from "../schemas/status";
 import { idParamSchema, NOT_FOUND } from "../services/http";
 import {
@@ -29,6 +30,7 @@ export const sessions = new Hono<Env>()
 					? c.json({ error: "overlap" as const }, 409)
 					: c.json({ error: "invalid_range" as const }, 400);
 		}
+		triggerReplan(c);
 		const row = await getSession(db, result.id);
 		return row ? c.json(row, 201) : c.json(NOT_FOUND, 404);
 	})
@@ -43,11 +45,12 @@ export const sessions = new Hono<Env>()
 					? c.json({ error: "overlap" as const }, 409)
 					: c.json({ error: "invalid_range" as const }, 400);
 		}
+		triggerReplan(c);
 		const row = await getSession(db, id);
 		return row ? c.json(row, 200) : c.json(NOT_FOUND, 404);
 	})
-	.delete("/:id", vValidator("param", idParamSchema), async (c) =>
-		(await deleteSession(getDb(c.env), c.req.valid("param").id))
-			? c.json({ ok: true as const }, 200)
-			: c.json(NOT_FOUND, 404),
-	);
+	.delete("/:id", vValidator("param", idParamSchema), async (c) => {
+		if (!(await deleteSession(getDb(c.env), c.req.valid("param").id))) return c.json(NOT_FOUND, 404);
+		triggerReplan(c);
+		return c.json({ ok: true as const }, 200);
+	});

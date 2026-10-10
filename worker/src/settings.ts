@@ -15,6 +15,8 @@ export type Settings = {
 	usualCapacityDefaults: { weekday: number; holiday: number };
 	/** 1日の通知の上限 */
 	notificationDailyLimit: number;
+	/** 睡眠中でも致命の通知を送る。既定は送らない(起きてから) */
+	criticalDuringSleep: boolean;
 	/** 時限の時刻表(JST 0時からの分)。未設定は空 */
 	timetablePeriods: { period: number; startMin: number; endMin: number }[];
 };
@@ -24,6 +26,7 @@ export const SETTINGS_DEFAULTS: Settings = {
 	digest: { morningMin: 480, eveningMin: 1320 },
 	usualCapacityDefaults: { weekday: 180, holiday: 300 },
 	notificationDailyLimit: 3,
+	criticalDuringSleep: false,
 	timetablePeriods: [],
 };
 

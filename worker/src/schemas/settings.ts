@@ -13,6 +13,8 @@ export const settingValueSchemas = {
 	usualCapacityDefaults: v.object({ weekday: capacityMin, holiday: capacityMin }),
 	// 1日に送る通知の上限
 	notificationDailyLimit: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(100)),
+	// 睡眠中でも致命の通知を送るか
+	criticalDuringSleep: v.boolean(),
 	// 時限ごとの開始・終了(JST 0時からの分)
 	timetablePeriods: v.pipe(
 		v.array(

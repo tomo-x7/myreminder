@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { getDb } from "../db";
 import { busyBlocks as busyBlocksTable } from "../db/schema";
 import type { Env } from "../env";
+import { triggerReplan } from "../notify/replan";
 import { busyBlockCreateSchema, busyBlockUpdateSchema } from "../schemas/busy-block";
 import { idParamSchema, NOT_FOUND } from "../services/http";
 
@@ -20,6 +21,7 @@ export const busyBlocks = new Hono<Env>()
 	)
 	.post("/", vValidator("json", busyBlockCreateSchema), async (c) => {
 		const [row] = await getDb(c.env).insert(busyBlocksTable).values(c.req.valid("json")).returning();
+		triggerReplan(c);
 		return c.json(row, 201);
 	})
 	.patch("/:id", vValidator("param", idParamSchema), vValidator("json", busyBlockUpdateSchema), async (c) => {
@@ -34,6 +36,7 @@ export const busyBlocks = new Hono<Env>()
 			return c.json({ error: "invalid_busy_block", issues: merged.issues.map((i) => i.message) }, 400);
 		}
 		const [row] = await db.update(busyBlocksTable).set(merged.output).where(eq(busyBlocksTable.id, id)).returning();
+		triggerReplan(c);
 		return c.json(row, 200);
 	})
 	.delete("/:id", vValidator("param", idParamSchema), async (c) => {
@@ -42,5 +45,6 @@ export const busyBlocks = new Hono<Env>()
 			.delete(busyBlocksTable)
 			.where(eq(busyBlocksTable.id, id))
 			.returning({ id: busyBlocksTable.id });
+		if (row) triggerReplan(c);
 		return row ? c.json({ ok: true as const }, 200) : c.json(NOT_FOUND, 404);
 	});

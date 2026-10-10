@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { getDb } from "../db";
 import { courses, TASK_STATUSES, taskDueHistory, tasks as tasksTable } from "../db/schema";
 import type { Env } from "../env";
+import { triggerReplan } from "../notify/replan";
 import { taskCreateSchema, taskUpdateSchema } from "../schemas/task";
 import { idParamSchema, NOT_FOUND } from "../services/http";
 
@@ -62,6 +63,7 @@ export const tasks = new Hono<Env>()
 			.insert(tasksTable)
 			.values({ ...input, createdAt: now, updatedAt: now })
 			.returning();
+		triggerReplan(c);
 		return c.json(row, 201);
 	})
 	.patch("/:id", vValidator("param", idParamSchema), vValidator("json", taskUpdateSchema), async (c) => {
@@ -97,9 +99,11 @@ export const tasks = new Hono<Env>()
 					cause: "manual",
 				}),
 			]);
+			triggerReplan(c);
 			return c.json(row, 200);
 		}
 		const [row] = await update;
+		triggerReplan(c);
 		return c.json(row, 200);
 	})
 	.delete("/:id", vValidator("param", idParamSchema), async (c) => {
@@ -107,5 +111,6 @@ export const tasks = new Hono<Env>()
 			.delete(tasksTable)
 			.where(eq(tasksTable.id, c.req.valid("param").id))
 			.returning({ id: tasksTable.id });
+		if (row) triggerReplan(c);
 		return row ? c.json({ ok: true as const }, 200) : c.json(NOT_FOUND, 404);
 	});
