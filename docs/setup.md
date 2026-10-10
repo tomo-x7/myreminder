@@ -7,11 +7,11 @@
 | Access の Service Token(Client ID / Secret) | Apps Script の Script Properties |
 | FCM のサービスアカウント JSON | Worker の secret(`FCM_SERVICE_ACCOUNT`) |
 | Cloudflare API トークン、Account ID | GitHub の repository secret |
-| webhook URL(Discord / Slack) | Worker の secret か D1(アプリ側で登録) |
+| webhook URL(Discord / Slack) | D1(アプリの設定画面で登録) |
 
 公開してよいもの: Firebase の Web 設定(`firebaseConfig`)、VAPID 公開鍵、D1 の `database_id`、Cloudflare の Account ID(ただし GitHub secret に入れる)。
 
-作業は `docs/setup.md` を上から順に進めてください。各節の末尾に公式ドキュメントへのリンクを付けています。
+作業は `docs/setup.md` を上から順に進めてください。各節の末尾に公式ドキュメントへのリンクを付けています。やることだけの一覧は [setup-quick.md](setup-quick.md)。
 
 ---
 
@@ -231,7 +231,7 @@ Account ID は、ダッシュボードのどのゾーンでも右側のサイド
 
 1. 2-1〜2-4 と 3(secret の登録)を終えて、デプロイする(`pnpm -F web build && pnpm -F worker exec wrangler deploy`)
 2. Android の Chrome で `https://reminder.tomo-x.win` を開き、Access でログインする
-3. `PushToggle`(設定画面に置く予定。置くまでは一時的に `App.tsx` に `<PushToggle />` を入れて確認する)で「通知をオンにする」を押し、通知を許可する
+3. 設定画面の「通知をオンにする」を押し、通知を許可する
 4. 「テスト通知」を押す。通知が届き、タップするとアプリが開けば OK
 5. 届かないとき: テスト通知の応答の `code` を見る(`UNAUTHENTICATED`/`PERMISSION_DENIED` は Worker の secret かサービスアカウントの権限、`UNREGISTERED` は端末の登録が古い。FCM Registration API が無効だと登録の段階で失敗する)。`pnpm -F worker exec wrangler tail` でも確認できる
 
@@ -404,7 +404,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
   https://reminder.tomo-x.win/api/ingest/ping
 ```
 
-- 403 や 302 ではなく、Worker からの応答(404 など。ルートがまだない場合)が返れば、Service Auth のアプリが効いています
+- 403 や 302 ではなく、Worker からの応答(`200` と `{"ok":true}`)が返れば、Service Auth のアプリが効いています
 - 応答が 302 やログイン画面なら、パスの優先順位が想定と違います。1-6 の Policy の Action(Service Auth)を確認してください
 
 ### D1
