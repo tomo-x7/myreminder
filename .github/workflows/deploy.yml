@@ -1,0 +1,84 @@
+# main への push で Cloudflare にデプロイする(ai-docs/plan.md §4.5)。
+#
+# 初回デプロイの前に、本人が次を済ませておくこと(docs/setup.md を参照)。
+#   - worker/wrangler.jsonc の d1_databases[].database_id を、実際の D1 の ID に置き換えてコミットする
+#     (プレースホルダのままだとマイグレーションとデプロイが失敗する)
+#   - GitHub の repository secret に CLOUDFLARE_API_TOKEN と CLOUDFLARE_ACCOUNT_ID を登録する(docs/setup.md の 4)
+#   - Worker の secret(FCM_SERVICE_ACCOUNT など)を wrangler secret put で登録する(docs/setup.md の 3)
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    # ドキュメントや GAS だけの変更ではデプロイしない
+    paths-ignore:
+      - "ai-docs/**"
+      - "docs/**"
+      - "**/*.md"
+      - "gas/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同時デプロイを防ぐ。実行中のデプロイは途中で止めず、後続を待たせる
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # secret が未登録のうちは、チェックだけ行ってデプロイの手順は飛ばす
+    env:
+      HAS_CF_SECRETS: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+    steps:
+      # biome の設定が shared/(submodule)にあるので、submodule 込みで取得する
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      # version を省略すると、package.json の devEngines.packageManager(pnpm ^11.21.0)から決まる
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint (biome)
+        run: pnpm exec biome ci .
+
+      - name: Typecheck (worker)
+        run: pnpm -F worker typecheck
+
+      - name: Test (worker)
+        run: pnpm -F worker test
+
+      # tsc -b で web の型チェックも兼ねる。出力 web/dist は Worker の assets として配布される
+      - name: Build (web)
+        run: pnpm -F web build
+
+      # リポジトリに入っている wrangler(worker の devDependencies)を使う
+      - name: Apply D1 migrations
+        if: env.HAS_CF_SECRETS == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          packageManager: pnpm
+          workingDirectory: worker
+          command: d1 migrations apply myreminder --remote
+
+      - name: Deploy Worker
+        if: env.HAS_CF_SECRETS == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          packageManager: pnpm
+          workingDirectory: worker
+          command: deploy --minify

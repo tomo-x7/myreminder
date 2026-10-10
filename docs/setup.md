@@ -263,7 +263,10 @@ GitHub のリポジトリの **Settings** > **Secrets and variables** > **Action
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare の Account ID(ダッシュボードのサイドバー) |
 
 - 登録後は値を再表示できません。紛失したらトークンを作り直して登録し直します
-- ワークフロー(`.github/workflows/deploy.yml`)は別の issue(0-4)で追加します
+- ワークフロー(`.github/workflows/deploy.yml`)は `main` への push(ドキュメントと `gas/` だけの変更を除く)と、Actions 画面からの手動実行(`workflow_dispatch`)で動きます。biome・型チェック・テスト・`web` のビルドを通したあと、D1 のマイグレーションと `wrangler deploy` を行います
+- secret が未登録のうちは、チェック(biome・型チェック・テスト・ビルド)だけ行い、マイグレーションとデプロイは飛ばします
+- 初回のデプロイの前に、`worker/wrangler.jsonc` の `database_id` を実際の値に置き換えてコミットしておいてください(プレースホルダのままだと失敗します)
+- Worker の secret(3 の `FCM_SERVICE_ACCOUNT` など)はワークフローからは登録しません。手元で `wrangler secret put` した値がデプロイ後も残ります
 - 参照: https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets
 
 ---
