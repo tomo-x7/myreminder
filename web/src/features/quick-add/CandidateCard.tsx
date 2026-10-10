@@ -165,7 +165,6 @@ export function CandidateCard({
 					type="number"
 					inputMode="numeric"
 					min={1}
-					step={5}
 					value={draft.estimateMin}
 					disabled={disabled}
 					onChange={(e) => onChange({ estimateMin: e.target.value, estimateTouched: true })}

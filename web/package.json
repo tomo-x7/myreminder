@@ -15,7 +15,8 @@
 		"hono": "^4.13.13",
 		"react": "^19.2.8",
 		"react-dom": "^19.2.8",
-		"tailwindcss": "^4.3.3"
+		"tailwindcss": "^4.3.3",
+		"wouter": "^3.13.0"
 	},
 	"devDependencies": {
 		"@types/node": "^24.13.3",
