@@ -6,6 +6,7 @@ import { getDb } from "../db";
 import { courses, TASK_STATUSES, taskDueHistory, tasks as tasksTable } from "../db/schema";
 import type { Env } from "../env";
 import { triggerReplan } from "../notify/replan";
+import { notifySubmitted } from "../notify/webhook";
 import { taskCreateSchema, taskUpdateSchema } from "../schemas/task";
 import { idParamSchema, NOT_FOUND } from "../services/http";
 
@@ -88,22 +89,24 @@ export const tasks = new Hono<Env>()
 			.returning();
 
 		// 締切が変わったら履歴に残す(更新と同じバッチで原子的に)
-		if (patch.dueAt !== undefined && patch.dueAt !== current.dueAt) {
-			const [[row]] = await db.batch([
-				update,
-				db.insert(taskDueHistory).values({
-					taskId: id,
-					oldDueAt: current.dueAt,
-					newDueAt: patch.dueAt,
-					changedAt: now,
-					cause: "manual",
-				}),
-			]);
-			triggerReplan(c);
-			return c.json(row, 200);
-		}
-		const [row] = await update;
+		const [row] =
+			patch.dueAt !== undefined && patch.dueAt !== current.dueAt
+				? (
+						await db.batch([
+							update,
+							db.insert(taskDueHistory).values({
+								taskId: id,
+								oldDueAt: current.dueAt,
+								newDueAt: patch.dueAt,
+								changedAt: now,
+								cause: "manual",
+							}),
+						])
+					)[0]
+				: await update;
 		triggerReplan(c);
+		// 提出済みにしたら Discord / Slack に報告する(レスポンスは待たせない)
+		if (submittedAt === now) c.executionCtx.waitUntil(notifySubmitted(db, id, now));
 		return c.json(row, 200);
 	})
 	.delete("/:id", vValidator("param", idParamSchema), async (c) => {

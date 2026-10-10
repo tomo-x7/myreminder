@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { PageHeader, QueryState, SectionTitle } from "../components/ui";
 import { SettingsForm } from "../features/settings/SettingsForm";
+import { WebhookSettings } from "../features/webhooks";
 import { useSettings, useUpdateSettings } from "../lib/queries";
 import { PushToggle } from "../push/PushToggle";
 
@@ -25,6 +26,10 @@ export function SettingsPage() {
 				>
 					作業記録を見る・直す →
 				</Link>
+			</section>
+			<section className="flex flex-col gap-2">
+				<SectionTitle>Discord / Slack への報告</SectionTitle>
+				<WebhookSettings />
 			</section>
 			<QueryState query={settings}>
 				{(s) => (

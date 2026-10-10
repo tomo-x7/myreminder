@@ -2,6 +2,7 @@ import { getDb } from "./db";
 import type { Bindings } from "./env";
 import { dispatchDueNotifications } from "./notify/dispatch";
 import { replanNotifications } from "./notify/replan";
+import { sendDailySummaryIfDue } from "./notify/webhook";
 import { checkWorkingSessions } from "./services/status";
 
 /**
@@ -18,6 +19,8 @@ export async function runScheduled(event: ScheduledController, env: Bindings, _c
 			? [{ name: "replanNotifications", run: () => replanNotifications(getDb(env), now) }]
 			: []),
 		{ name: "dispatchDueNotifications", run: () => dispatchDueNotifications(env, now) },
+		// Discord / Slack へのその日の作業時間の報告(夜のダイジェストの時刻以降、1日1回)
+		{ name: "sendDailySummaryIfDue", run: () => sendDailySummaryIfDue(getDb(env), now) },
 	];
 	for (const step of steps) {
 		try {
