@@ -21,6 +21,7 @@ type Form = {
 	weekdayHours: string;
 	holidayHours: string;
 	dailyLimit: string;
+	criticalDuringSleep: boolean;
 	periods: PeriodRow[];
 };
 
@@ -34,6 +35,7 @@ const toForm = (s: Settings): Form => ({
 	weekdayHours: hoursText(s.usualCapacityDefaults.weekday),
 	holidayHours: hoursText(s.usualCapacityDefaults.holiday),
 	dailyLimit: String(s.notificationDailyLimit),
+	criticalDuringSleep: s.criticalDuringSleep,
 	periods: s.timetablePeriods.map((p, i) => ({
 		key: i,
 		period: String(p.period),
@@ -81,6 +83,7 @@ function toPatch(f: Form): { patch: SettingsPatch } | { error: string } {
 			digest: { morningMin: morning, eveningMin: evening },
 			usualCapacityDefaults: { weekday, holiday },
 			notificationDailyLimit: limit,
+			criticalDuringSleep: f.criticalDuringSleep,
 			timetablePeriods: periods,
 		},
 	};
@@ -191,6 +194,20 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 						className={inputClass}
 					/>
 				</Field>
+				<label className="flex items-start gap-3 text-base text-gray-900">
+					<input
+						type="checkbox"
+						checked={form.criticalDuringSleep}
+						onChange={(e) => set("criticalDuringSleep", e.target.checked)}
+						className="mt-1 h-5 w-5 shrink-0"
+					/>
+					<span>
+						寝ている間も致命的な通知を送る
+						<span className="block text-xs text-gray-500">
+							オフなら起きた時刻に送る(締切に近すぎるときは寝る前)
+						</span>
+					</span>
+				</label>
 			</Card>
 
 			<Card>
