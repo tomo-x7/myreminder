@@ -4,6 +4,9 @@ onlyBuiltDependencies:
 allowBuilds:
   esbuild: true
   workerd: true
+  # firebase の依存の postinstall は不要(Firebase Hosting 用の自動設定とバージョン表示だけ)
+  "@firebase/util": false
+  protobufjs: false
 
 packages:
   - "web"

@@ -182,7 +182,17 @@ Account ID は、ダッシュボードのどのゾーンでも右側のサイド
 2. プロジェクトの概要で **</>(ウェブ)** のアイコンを押してアプリを登録する(ニックネーム: `myreminder-web`)。Firebase Hosting は設定しない
 3. 表示される `firebaseConfig`(`apiKey`、`projectId`、`messagingSenderId`、`appId` など)を控える
 
-`firebaseConfig` と VAPID 公開鍵は公開してよい値です。コミット先(`web/` のどのファイルか)は、後の issue で決めます。
+`firebaseConfig` と VAPID 公開鍵は公開してよい値です。2-3 の VAPID 公開鍵と合わせて、**`web/src/push/firebase-config.ts`** の `YOUR_` で始まるプレースホルダを実際の値に置き換えてコミットします(`.env` は gitignore されているので使いません)。
+
+| 埋める場所 | Firebase コンソールの値 |
+|---|---|
+| `firebaseConfig.apiKey` | `apiKey` |
+| `firebaseConfig.projectId` | `projectId` |
+| `firebaseConfig.messagingSenderId` | `messagingSenderId` |
+| `firebaseConfig.appId` | `appId` |
+| `vapidKey`(2-3 で取得) | Web Push certificates の公開鍵 |
+
+`YOUR_` のままだと、通知を有効にしようとしたときに「Firebase の設定が未入力です」と表示されて止まります。Service Worker(`web/public/firebase-messaging-sw.js`)には、この設定が URL のクエリで渡されるので、Service Worker 側を編集する必要はありません。
 
 - 参照: https://firebase.google.com/docs/cloud-messaging/js/client
 
@@ -203,7 +213,7 @@ Account ID は、ダッシュボードのどのゾーンでも右側のサイド
 2. **Web configuration** の **Web Push certificates** で **Generate key pair**
 3. 表示される **公開鍵**(Key pair)を控える。これが VAPID 公開鍵です
 
-秘密鍵の側は Firebase Admin では使わないので、コンソールに表示されるものをそのまま使ってください。
+表示された公開鍵を `web/src/push/firebase-config.ts` の `vapidKey` に貼ります(2-1 の表を参照)。秘密鍵の側は Worker では使いません。
 
 - 参照: https://firebase.google.com/docs/cloud-messaging/js/client
 
@@ -216,6 +226,16 @@ Account ID は、ダッシュボードのどのゾーンでも右側のサイド
 この JSON は**極めて強い権限**を持つ秘密情報です。リポジトリの中に置かないでください(ダウンロード先は `~/Downloads` などリポジトリの外にする)。Worker の secret に登録したら、ファイルは削除します。
 
 - 参照: https://firebase.google.com/docs/admin/setup / https://firebase.google.com/docs/cloud-messaging/auth-server
+
+### 2-5. Android の Chrome で動作確認する
+
+1. 2-1〜2-4 と 3(secret の登録)を終えて、デプロイする(`pnpm -F web build && pnpm -F worker exec wrangler deploy`)
+2. Android の Chrome で `https://reminder.tomo-x.win` を開き、Access でログインする
+3. `PushToggle`(設定画面に置く予定。置くまでは一時的に `App.tsx` に `<PushToggle />` を入れて確認する)で「通知をオンにする」を押し、通知を許可する
+4. 「テスト通知」を押す。通知が届き、タップするとアプリが開けば OK
+5. 届かないとき: テスト通知の応答の `code` を見る(`UNAUTHENTICATED`/`PERMISSION_DENIED` は Worker の secret かサービスアカウントの権限、`UNREGISTERED` は端末の登録が古い。FCM Registration API が無効だと登録の段階で失敗する)。`pnpm -F worker exec wrangler tail` でも確認できる
+
+ホーム画面への追加(PWA のインストール)はなくても Android の Chrome では通知が届きます。
 
 ---
 
