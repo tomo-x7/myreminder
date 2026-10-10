@@ -1,0 +1,20 @@
+{
+	"timeZone": "Asia/Tokyo",
+	"runtimeVersion": "V8",
+	"dependencies": {
+		"enabledAdvancedServices": [
+			{
+				"userSymbol": "Classroom",
+				"serviceId": "classroom",
+				"version": "v1"
+			}
+		]
+	},
+	"oauthScopes": [
+		"https://www.googleapis.com/auth/classroom.courses.readonly",
+		"https://www.googleapis.com/auth/classroom.coursework.me.readonly",
+		"https://www.googleapis.com/auth/script.external_request",
+		"https://www.googleapis.com/auth/script.scriptapp"
+	],
+	"exceptionLogging": "STACKDRIVER"
+}

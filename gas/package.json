@@ -1,0 +1,14 @@
+{
+	"name": "gas",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "node build.mjs",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/google-apps-script": "^2.0.13",
+		"esbuild": "^0.28.2",
+		"typescript": "~6.0.3"
+	}
+}

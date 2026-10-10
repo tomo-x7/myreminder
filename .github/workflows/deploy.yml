@@ -55,6 +55,10 @@ jobs:
       - name: Typecheck (worker)
         run: pnpm -F worker typecheck
 
+      # Apps Script は取り込みの契約(worker/src/schemas/ingest.ts)の型を使うので、契約を変えたら壊れていないか見る
+      - name: Typecheck (gas)
+        run: pnpm -F gas typecheck
+
       - name: Test (worker)
         run: pnpm -F worker test
 

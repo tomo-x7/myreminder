@@ -5,6 +5,7 @@
 	"main": "index.js",
 	"scripts": {
 		"web": "pnpm -F web",
+		"gas": "pnpm -F gas",
 		"worker": "pnpm -F worker",
 		"check": "biome check --write"
 	},

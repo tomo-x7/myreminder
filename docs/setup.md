@@ -291,12 +291,88 @@ GitHub のリポジトリの **Settings** > **Secrets and variables** > **Action
 
 ---
 
-## 5. Apps Script(3-2 で追記)
+## 5. Apps Script(Classroom の取り込み)
 
-Classroom の取り込み(Apps Script)のセットアップ手順は、Phase 3 の issue(3-2)で追記します。ここでは、1-5 で作った Service Token の値を Script Properties に入れる場所だけ決めておきます。
+Classroom の課題を1時間ごとに Worker へ送る Apps Script のセットアップです。ソースは `gas/` にあり、ビルドした `gas/dist/Code.js` をエディタに貼り付けます。`gas/dist/` はコミットされません。
 
-- 予定の Script Properties のキー: `CF_ACCESS_CLIENT_ID`、`CF_ACCESS_CLIENT_SECRET`、取り込み先の URL
-- Token の値はコード・リポジトリ・コミットに書かないこと
+- このリポジトリは **public** です。Client Secret は Script Properties にだけ入れ、コード・コミット・チャットには書かないでください
+- Apps Script のプロジェクトを開ける人は Script Properties を読めます。プロジェクトは自分だけが編集できる状態にしておきます
+
+### 5-1. プロジェクトを作る
+
+大学の Google アカウント(Classroom を使っているアカウント)で、https://script.google.com を開きます。
+
+1. **新しいプロジェクト** を押す
+2. 名前を `myreminder-classroom` などに変える
+
+- 参照: https://developers.google.com/apps-script/guides/projects
+
+### 5-2. マニフェスト(appsscript.json)をエディタで表示する
+
+1. 左の歯車(**プロジェクトの設定**)を開く
+2. **「appsscript.json」 マニフェスト ファイルをエディタで表示する** にチェックを入れる
+3. エディタに戻ると `appsscript.json` が出るので、中身をリポジトリの `gas/appsscript.json` の内容で置き換える
+
+タイムゾーン、V8 ランタイム、Classroom の拡張サービス、必要な権限(スコープ)がこのファイルで決まります。
+
+- 参照: https://developers.google.com/apps-script/concepts/manifests
+
+### 5-3. Code.js を貼り付ける
+
+手元(リポジトリのルート)でビルドします。
+
+```sh
+pnpm gas build
+```
+
+`gas/dist/Code.js` ができるので、中身をすべて開き、エディタの `コード.gs`(最初からあるファイル。名前は何でもかまいません)に貼り付けます。最初からある `myFunction` などのコードは消してください。貼り付けたら保存します(Ctrl+S)。
+
+### 5-4. Script Properties を設定する
+
+歯車(**プロジェクトの設定**)の **スクリプト プロパティ** で、次の 3 つを追加します。
+
+| プロパティ | 値 |
+|---|---|
+| `INGEST_URL` | `https://reminder.tomo-x.win/api/ingest/classroom` |
+| `CF_ACCESS_CLIENT_ID` | 1-5 で表示された Client ID |
+| `CF_ACCESS_CLIENT_SECRET` | 1-5 で表示された Client Secret |
+
+- Client Secret は、1-5 の画面を閉じると見られなくなります。紛失したら Service Token を作り直し、ここの値を入れ直します
+- 参照: https://developers.google.com/apps-script/guides/properties
+
+### 5-5. 接続確認、同期、トリガーの順に実行する
+
+エディタの上の関数の選択肢で関数を選び、**実行** を押します。
+
+1. **`checkConnection`** を実行する。初回は権限の承認が出るので許可する。実行ログに「接続OK」が出れば、Service Token と URL は正しい
+2. **`syncClassroom`** を実行する。Classroom の読み取りの権限を許可する。実行ログに「取り込み完了: 受信 N / 新規 N / …」が出れば成功
+3. **`installTrigger`** を実行する。左の時計のアイコン(**トリガー**)に `syncClassroom` が1時間ごとに登録されていれば完了
+
+- 承認画面に「このアプリは確認されていません」と出る場合は、自分で作ったプロジェクトなので内容を確かめて許可します
+- トリガーは、作成したアカウントの権限で動きます。そのアカウントが大学のドメインから外れると止まります
+
+### 5-6. 更新するとき
+
+コードを変えたら、リポジトリのルートで次を実行します。
+
+```sh
+pnpm gas build
+```
+
+`gas/dist/Code.js` の中身をすべてコピーして、エディタの `コード.gs` に貼り直して保存します。マニフェストを変えた場合は `appsscript.json` も貼り直します。トリガーはそのままで、`installTrigger` の再実行は不要です。
+
+### 5-7. うまくいかないとき
+
+実行ログ(**実行数** の画面、または関数を実行したときのログ)で原因を見ます。
+
+| ログ | 原因と対処 |
+|---|---|
+| HTTP 302 | Access のログイン画面に転送されている。Service Token が認証されていません。1-6 のアプリの Policy が **Service Auth** か、パスが `/api/ingest/*` かを確認する |
+| HTTP 401 / 403 | Service Token が無効か、期限切れです。1-5 の Token を Refresh(延長)するか作り直し、Script Properties の `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` を更新する |
+| Script Properties が足りません | 5-4 の 3 つのプロパティのどれかが未設定か、名前が違う |
+| Classroom の拡張サービスが有効ではありません | マニフェストの `enabledAdvancedServices` が入っていない。5-2 をやり直す |
+
+- Service Token の期限は、1-5 で決めた期間です。切れる日をカレンダーに入れておくと止まりにくくなります
 
 ---
 
