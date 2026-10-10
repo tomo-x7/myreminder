@@ -8,7 +8,11 @@
 
 - [ai-docs/plan.md](ai-docs/plan.md): 計画書(要件、本人の性格の読み取り、心理ハック、技術スタック、フェーズ、未決事項)。作業を始める前に読む
 - [ai-docs/decisions.md](ai-docs/decisions.md): 決定ログ。決めたことは末尾に追記する
-- [ai-docs/research.md](ai-docs/research.md): 調査で確認した事実と出典。調べ直す前にまずここを見る
+- [ai-docs/research/](ai-docs/research/): 調査で確認した事実と出典。調べ直す前にまずここを見る
+  - `platform.md`: Cloudflare・FCM・Workers AI・取り込み元
+  - `behavior.md`: 心理学・行動経済学
+  - `algorithms.md`: スケジューリング・見積もり
+  - `gas.md`: Apps Script
 
 本人が何かを決めたとき、エージェントが何かを学んだとき、計画が変わったときは、該当ファイルを更新して同じコミットに含める。
 
