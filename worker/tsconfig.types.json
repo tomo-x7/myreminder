@@ -1,0 +1,12 @@
+{
+	// web が型 (AppType) だけを参照するための宣言ファイル生成用。web/tsconfig.json の references から呼ばれる
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"composite": true,
+		"declaration": true,
+		"emitDeclarationOnly": true,
+		"outDir": "./node_modules/.tmp/types",
+		"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.types.tsbuildinfo"
+	},
+	"exclude": ["src/**/*.test.ts", "vitest.config.ts"]
+}

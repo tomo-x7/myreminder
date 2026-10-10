@@ -2,6 +2,6 @@
 	"$schema": "https://biomejs.dev/schemas/2.2.3/schema.json",
 	"extends": ["./shared/biome.jsonc"],
 	"files": {
-		"includes": ["**", "!**/worker-configuration.d.ts"]
+		"includes": ["**", "!**/worker-configuration.d.ts", "!**/migrations"]
 	}
 }

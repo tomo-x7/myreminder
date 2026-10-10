@@ -437,6 +437,8 @@ myreminder/
 
 ### 4.7 データモデル(案)
 
+確定版は `worker/src/db/schema.ts`(#3)。ID は UUID の文字列(`user_status` は1行固定、`push_tokens` は token、`settings` は key が主キー)。`busy_blocks` は、繰り返し(曜日+JST の0時からの分+期間)と単発(epoch ミリ秒)の両方を持つ。
+
 | テーブル | 主な列 |
 |---|---|
 | `courses` | id, name, aliases(取り込み元ごとの表記揺れ), color |
