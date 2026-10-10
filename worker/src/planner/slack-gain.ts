@@ -15,6 +15,8 @@ export type SlackGainInput = {
 	spareMin: Minutes;
 	/** ストレスの尺度。既定 1 */
 	tau?: number;
+	/** true なら近道をせず、候補ごとに計画し直す(近道との一致を確かめるテスト用) */
+	exact?: boolean;
 };
 
 export type SlackGain = {
@@ -102,6 +104,26 @@ function evaluate(tasks: PlanTask[], cap: Capacity, now: Ms, marginRatio: number
 	};
 }
 
+/**
+ * 配置をせずに、締切ごとの余裕(普段のキャパ)と山場だけを出す。plan() の手順2・4と同じ計算・同じ順序
+ * (同じ浮動小数の結果になるように)。capU は締切までの普段のキャパ
+ */
+function demandBound(tasks: PlanTask[], now: Ms, capU: (d: Ms) => Minutes): Omit<Evaluation, "infeasible"> {
+	const live = tasks.filter((t) => t.dueAt > now).sort(cmpTask);
+	const slacks: Minutes[] = [];
+	let bottleneck: Minutes | null = null;
+	let acc = 0;
+	for (let k = 0; k < live.length; k++) {
+		acc += live[k].remainingP80;
+		// 同じ締切は1つにまとめる(最後のタスクまで足してから余裕を出す)
+		if (k + 1 < live.length && live[k + 1].dueAt === live[k].dueAt) continue;
+		const s = snap(capU(live[k].dueAt) - acc, 1e6);
+		slacks.push(s);
+		if (bottleneck === null || s < bottleneck) bottleneck = s;
+	}
+	return { bottleneck, slacks };
+}
+
 /** ストレス Σ exp(−(s / D) / tau) */
 function stressOf(slacks: Minutes[], D: Minutes, tau: number): number {
 	let sum = 0;
@@ -159,6 +181,20 @@ export function slackGain(input: SlackGainInput): SlackGain[] {
 	const base = evaluate(tasks, capNext, nextNow, marginRatio);
 	const baseStress = stressOf(base.slacks, D, tau);
 
+	// 近道: 休んでも間に合わないタスクがなければ、残りを減らしても間に合わないタスクは増えない
+	// (需要上限テストの各締切の需要は減るだけ。配置も、減らしたぶん場所が空くだけ)。
+	// そのときは配置をせず、締切ごとの余裕だけを計算し直す。候補ごとの計画し直しは重い(CPU 10ms の制限)
+	const fast = !input.exact && base.infeasible === 0;
+	const capUCache = new Map<Ms, Minutes>();
+	const capU = (d: Ms): Minutes => {
+		let v = capUCache.get(d);
+		if (v === undefined) {
+			v = capacityUntil(capNext, d, "usual");
+			capUCache.set(d, v);
+		}
+		return v;
+	};
+
 	const scored = candidates.map((t) => {
 		// 空き時間のうち、公開日時より後の分しかこのタスクには使えない
 		const usable = Math.max(0, Math.min(spareMin, (nextNow - (t.releaseAt ?? now)) / MINUTE));
@@ -166,7 +202,9 @@ export function slackGain(input: SlackGainInput): SlackGain[] {
 		const after = tasks
 			.map((x) => (x.id === t.id ? { ...x, remainingP80: x.remainingP80 - work } : x))
 			.filter((x) => x.remainingP80 > 1e-9);
-		const done = evaluate(after, capNext, nextNow, marginRatio);
+		const done: Evaluation = fast
+			? { infeasible: 0, ...demandBound(after, nextNow, capU) }
+			: evaluate(after, capNext, nextNow, marginRatio);
 
 		// 何も残らず山場がなくなったときは、片付けた分を改善量とする
 		const bottleneckDelta =

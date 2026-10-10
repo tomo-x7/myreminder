@@ -225,3 +225,56 @@ describe("slackGain: 性能", () => {
 		expect(elapsed).toBeLessThan(200);
 	});
 });
+
+describe("slackGain: 近道(配置をしない計算)と、候補ごとに計画し直した結果が一致する", () => {
+	// 再現できる乱数(mulberry32)
+	const rng = (seed: number) => () => {
+		seed = (seed + 0x6d2b79f5) | 0;
+		let t = seed;
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
+
+	it("ランダムな 400 ケース", () => {
+		let compared = 0;
+		for (let seed = 1; seed <= 400; seed++) {
+			const r = rng(seed);
+			const int = (a: number, b: number) => a + Math.floor(r() * (b - a + 1));
+			const horizonDays = int(7, 40);
+			const busy: Interval[] = [];
+			for (let d = 0; d < horizonDays; d++) {
+				if (r() < 0.6) {
+					const start = NOW + d * DAY + int(0, 8) * HOUR;
+					busy.push({ start, end: start + int(1, 4) * 90 * MINUTE });
+				}
+			}
+			const tasks = Array.from({ length: int(1, 14) }, (_, i) =>
+				task(`t${String(i).padStart(2, "0")}`, "2026-10-12 09:00", int(1, 16) * 15, {
+					dueAt: NOW + int(2, horizonDays * 24 - 1) * HOUR,
+					minBlock: [15, 30, 60, 90, 120][int(0, 4)],
+					releaseAt: r() < 0.2 ? NOW + int(0, 72) * HOUR : undefined,
+					uncertain: r() < 0.2,
+				}),
+			);
+			const input: SlackGainInput = {
+				capacityInput: capInput({
+					horizonDays,
+					busy,
+					usual: { weekday: int(60, 300), holiday: int(60, 480) },
+					workedToday: int(0, 120),
+				}),
+				tasks,
+				marginRatio: 0.5,
+				candidateIds: tasks.filter(() => r() < 0.7).map((t) => t.id),
+				spareMin: int(30, 90),
+			};
+			const fast = slackGain(input);
+			const exact = slackGain({ ...input, exact: true });
+			expect(fast, `seed ${seed}`).toEqual(exact);
+			compared += fast.length;
+		}
+		// 比べた件数が少なすぎると意味がない
+		expect(compared).toBeGreaterThan(500);
+	});
+});
