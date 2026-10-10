@@ -62,6 +62,8 @@ export type PolicyInput = {
 	history: HistoryItem[];
 	/** 最後にダイジェストを送ってから長く空いている(最初の朝に週の見通しを付ける) */
 	longGap: boolean;
+	/** 受信箱の確認待ち: 承認待ち + 変更の提案。朝のダイジェストに件数だけ載せる */
+	inboxPending: number;
 	/** これより先の通知は作らない(次の再計画で作る)。既定 48h */
 	horizonMs?: Ms;
 };
@@ -612,7 +614,15 @@ function digestNotifications(input: PolicyInput, cal: Calendar): DesiredNotifica
 			}
 			if (doneUnsubmitted.length > 0) lines.push(`提出はした?: ${listTitles(doneUnsubmitted)}`);
 			if (input.overdue.length > 0) lines.push(`期限切れ ${input.overdue.length}件`);
-			if (lines.length > 0 && (todays.length > 0 || soon.length > 0 || doneUnsubmitted.length > 0 || outlook)) {
+			if (input.inboxPending > 0) lines.push(`受信箱: 確認待ち ${input.inboxPending}件`);
+			if (
+				lines.length > 0 &&
+				(todays.length > 0 ||
+					soon.length > 0 ||
+					doneUnsubmitted.length > 0 ||
+					input.inboxPending > 0 ||
+					outlook)
+			) {
 				out.push({
 					dedupeKey: `digest:morning:${dateKey}`,
 					kind: monday ? "weekly" : "digest",

@@ -4,6 +4,8 @@ import type { Bindings, Env } from "./env";
 import { busyBlocks } from "./routes/busy-blocks";
 import { courses } from "./routes/courses";
 import { health } from "./routes/health";
+import { inbox } from "./routes/inbox";
+import { ingest } from "./routes/ingest";
 import { parse } from "./routes/parse";
 import { push } from "./routes/push";
 import { schedule } from "./routes/schedule";
@@ -26,7 +28,9 @@ const routes = app
 	.route("/schedule", schedule)
 	.route("/status", status)
 	.route("/sessions", sessions)
-	.route("/webhooks", webhooks);
+	.route("/webhooks", webhooks)
+	.route("/ingest", ingest)
+	.route("/inbox", inbox);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 

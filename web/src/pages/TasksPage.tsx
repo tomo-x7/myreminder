@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "wouter";
 import { btnPrimary, ErrorNotice, PageHeader, QueryState } from "../components/ui";
+import { InboxBanner } from "../features/inbox";
 import { AddTaskSheet } from "../features/tasks/AddTaskSheet";
 import { FILTERS, isStatusFilter, matchesFilter, type StatusFilter } from "../features/tasks/status";
 import { TaskRow } from "../features/tasks/TaskRow";
@@ -62,6 +63,7 @@ export function TasksPage() {
 					</button>
 				}
 			/>
+			<InboxBanner className="rounded-lg border border-blue-400 bg-blue-50 px-4 py-3 text-base font-semibold text-blue-900" />
 			<div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label="状態で絞り込み">
 				{FILTERS.map((f) => (
 					<button

@@ -50,6 +50,7 @@ const base = (over: Partial<PolicyInput> = {}): PolicyInput => ({
 	criticalDuringSleep: false,
 	history: [],
 	longGap: false,
+	inboxPending: 0,
 	...over,
 });
 const gen = (over: Partial<PolicyInput>) => generateNotifications(base(over));
@@ -393,6 +394,27 @@ describe("ダイジェスト", () => {
 		expect(at(m)).toBe(jst("2026-10-14 08:00"));
 		expect(m.payload.body).toContain("期限切れ 1件");
 		expect(m.payload.body).toContain("今日 23:59 英語レポート");
+	});
+
+	it("受信箱の確認待ちがあれば、朝のダイジェストに件数の行が付く(夜には付かない)", () => {
+		const list = gen({ now: jst("2026-10-13 20:00"), tasks: [t0], inboxPending: 3 });
+		const m = list.find((n) => n.dedupeKey.startsWith("digest:morning:")) as DesiredNotification;
+		expect(m.payload.body).toContain("受信箱: 確認待ち 3件");
+		const eve = list.find((n) => n.dedupeKey.startsWith("digest:evening:")) as DesiredNotification;
+		expect(eve.payload.body).not.toContain("受信箱");
+	});
+
+	it("確認待ちが0件なら、受信箱の行は付かない", () => {
+		const list = gen({ now: jst("2026-10-13 20:00"), tasks: [t0], inboxPending: 0 });
+		const m = list.find((n) => n.dedupeKey.startsWith("digest:morning:")) as DesiredNotification;
+		expect(m.payload.body).not.toContain("受信箱");
+	});
+
+	it("タスクが何もなくても、確認待ちだけでも朝のダイジェストを作る", () => {
+		const list = gen({ now: jst("2026-10-13 20:00"), tasks: [], inboxPending: 2 });
+		const m = list.filter((n) => n.dedupeKey.startsWith("digest:morning:"));
+		expect(m.length).toBeGreaterThan(0);
+		expect(m[0].payload.body).toBe("受信箱: 確認待ち 2件");
 	});
 
 	it("何もなければダイジェストを作らない", () => {

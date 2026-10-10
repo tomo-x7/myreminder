@@ -3,12 +3,12 @@ import { and, asc, eq, gte, inArray, lt } from "drizzle-orm";
 import { Hono } from "hono";
 import * as v from "valibot";
 import { getDb } from "../db";
-import { courses, TASK_STATUSES, taskDueHistory, tasks as tasksTable } from "../db/schema";
+import { TASK_STATUSES, taskDueHistory, tasks as tasksTable } from "../db/schema";
 import type { Env } from "../env";
 import { triggerReplan } from "../notify/replan";
 import { notifySubmitted } from "../notify/webhook";
 import { taskCreateSchema, taskUpdateSchema } from "../schemas/task";
-import { idParamSchema, NOT_FOUND } from "../services/http";
+import { courseExists, INVALID_COURSE, idParamSchema, NOT_FOUND } from "../services/http";
 
 const epochMsQuery = v.pipe(v.string(), v.regex(/^\d+$/), v.transform(Number));
 
@@ -26,11 +26,6 @@ const taskListQuerySchema = v.object({
 	// dueAt >= dueAfter
 	dueAfter: v.optional(epochMsQuery),
 });
-
-const INVALID_COURSE = { error: "invalid_course" } as const;
-
-const courseExists = async (db: ReturnType<typeof getDb>, courseId: string) =>
-	(await db.select({ id: courses.id }).from(courses).where(eq(courses.id, courseId))).length > 0;
 
 export const tasks = new Hono<Env>()
 	.get("/", vValidator("query", taskListQuerySchema), async (c) => {

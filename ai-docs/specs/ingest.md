@@ -22,13 +22,13 @@ plan.md §3.9 の実装仕様。契約(型)の正は [worker/src/schemas/ingest.
 | 既存の行 | 動き |
 |---|---|
 | なし | 新しく作る。`firstSeenAt = lastSeenAt = now`。下の「初めて見たときの自動無視」に当たれば `ignored`、それ以外は `pending`(受信箱に入る) |
-| `pending` | 項目を上書きする |
+| `pending` | 項目を上書きする。`remoteState` が `TURNED_IN` / `RETURNED` になったら `ignored`(`payload.autoIgnored = "submitted"`)にして受信箱から消す |
 | `ignored` | 項目を上書きするだけ。**二度と受信箱に出さない** |
 | `linked`(`taskId` あり) | 下の「紐付け済みの変化」 |
 | `linked`(タスクが削除されて `taskId` が null) | `ignored` と同じ扱い(本人が消したので) |
 
 - 項目 = `title` / `courseName` / `dueAt` / `url` / `remoteState`。`description` / `kind` は `payload` に入れる
-- `lastSeenAt` は、項目が変わったとき、または前回から24時間以上たったときだけ更新する(毎時の同期で全行を書き換えない。D1 の書き込み枠のため)
+- `lastSeenAt` は、項目が変わったとき、または前回から24時間以上たったときだけ更新する(毎時の同期で全行を書き換えない。D1 の書き込み枠のため)。`lastSeenAt` だけの更新は `id in (...)` の1文にまとめる
 - スナップショットに**ない**行は何もしない(削除も無視もしない)
 
 **初めて見たときの自動無視**(初回の同期で過去の課題が受信箱にあふれないように):

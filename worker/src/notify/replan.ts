@@ -1,10 +1,10 @@
 // 再計画: 計画を計算 → 通知ポリシーで「これから送りたい通知」を作る → notifications テーブルと突き合わせる。
 // 何度呼んでも同じ結果になる(冪等)。cron(毎時0分)と、タスク・予定・設定・ステータスの変更後に呼ぶ。
-import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 import type { Context } from "hono";
 import type { Db } from "../db";
 import { getDb } from "../db";
-import { busyBlocks, notifications, tasks } from "../db/schema";
+import { busyBlocks, ingestItems, notifications, tasks } from "../db/schema";
 import type { Env } from "../env";
 import { expandBusyBlocks } from "../planner/busy";
 import { DAY, type Ms } from "../planner/types";
@@ -37,7 +37,7 @@ const asPayload = (p: unknown): StoredPayload => (p && typeof p === "object" ? (
 export type ReplanResult = { inserted: number; updated: number; deleted: number };
 
 export async function replanNotifications(db: Db, now: Ms): Promise<ReplanResult> {
-	const [cfg, plan, taskRows, blockRows, histRows, lastDigest] = await Promise.all([
+	const [cfg, plan, taskRows, blockRows, histRows, lastDigest, inbox] = await Promise.all([
 		getSettings(db),
 		computePlan(db, now),
 		db
@@ -53,6 +53,16 @@ export async function replanNotifications(db: Db, now: Ms): Promise<ReplanResult
 			.select({ at: sql<number | null>`max(json_extract(${notifications.payload}, '$.sentAt'))` })
 			.from(notifications)
 			.where(and(eq(notifications.status, "sent"), inArray(notifications.kind, [...DAILY_DIGEST_KINDS]))),
+		// 受信箱の確認待ち: 承認待ち + 変更の提案
+		db
+			.select({ n: sql<number>`count(*)` })
+			.from(ingestItems)
+			.where(
+				or(
+					eq(ingestItems.status, "pending"),
+					and(eq(ingestItems.status, "linked"), isNotNull(ingestItems.pendingChange)),
+				),
+			),
 	]);
 
 	const planById = new Map(plan.tasks.map((t) => [t.id, t]));
@@ -106,6 +116,7 @@ export async function replanNotifications(db: Db, now: Ms): Promise<ReplanResult
 		criticalDuringSleep: cfg.criticalDuringSleep,
 		history,
 		longGap: lastDigestAt !== null && now - lastDigestAt >= LONG_GAP,
+		inboxPending: inbox[0]?.n ?? 0,
 	});
 
 	return reconcile(db, now, desired, new Set(history.map((h) => h.dedupeKey).filter((k): k is string => !!k)));

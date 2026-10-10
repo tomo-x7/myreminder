@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { btnPrimary, QueryState } from "../components/ui";
+import { InboxBanner } from "../features/inbox";
 import { BottleneckCard, NextCard, PlanAlerts, pickNext, useSchedule } from "../features/schedule";
 import type { Plan } from "../features/schedule/hooks";
 import { StatusSwitcher } from "../features/status";
@@ -26,6 +27,8 @@ function HomeBody({ plan, courses }: { plan: Plan; courses: readonly Course[] })
 					<p className="mt-1 text-sm text-gray-600">課題が出たら「＋ 追加」から登録しましょう</p>
 				</section>
 			)}
+
+			<InboxBanner className="rounded-lg border border-blue-400 bg-blue-50 px-4 py-3 text-base font-semibold text-blue-900" />
 
 			<BottleneckCard bottleneck={plan.bottleneck} now={now} />
 			<PlanAlerts plan={plan} now={now} />
