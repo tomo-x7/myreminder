@@ -1,6 +1,10 @@
 import type { ComponentType, ReactNode } from "react";
+import { EveningPage } from "./pages/EveningPage";
 import { HomePage } from "./pages/HomePage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SharePage } from "./pages/SharePage";
+import { SlackPage } from "./pages/SlackPage";
+import { StatusPage } from "./pages/StatusPage";
 import { TaskDetailPage } from "./pages/TaskDetailPage";
 import { TasksPage } from "./pages/TasksPage";
 import { TimetablePage } from "./pages/TimetablePage";
@@ -9,10 +13,11 @@ export type NavItem = { to: string; label: string; icon: ReactNode };
 
 const stroke = (d: string) => <path d={d} />;
 
-// 下タブ。余裕リスト・受信箱は、画面ができたらここに足す(ROUTES にも対応する行を足す)
+// 下タブ。受信箱は、画面ができたらここに足す(ROUTES にも対応する行を足す)
 export const NAV: readonly NavItem[] = [
 	{ to: "/", label: "ホーム", icon: stroke("M3 11l9-8 9 8M5 10v10h14V10M10 20v-6h4v6") },
 	{ to: "/tasks", label: "一覧", icon: stroke("M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01") },
+	{ to: "/slack", label: "余裕", icon: <circle cx="12" cy="12" r="8" /> },
 	{ to: "/timetable", label: "時間割", icon: stroke("M3 5h18v16H3zM3 10h18M8 3v4M16 3v4") },
 	{
 		to: "/settings",
@@ -31,6 +36,10 @@ export const ROUTES: readonly { path: string; component: ComponentType }[] = [
 	{ path: "/", component: HomePage },
 	{ path: "/tasks", component: TasksPage },
 	{ path: "/tasks/:id", component: TaskDetailPage },
+	{ path: "/slack", component: SlackPage },
+	{ path: "/evening", component: EveningPage },
+	{ path: "/status", component: StatusPage },
+	{ path: "/share", component: SharePage },
 	{ path: "/timetable", component: TimetablePage },
 	{ path: "/settings", component: SettingsPage },
 ];

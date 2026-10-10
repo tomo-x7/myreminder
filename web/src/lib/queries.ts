@@ -86,7 +86,12 @@ export const useSettings = () =>
 /** 更新系の mutation を作り、成功したらその key を無効化する */
 function useInvalidatingMutation<V, R>(mutationFn: (v: V) => Promise<R>, key: readonly unknown[]) {
 	const qc = useQueryClient();
-	return useMutation({ mutationFn, onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
+	// 計画(/api/schedule)はタスク・予定・設定のどれが変わっても変わる
+	return useMutation({
+		mutationFn,
+		onSuccess: () =>
+			Promise.all([qc.invalidateQueries({ queryKey: key }), qc.invalidateQueries({ queryKey: ["schedule"] })]),
+	});
 }
 
 export const useCreateTasks = () =>
@@ -110,6 +115,7 @@ export function useDeleteTask() {
 		onSuccess: (_, id) => {
 			qc.removeQueries({ queryKey: [...queryKeys.tasks, id], exact: true });
 			void qc.invalidateQueries({ queryKey: queryKeys.tasks });
+			void qc.invalidateQueries({ queryKey: ["schedule"] });
 		},
 	});
 }
@@ -135,6 +141,7 @@ export function useDeleteCourse() {
 			Promise.all([
 				qc.invalidateQueries({ queryKey: queryKeys.courses }),
 				qc.invalidateQueries({ queryKey: queryKeys.tasks }),
+				qc.invalidateQueries({ queryKey: ["schedule"] }),
 			]),
 	});
 }
@@ -164,6 +171,9 @@ export const useUpdateSettings = () => {
 			assertOk(res);
 			return res.json();
 		},
-		onSuccess: (data) => qc.setQueryData(queryKeys.settings, data),
+		onSuccess: (data) => {
+			qc.setQueryData(queryKeys.settings, data);
+			void qc.invalidateQueries({ queryKey: ["schedule"] });
+		},
 	});
 };

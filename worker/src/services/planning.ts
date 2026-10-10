@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { Db } from "../db";
 import { busyBlocks, sessions, tasks } from "../db/schema";
 import { expandBusyBlocks } from "../planner/busy";
-import { buildCapacity, type CapacityInput } from "../planner/capacity";
+import { buildCapacity, type CapacityInput, capacityUntil } from "../planner/capacity";
 import { fitEstimateModel, planningMultiplier, type Sample, uncertainty } from "../planner/estimate";
 import { type PlanOutput, type PlanTask, plan } from "../planner/schedule";
 import { type SlackGain, slackGain } from "../planner/slack-gain";
@@ -14,6 +14,7 @@ import { getSettings } from "../settings";
 import {
 	activityDayOf,
 	actualForSample,
+	confirmedMinutes,
 	dailyWorkForLearning,
 	latestProgress,
 	remainingFraction,
@@ -37,6 +38,15 @@ export type TaskMeta = {
 	courseId: string | null;
 	dueAt: Ms;
 	remainingP80: Minutes;
+	status: string;
+	estimateMin: Minutes;
+	firstStep: string | null;
+	/** 本人が決めた着手時刻 */
+	plannedStartAt: Ms | null;
+	/** 確認済みの記録のうち、一番新しい進捗(0〜100)。なければ null */
+	progress: number | null;
+	/** 確認済みで終了した作業記録の合計(分) */
+	actualMin: Minutes;
 };
 
 export type PlanContext = {
@@ -120,7 +130,19 @@ export async function buildPlanContext(db: Db, now: Ms): Promise<PlanContext> {
 			plannedStartAt: t.plannedStartAt ?? undefined,
 			uncertain: own.length === 0 && uncertainty(model, t.category, t.estimateMin) > UNCERTAIN_THRESHOLD,
 		});
-		meta.set(t.id, { id: t.id, title: t.title, courseId: t.courseId, dueAt: t.dueAt, remainingP80 });
+		meta.set(t.id, {
+			id: t.id,
+			title: t.title,
+			courseId: t.courseId,
+			dueAt: t.dueAt,
+			remainingP80,
+			status: t.status,
+			estimateMin: t.estimateMin,
+			firstStep: t.firstStep,
+			plannedStartAt: t.plannedStartAt,
+			progress: latestProgress(confirmed),
+			actualMin: confirmedMinutes(confirmed),
+		});
 	}
 
 	return {
@@ -143,6 +165,16 @@ export type TaskPlanView = PlanOutput["tasks"][number] & {
 	courseId: string | null;
 	dueAt: Ms;
 	remainingP80: Minutes;
+	status: string;
+	estimateMin: Minutes;
+	firstStep: string | null;
+	plannedStartAt: Ms | null;
+	progress: number | null;
+	actualMin: Minutes;
+	/** 「残り空き」。着手デッドラインまでに使える時間(普段のキャパ)=余裕+必要。必要は remainingP80 */
+	freeUsualMin: Minutes;
+	/** 同、本気のキャパ */
+	freeHardMin: Minutes;
 };
 
 export type PlanResult = {
@@ -155,6 +187,17 @@ export type PlanResult = {
 };
 
 const view = (ctx: PlanContext, id: string): TaskMeta => ctx.meta.get(id) as TaskMeta;
+
+const taskView = (ctx: PlanContext, t: PlanOutput["tasks"][number]): Omit<TaskPlanView, "blocks"> => {
+	const { blocks: _blocks, ...rest } = t;
+	const m = view(ctx, t.id);
+	return {
+		...rest,
+		...m,
+		freeUsualMin: t.slackUsual + m.remainingP80,
+		freeHardMin: t.slackHard + m.remainingP80,
+	};
+};
 
 /** 計画を計算して、API 向けにタスクの情報を足す */
 export async function computePlan(db: Db, now: Ms): Promise<PlanResult> {
@@ -169,10 +212,7 @@ export async function computePlan(db: Db, now: Ms): Promise<PlanResult> {
 		now,
 		bottleneck: out.bottleneck,
 		deadlines: out.deadlines,
-		tasks: out.tasks.map(({ blocks: _blocks, ...t }) => {
-			const m = view(ctx, t.id);
-			return { ...t, title: m.title, courseId: m.courseId, dueAt: m.dueAt, remainingP80: m.remainingP80 };
-		}),
+		tasks: out.tasks.map((t) => taskView(ctx, t)),
 		overdue: out.overdue.map((id) => view(ctx, id)),
 		dropCandidates: out.dropCandidates.map((id) => view(ctx, id)),
 	};
@@ -212,4 +252,95 @@ export async function computeSlackList(
 		return { ...g, title: m.title, dueAt: m.dueAt, remainingP80: m.remainingP80 };
 	});
 	return { spareMin: spare, items };
+}
+
+export type TaskSnapshot = Pick<
+	PlanOutput["tasks"][number],
+	| "risk"
+	| "slackUsual"
+	| "latestStartUsual"
+	| "latestStartHard"
+	| "recommendedStart"
+	| "needsFullEffort"
+	| "placementFailed"
+>;
+
+export type WhatIfResult = {
+	taskId: string;
+	startAt: Ms;
+	before: TaskSnapshot;
+	/** startAt より前には着手しない(releaseAt を startAt にした)として計画し直した結果 */
+	after: TaskSnapshot;
+	bottleneck: { before: PlanOutput["bottleneck"]; after: PlanOutput["bottleneck"] };
+	/** startAt から締切までに使える時間(分)。他のタスクの分は引いていない */
+	availableUsualMin: Minutes;
+	availableHardMin: Minutes;
+	neededMin: Minutes;
+	/** 計画し直したことでリスクが変わる、ほかのタスク */
+	changedOthers: {
+		id: string;
+		title: string;
+		before: PlanOutput["tasks"][number]["risk"];
+		after: PlanOutput["tasks"][number]["risk"];
+	}[];
+};
+
+const snapshot = (t: PlanOutput["tasks"][number]): TaskSnapshot => ({
+	risk: t.risk,
+	slackUsual: t.slackUsual,
+	latestStartUsual: t.latestStartUsual,
+	latestStartHard: t.latestStartHard,
+	recommendedStart: t.recommendedStart,
+	needsFullEffort: t.needsFullEffort,
+	placementFailed: t.placementFailed,
+});
+
+/**
+ * 「いつに回す?」の事実の計算。タスクを startAt より前には着手しない(releaseAt)として計画し直し、
+ * 今の計画と比べる。タスクが計画にない(完了済み・期限切れなど)ときは null
+ */
+export async function computeWhatIf(db: Db, now: Ms, taskId: string, startAt: Ms): Promise<WhatIfResult | null> {
+	const ctx = await buildPlanContext(db, now);
+	const target = ctx.planTasks.find((t) => t.id === taskId);
+	if (!target) return null;
+	const capacity = buildCapacity(ctx.capacityInput);
+	const base = plan({ now, tasks: ctx.planTasks, capacity, marginRatio: MARGIN_RATIO });
+	const from = Math.max(now, startAt);
+	const moved = plan({
+		now,
+		tasks: ctx.planTasks.map((t) =>
+			t.id === taskId ? { ...t, releaseAt: Math.max(t.releaseAt ?? from, from) } : t,
+		),
+		capacity,
+		marginRatio: MARGIN_RATIO,
+	});
+
+	// startAt から先のキャパを作り直して、締切までに使える時間を数える
+	const wake = ctx.capacityInput.sleep.endMin;
+	const sameDay = activityDayOf(from, wake) === activityDayOf(now, wake);
+	const later = buildCapacity({
+		...ctx.capacityInput,
+		now: from,
+		workedToday: sameDay ? ctx.capacityInput.workedToday : 0,
+	});
+
+	const find = (out: PlanOutput) => out.tasks.find((t) => t.id === taskId) as PlanOutput["tasks"][number];
+	const baseById = new Map(base.tasks.map((t) => [t.id, t]));
+	const changedOthers = moved.tasks.flatMap((t) => {
+		const b = baseById.get(t.id);
+		return t.id === taskId || !b || b.risk === t.risk
+			? []
+			: [{ id: t.id, title: view(ctx, t.id).title, before: b.risk, after: t.risk }];
+	});
+	return {
+		taskId,
+		startAt: from,
+		before: snapshot(find(base)),
+		after: snapshot(find(moved)),
+		bottleneck: { before: base.bottleneck, after: moved.bottleneck },
+		availableUsualMin: capacityUntil(later, target.dueAt, "usual"),
+		availableHardMin: capacityUntil(later, target.dueAt, "hard"),
+		neededMin: target.remainingP80,
+		changedOthers,
+	};
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { PageHeader, QueryState, SectionTitle } from "../components/ui";
 import { SettingsForm } from "../features/settings/SettingsForm";
 import { useSettings, useUpdateSettings } from "../lib/queries";
@@ -15,6 +16,15 @@ export function SettingsPage() {
 			<section className="flex flex-col gap-2">
 				<SectionTitle>プッシュ通知(この端末)</SectionTitle>
 				<PushToggle />
+			</section>
+			<section className="flex flex-col gap-2">
+				<SectionTitle>ステータスと作業記録</SectionTitle>
+				<Link
+					href="/status"
+					className="rounded-lg border border-gray-300 bg-white px-4 py-3 text-base text-gray-800"
+				>
+					作業記録を見る・直す →
+				</Link>
 			</section>
 			<QueryState query={settings}>
 				{(s) => (

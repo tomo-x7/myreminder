@@ -33,7 +33,7 @@ const AGO_PRESETS = [10, 30, 60] as const;
 const btn = "rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm active:bg-gray-100 disabled:opacity-50";
 
 /** 現在のステータス(Discord 風)と、手動の切り替え・作業の開始と終了 */
-export function StatusSwitcher() {
+export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 	const status = useStatus();
 	const setStatus = useSetStatus();
 	const start = useStartWorking();
@@ -46,6 +46,8 @@ export function StatusSwitcher() {
 	const [stopping, setStopping] = useState(false);
 	const [agoMin, setAgoMin] = useState(0);
 	const [taskId, setTaskId] = useState("");
+	// compact: 手動の切り替えとタスク選びは、開くまで隠す(ホームでは場所を取らない)
+	const [expanded, setExpanded] = useState(false);
 
 	if (status.isPending) return <p className="text-sm text-gray-500">読み込み中…</p>;
 	if (status.isError) return <p className="text-sm text-red-600">ステータスを取得できませんでした</p>;
@@ -175,6 +177,14 @@ export function StatusSwitcher() {
 						作業を終える
 					</button>
 				)
+			) : compact && !expanded ? (
+				<button
+					type="button"
+					className="self-start text-sm text-gray-600 underline"
+					onClick={() => setExpanded(true)}
+				>
+					ステータスを変える・タスクを選んで始める
+				</button>
 			) : (
 				<>
 					<div className="flex flex-col gap-2">

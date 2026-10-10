@@ -115,3 +115,10 @@ export function actualForSample(sessions: FinishedSession[]): { actualMin: Minut
 	}
 	return total > 0 ? { actualMin: total, completedAt: last } : null;
 }
+
+/** 終了した作業記録の合計(分)。呼び出し側で確認済みのものだけ渡す */
+export function confirmedMinutes(spans: SessionSpan[]): Minutes {
+	let total = 0;
+	for (const { startAt, endAt } of spans) if (endAt !== null && endAt > startAt) total += (endAt - startAt) / MINUTE;
+	return total;
+}

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
+import { ReviewPrompt } from "../features/status";
 import type { NavItem } from "../routes";
 
 function isActive(location: string, item: NavItem): boolean {
@@ -12,7 +13,11 @@ export function Layout({ nav, children }: { nav: readonly NavItem[]; children: R
 	const [location] = useLocation();
 	return (
 		<div className="mx-auto flex min-h-svh max-w-xl flex-col bg-gray-50 text-gray-900">
-			<main className="flex-1 px-4 pt-4 pb-28">{children}</main>
+			<main className="flex flex-1 flex-col gap-4 px-4 pt-4 pb-28">
+				{/* 消し忘れの作業記録は、次に開いたときに「いつ終わった?」と聞く */}
+				<ReviewPrompt />
+				{children}
+			</main>
 			<nav
 				aria-label="メニュー"
 				className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]"

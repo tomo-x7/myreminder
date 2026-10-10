@@ -27,8 +27,13 @@ async function unwrap<T>(res: { ok: boolean; status: number; json: () => Promise
 	throw new ApiError(body?.error ?? "unknown", res.status);
 }
 
+// 作業記録が変わると計画(残り・今日の作業分)も変わるので、schedule も取り直す
 const invalidate = (qc: QueryClient) =>
-	Promise.all([qc.invalidateQueries({ queryKey: ["status"] }), qc.invalidateQueries({ queryKey: ["sessions"] })]);
+	Promise.all([
+		qc.invalidateQueries({ queryKey: ["status"] }),
+		qc.invalidateQueries({ queryKey: ["sessions"] }),
+		qc.invalidateQueries({ queryKey: ["schedule"] }),
+	]);
 
 /** 現在時刻。タイマー表示用 */
 export function useNow(intervalMs: number): number {
