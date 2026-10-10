@@ -4,6 +4,8 @@ issue #12 で確定した仕様。実装は #13(見積もり・キャパの学�
 
 ## 共通の約束
 
+- ファイルの分担: #13 = `estimate.ts`・`usual-capacity.ts` / #14 = `capacity.ts`・`schedule.ts` / #15 = `slack-gain.ts`。共通の型は `types.ts`
+
 - **純粋関数のみ**: DB・現在時刻・乱数に触れない。`now` などはすべて引数で渡す
 - 時刻は epoch ミリ秒(`Ms`)、長さは分(`Minutes`)
 - 区間は半開区間 `[start, end)`
@@ -85,9 +87,9 @@ function uncertainty(model: EstimateModel, category: Category, estimateMin: Minu
 - 新しいサンプルほど効く: 古い比率 2.0 ×10件+新しい比率 1.0 ×10件 → 全体の中心は 1.0 寄り
 - 区分のサンプルが少ないうちは、全体に寄る(shrinkK の効果)
 
-## 2. キャパ(`capacity.ts`、#13 と #14)
+## 2. キャパ(#13 と #14)
 
-### 2.1 普段のキャパの学習(#13)
+### 2.1 普段のキャパの学習(`usual-capacity.ts`、#13)
 
 ```ts
 type DailyWork = { day: string /* 活動日 YYYY-MM-DD(JST) */; minutes: Minutes; holiday: boolean };
@@ -105,7 +107,7 @@ function learnUsualCapacity(
 - `floor` を下回らない
 - 休日 = 土日(祝日は扱わない。必要になったら呼び出し側で `holiday` を立てる)
 
-### 2.2 使える時間(#14)
+### 2.2 使える時間(`capacity.ts`、#14)
 
 ```ts
 type SleepWindow = { startMin: number; endMin: number }; // JST の0時からの分。日をまたいでよい(例: 60〜480)
