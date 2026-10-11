@@ -21,6 +21,15 @@ web 固有の処理が要るところは、`core` が受け口(関数やオプ�
 
 `core` の import は `core/<パス>`(例: `core/api/client`、`core/domain/date`)。`package.json` の `exports` で `./*` → `./src/*.ts` にしている。
 
+## フォームの分け方(#31 フェーズ B)
+
+入力画面のロジックは `core/src/forms/<名前>.ts` に置き、画面は「値を表示して、変更を渡す」だけにする。RN では入力の部品が違うので、部品に依存する部分だけが画面の層に残るようにする。
+
+- **フォームの状態の型**を core で決める。自由に打つ欄(タイトル、分数、時刻の文字列など)は打ったままの文字列で持つ。日時は epoch ms か null で持ち、`<input type="datetime-local">` の文字列との変換は web の部品の側でする(RN は日付ピッカーが Date を返すので)
+- 純粋関数: `fromEntity(既存の行) → 状態`、`emptyForm() → 状態`、`validateForm(状態) → { 項目: 文言 }`、`toInput(状態) → API に送る形`(検証を通ったときだけ)
+- 必要なら `useXxxForm()` のような小さなフックを core に置いてよい(状態・変更・保存中・エラーをまとめる)。保存は core/queries のフックを使う
+- 画面の層に残すもの: 部品の選択(input / select / ピッカー)、見た目、ルーティング、シートの開閉、フォーカスなどの DOM の操作
+
 ## API の契約
 
 ### 共通
