@@ -55,6 +55,10 @@ jobs:
       - name: Typecheck (worker)
         run: pnpm -F worker typecheck
 
+      # core は web と将来の RN アプリで共有する層。web のビルドとは別に単体でも型を見る
+      - name: Typecheck (core)
+        run: pnpm -F core typecheck
+
       # Apps Script は取り込みの契約(worker/src/schemas/ingest.ts)の型を使うので、契約を変えたら壊れていないか見る
       - name: Typecheck (gas)
         run: pnpm -F gas typecheck

@@ -201,6 +201,28 @@ importers:
         specifier: 2.2.3
         version: 2.2.3
 
+  core:
+    dependencies:
+      hono:
+        specifier: ^4.13.13
+        version: 4.13.13
+    devDependencies:
+      '@tanstack/react-query':
+        specifier: ^5.104.1
+        version: 5.104.1(react@19.3.0)
+      '@types/react':
+        specifier: ^19.2.18
+        version: 19.3.0
+      react:
+        specifier: ^19.2.8
+        version: 19.3.0
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      worker:
+        specifier: workspace:*
+        version: link:../worker
+
   gas:
     devDependencies:
       '@types/google-apps-script':
@@ -221,6 +243,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.104.1
         version: 5.104.1(react@19.3.0)
+      core:
+        specifier: workspace:*
+        version: link:../core
       firebase:
         specifier: ^13.0.0
         version: 13.0.0

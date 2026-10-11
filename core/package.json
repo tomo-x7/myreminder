@@ -1,0 +1,25 @@
+{
+	"name": "core",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./*": "./src/*.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc -b"
+	},
+	"peerDependencies": {
+		"@tanstack/react-query": "^5.104.1",
+		"react": "^19.2.8"
+	},
+	"dependencies": {
+		"hono": "^4.13.13"
+	},
+	"devDependencies": {
+		"@tanstack/react-query": "^5.104.1",
+		"@types/react": "^19.2.18",
+		"react": "^19.2.8",
+		"typescript": "~6.0.2",
+		"worker": "workspace:*"
+	}
+}

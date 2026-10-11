@@ -9,6 +9,7 @@ allowBuilds:
   protobufjs: false
 
 packages:
+  - "core"
   - "gas"
   - "web"
   - "worker"

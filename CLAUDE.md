@@ -35,11 +35,12 @@
 
 ## 構成とコマンド
 
-pnpm workspace(`web/`: Vite+React、`worker/`: Hono on Cloudflare Workers)。`shared/` は biome 設定の submodule。
+pnpm workspace(`web/`: Vite+React、`worker/`: Hono on Cloudflare Workers、`core/`: web と将来の RN アプリが共有する API クライアント・フック・ロジック。DOM を使わない。規則は [ai-docs/specs/client.md](ai-docs/specs/client.md))。`shared/` は biome 設定の submodule。
 
 ```sh
 pnpm web dev        # Vite
 pnpm worker dev     # wrangler dev
 pnpm check          # biome check --write
+pnpm -F core typecheck
 pnpm -F web build && pnpm -F worker deploy
 ```

@@ -3,5 +3,49 @@
 	"extends": ["./shared/biome.jsonc"],
 	"files": {
 		"includes": ["**", "!**/worker-configuration.d.ts", "!**/migrations", "!web/src/theme.css"]
-	}
+	},
+	"overrides": [
+		{
+			// core は web と将来の RN アプリで共有する。DOM・ブラウザ専用のものを使わない(ai-docs/specs/client.md)
+			"includes": ["core/**"],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedGlobals": {
+							"level": "error",
+							"options": {
+								"deniedGlobals": {
+									"window": "core では DOM を使わない。必要ならオプションで受け取る",
+									"document": "core では DOM を使わない",
+									"location": "core では DOM を使わない。baseUrl などで受け取る",
+									"navigator": "core では DOM を使わない",
+									"localStorage": "core では DOM を使わない。保存先はプラットフォームから渡す",
+									"sessionStorage": "core では DOM を使わない。保存先はプラットフォームから渡す",
+									"caches": "core では DOM を使わない",
+									"Notification": "core では DOM を使わない",
+									"history": "core では DOM を使わない"
+								}
+							}
+						},
+						"noRestrictedImports": {
+							"level": "error",
+							"options": {
+								"paths": {
+									"react-dom": "core は RN でも使う。画面の層で使う",
+									"wouter": "ルーティングは画面の層で扱う",
+									"firebase": "push はプラットフォームの層で扱う"
+								},
+								"patterns": [
+									{
+										"group": ["firebase/*", "react-dom/*", "wouter/*"],
+										"message": "core は RN でも使う。画面・プラットフォームの層で使う"
+									}
+								]
+							}
+						}
+					}
+				}
+			}
+		}
+	]
 }

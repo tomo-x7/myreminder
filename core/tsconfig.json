@@ -1,0 +1,22 @@
+{
+	// web と将来の RN アプリが共有する、プラットフォームに依存しない層(ai-docs/specs/client.md)。
+	// fetch・Response・URL の型のために lib に DOM を入れているが、DOM のグローバル(window など)は biome で禁止している
+	"compilerOptions": {
+		"tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
+		"target": "es2023",
+		"lib": ["ES2023", "DOM"],
+		"module": "esnext",
+		"skipLibCheck": true,
+		"strict": true,
+		"moduleResolution": "bundler",
+		"verbatimModuleSyntax": true,
+		"moduleDetection": "force",
+		"noEmit": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"erasableSyntaxOnly": true,
+		"noFallthroughCasesInSwitch": true
+	},
+	"include": ["src"],
+	"references": [{ "path": "../worker/tsconfig.types.json" }]
+}

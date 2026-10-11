@@ -431,6 +431,7 @@ myreminder/
 ├─ .github/workflows/   deploy.yml(main への push でデプロイ)
 ├─ ai-docs/             エージェント向けのコンテキスト(計画書、決定ログ、調査メモ)
 ├─ docs/                人間向けの手順書(Cloudflare / Firebase / Apps Script のセットアップ)
+├─ core/                web と将来の RN アプリが共有する層(API クライアント、Query のフック、表示の規則、入力の変換。DOM を使わない)
 ├─ web/                 Vite+React SPA / PWA / FCM の Service Worker
 ├─ worker/
 │  ├─ src/
@@ -545,6 +546,16 @@ myreminder/
 - スライドの写真 → 視覚モデル
 - 週次のふりかえり(見積もりの精度、徹夜ゼロの日数)
 - カレンダーの取り込みはしない(Google Calendar はほぼ使っておらず、TimeTree は API が終了しているため)
+
+### Phase 5: Android ネイティブ(React Native)の準備
+
+本人の依頼: 将来 Android の RN 版を作れるよう、構成はそのままで準備しておく。アプリ本体はまだ作らない。層と API の契約は [specs/client.md](specs/client.md)。
+
+| # | 作業 | 担当 |
+|---|---|---|
+| 5-1 | バックエンド: エラー応答の統一、FCM の android ブロック、端末の platform、apiVersion、Service Token の手順(#30) | Sonnet |
+| 5-2 | フロント: 通信・ロジックを `core/` に分け、画面から切り離す(#31) | Sonnet(Opus が設計・レビュー) |
+| 5-3 | (未着手)Expo のアプリ本体。見積もりは 12〜18 人日(画面の書き直しが7〜8割) | — |
 
 ## 6. 未決事項(本人に確認したいこと)
 
