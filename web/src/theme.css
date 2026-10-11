@@ -1,0 +1,35 @@
+/* biome の CSS パーサー(2.2)は `--color-*: initial` を読めないので、このファイルだけ biome の対象から外している */
+/*
+ * 見た目のトークン(#29)。色・影・角丸は既定のパレットを消して、ここで決めたものだけ使えるようにする
+ * (bg-blue-600 のような既定の色を書いても効かない)。
+ * - 色: 墨(文字)・灰(補助・罫線・面)・赤(危険・期限切れ)・黄土(注意・未提出)だけ
+ * - 影: 下から出るシートの境目だけ。角丸は 3px のみ(点は full)
+ */
+@theme {
+	--color-*: initial;
+	--color-white: #ffffff;
+	--color-black: #000000;
+	--color-transparent: transparent;
+	--color-current: currentColor;
+
+	--color-ink: #1b1b1a;
+	--color-sub: #62615d;
+	--color-faint: #9a9994;
+	--color-line: #e2e1dc;
+	--color-wash: #f3f2ee;
+	--color-paper: #ffffff;
+	--color-danger: #bf2a1f;
+	--color-warn: #965a00;
+
+	--shadow-*: initial;
+	--shadow-edge: 0 -1px 0 0 var(--color-line);
+	--inset-shadow-*: initial;
+	--drop-shadow-*: initial;
+	--text-shadow-*: initial;
+
+	--radius-*: initial;
+	--radius-sm: 3px;
+	--radius-full: 9999px;
+
+	--font-sans: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+}

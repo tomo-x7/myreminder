@@ -1,1 +1,19 @@
 @import "tailwindcss";
+@import "./theme.css";
+
+@layer base {
+	html {
+		-webkit-tap-highlight-color: transparent;
+	}
+	body {
+		background: var(--color-paper);
+		color: var(--color-ink);
+		/* 和文の詰め。数字は桁をそろえる */
+		font-feature-settings: "palt";
+		font-variant-numeric: tabular-nums;
+	}
+	:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 1px;
+	}
+}

@@ -3,7 +3,7 @@ import { Layout } from "./components/Layout";
 import { NAV, ROUTES } from "./routes";
 
 function NotFound() {
-	return <p className="py-8 text-center text-gray-500">ページが見つかりません</p>;
+	return <p className="py-6 text-center text-xs text-faint">ページが見つかりません</p>;
 }
 
 function App() {

@@ -11,12 +11,12 @@ export const RISK_LABEL: Record<Risk, string> = {
 	critical: "致命",
 };
 
-/** カードの枠・バッジの色 */
-export const RISK_STYLE: Record<Risk, { border: string; badge: string }> = {
-	relaxed: { border: "border-green-600", badge: "bg-green-600 text-white" },
-	watch: { border: "border-yellow-500", badge: "bg-yellow-400 text-yellow-950" },
-	danger: { border: "border-orange-500", badge: "bg-orange-500 text-white" },
-	critical: { border: "border-red-600", badge: "bg-red-600 text-white" },
+/** リスクの色。面は塗らず、左の線と文字色だけで示す(余裕は色を付けない) */
+export const RISK_STYLE: Record<Risk, { border: string; text: string }> = {
+	relaxed: { border: "border-line", text: "text-sub" },
+	watch: { border: "border-warn", text: "text-warn" },
+	danger: { border: "border-danger", text: "text-danger" },
+	critical: { border: "border-danger", text: "text-danger font-bold" },
 };
 
 const RISK_RANK: Record<Risk, number> = { relaxed: 0, watch: 1, danger: 2, critical: 3 };

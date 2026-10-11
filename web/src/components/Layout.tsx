@@ -12,15 +12,15 @@ function isActive(location: string, item: NavItem): boolean {
 export function Layout({ nav, children }: { nav: readonly NavItem[]; children: ReactNode }) {
 	const [location] = useLocation();
 	return (
-		<div className="mx-auto flex min-h-svh max-w-xl flex-col bg-gray-50 text-gray-900">
-			<main className="flex flex-1 flex-col gap-4 px-4 pt-4 pb-28">
+		<div className="mx-auto flex min-h-svh max-w-xl flex-col bg-paper text-sm text-ink">
+			<main className="flex flex-1 flex-col gap-3 px-3 pt-3 pb-20">
 				{/* 消し忘れの作業記録は、次に開いたときに「いつ終わった?」と聞く */}
 				<ReviewPrompt />
 				{children}
 			</main>
 			<nav
 				aria-label="メニュー"
-				className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]"
+				className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)]"
 			>
 				<ul className="mx-auto flex max-w-xl">
 					{nav.map((item) => {
@@ -30,17 +30,17 @@ export function Layout({ nav, children }: { nav: readonly NavItem[]; children: R
 								<Link
 									href={item.to}
 									aria-current={active ? "page" : undefined}
-									className={`flex flex-col items-center gap-0.5 py-2 text-xs font-medium ${
-										active ? "text-blue-700" : "text-gray-500"
+									className={`flex flex-col items-center gap-0.5 pt-1.5 pb-1 text-[10px] leading-3 ${
+										active ? "font-semibold text-ink" : "text-faint"
 									}`}
 								>
 									<svg
 										viewBox="0 0 24 24"
-										width="24"
-										height="24"
+										width="20"
+										height="20"
 										fill="none"
 										stroke="currentColor"
-										strokeWidth={active ? 2.4 : 1.8}
+										strokeWidth={active ? 2.2 : 1.6}
 										strokeLinecap="round"
 										strokeLinejoin="round"
 										aria-hidden="true"

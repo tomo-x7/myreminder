@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { DueLabel } from "../../components/DueLabel";
-import { btnPrimary, btnSecondary, ErrorNotice } from "../../components/ui";
+import { btnPrimary, btnSecondary, ErrorNotice, Notice } from "../../components/ui";
 import { formatJstDateTime } from "../../lib/date";
 import type { Course } from "../../lib/queries";
 import { useUpdateTask } from "../../lib/queries";
@@ -16,39 +16,39 @@ function StartDeadline({ task, now }: { task: PlanTask; now: number }) {
 	const d = startDeadline(task);
 	const need = formatHours(task.remainingP80);
 	return (
-		<div className="flex flex-col gap-0.5 rounded-lg bg-gray-100 px-3 py-2">
-			{d ? (
+		<dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-0.5">
+			<dt className="text-xs text-sub">着手デッドライン</dt>
+			<dd className={d ? "font-semibold" : "font-semibold text-danger"}>
+				{d ? formatJstDateTime(d.at) : "なし"}
+			</dd>
+			<dd className="col-span-2 text-xs text-sub">
+				{d === null
+					? `本気で詰めても、睡眠を削らずには間に合わない見込み(本気で使える空き ${formatHours(Math.max(0, task.freeHardMin))} / 必要 ${need})`
+					: d.mode === "usual"
+						? `この時刻までに始めないと、普段のペースでは収まらなくなる(残り空き ${formatHours(Math.max(0, task.freeUsualMin))} / 必要 ${need})`
+						: `この時刻までに始めないと、睡眠を削らずには間に合わない(本気で使える空き ${formatHours(Math.max(0, task.freeHardMin))} / 必要 ${need})`}
+			</dd>
+			{task.plannedStartAt !== null ? (
 				<>
-					<p className="text-base font-bold text-gray-900">
-						着手デッドライン <span className="tabular-nums">{formatJstDateTime(d.at)}</span>
-					</p>
-					<p className="text-sm text-gray-700">
-						{d.mode === "usual"
-							? `この時刻までに始めないと、普段のペースでは収まらなくなる(残り空き ${formatHours(Math.max(0, task.freeUsualMin))} / 必要 ${need})`
-							: `この時刻までに始めないと、睡眠を削らずには間に合わない(本気で使える空き ${formatHours(Math.max(0, task.freeHardMin))} / 必要 ${need})`}
-					</p>
+					<dt className="text-xs text-sub">着手予定</dt>
+					<dd className={task.plannedStartAt < now ? "text-danger" : ""}>
+						{formatJstDateTime(task.plannedStartAt)}
+						{task.plannedStartAt < now ? "(過ぎています)" : ""}
+					</dd>
 				</>
 			) : (
-				<p className="text-sm text-gray-700">
-					本気で詰めても、睡眠を削らずには間に合わない見込み(本気で使える空き{" "}
-					{formatHours(Math.max(0, task.freeHardMin))} / 必要 {need})
-				</p>
-			)}
-			{task.plannedStartAt !== null ? (
-				<p className="text-sm text-gray-700">
-					着手予定 {formatJstDateTime(task.plannedStartAt)}
-					{task.plannedStartAt < now ? "(過ぎています)" : ""}
-				</p>
-			) : (
 				task.recommendedStart !== null && (
-					<p className="text-sm text-gray-700">おすすめの着手 {formatJstDateTime(task.recommendedStart)}</p>
+					<>
+						<dt className="text-xs text-sub">おすすめの着手</dt>
+						<dd>{formatJstDateTime(task.recommendedStart)}</dd>
+					</>
 				)
 			)}
-		</div>
+		</dl>
 	);
 }
 
-/** ホームの「次の1件」。計画のリスクが一番高いタスク */
+/** ホームの「次の1件」。計画のリスクが一番高いタスク。リスクは左の線と文字色で示す */
 export function NextCard({ task, course, now }: { task: PlanTask; course: Course | undefined; now: number }) {
 	const update = useUpdateTask();
 	const start = useStartWorking();
@@ -60,43 +60,40 @@ export function NextCard({ task, course, now }: { task: PlanTask; course: Course
 	const error = update.error?.message ?? (start.error ? errorText(start.error) : null);
 
 	return (
-		<section className={`flex flex-col gap-3 rounded-2xl border-4 bg-white p-4 shadow-sm ${style.border}`}>
-			<div className="flex items-center justify-between gap-2">
-				<p className="text-sm font-bold tracking-wide text-gray-500">次にやること</p>
-				<span className={`rounded-full px-3 py-0.5 text-sm font-bold ${style.badge}`}>
-					{RISK_LABEL[task.risk]}
-				</span>
+		<section className={`flex flex-col gap-2 border-l-2 pl-3 ${style.border}`}>
+			<div className="flex items-baseline justify-between gap-2 text-xs">
+				<span className="text-sub">次にやること</span>
+				<span className={style.text}>{RISK_LABEL[task.risk]}</span>
 			</div>
-			<DueLabel dueAt={task.dueAt} now={now} size="lg" />
-			<Link href={`/tasks/${task.id}`} className="flex flex-col gap-1">
-				<span className="text-2xl leading-snug font-bold text-gray-900">{task.title}</span>
-				<span className="text-sm text-gray-600">
-					{[course?.name, `見積もり ${formatDuration(task.estimateMin)}`].filter(Boolean).join(" ・ ")}
-				</span>
-			</Link>
-			{task.needsFullEffort && (
-				<p className="rounded-md bg-orange-100 px-3 py-2 text-base font-bold text-orange-900">
-					普段のペースでは足りない。本気が必要
+			<div className="flex flex-col gap-0.5">
+				<DueLabel dueAt={task.dueAt} now={now} size="lg" />
+				<Link href={`/tasks/${task.id}`} className="text-base leading-snug font-bold">
+					{task.title}
+				</Link>
+				<p className="text-xs text-sub">
+					{[course?.name, `見積もり ${formatDuration(task.estimateMin)}`, progress]
+						.filter(Boolean)
+						.join(" ・ ")}
 				</p>
-			)}
+			</div>
+			{task.needsFullEffort && <Notice tone="danger">普段のペースでは足りない。本気が必要</Notice>}
 			<StartDeadline task={task} now={now} />
-			{progress && <p className="text-base font-semibold text-gray-800">{progress}</p>}
 			{task.firstStep && (
-				<p className="rounded-md bg-blue-50 px-3 py-2 text-base text-blue-900">
-					<span className="font-bold">まず: </span>
+				<p>
+					<span className="mr-1.5 text-xs text-sub">まず</span>
 					{task.firstStep}
 				</p>
 			)}
 			{error && <ErrorNotice>{error}</ErrorNotice>}
-			<button
-				type="button"
-				disabled={start.isPending || workingHere}
-				onClick={() => start.mutate(task.id)}
-				className={`${btnPrimary} py-4 text-lg`}
-			>
-				{workingHere ? "作業中" : "始める"}
-			</button>
-			<div className="grid grid-cols-2 gap-2">
+			<div className="flex gap-1.5">
+				<button
+					type="button"
+					disabled={start.isPending || workingHere}
+					onClick={() => start.mutate(task.id)}
+					className={`${btnPrimary} flex-1`}
+				>
+					{workingHere ? "作業中" : "始める"}
+				</button>
 				<button
 					type="button"
 					disabled={update.isPending}
@@ -113,7 +110,7 @@ export function NextCard({ task, course, now }: { task: PlanTask; course: Course
 				>
 					提出済み
 				</button>
-				<button type="button" onClick={() => setSnoozing(true)} className={`${btnSecondary} col-span-2`}>
+				<button type="button" onClick={() => setSnoozing(true)} className={btnSecondary}>
 					いつに回す?
 				</button>
 			</div>
