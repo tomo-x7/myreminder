@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { runScheduled } from "./cron";
 import type { Bindings, Env } from "./env";
 import { busyBlocks } from "./routes/busy-blocks";
@@ -35,6 +36,15 @@ const routes = app
 	.route("/review", review);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
+// 想定外の例外は 500 internal。中身は返さずログにだけ残す。
+// Hono が投げる HTTPException は状態コードを保つ(400 は壊れた JSON・FormData なので入力の誤り)
+app.onError((err, c) => {
+	if (err instanceof HTTPException) {
+		return c.json({ error: err.status === 400 ? "invalid_input" : "http_error", message: err.message }, err.status);
+	}
+	console.error(err);
+	return c.json({ error: "internal" }, 500);
+});
 
 export type AppType = typeof routes;
 

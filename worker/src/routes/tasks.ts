@@ -1,4 +1,3 @@
-import { vValidator } from "@hono/valibot-validator";
 import { and, asc, eq, gte, inArray, lt } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
@@ -11,6 +10,7 @@ import { notifySubmitted } from "../notify/webhook";
 import { taskCreateSchema, taskUpdateSchema } from "../schemas/task";
 import { courseExists, INVALID_COURSE, idParamSchema, NOT_FOUND } from "../services/http";
 import { closeWorkOnTask } from "../services/status";
+import { validate } from "../services/validate";
 
 // これらにしたら、そのタスクの作業は終わり
 const CLOSING_STATUSES: readonly string[] = ["done", "submitted", "dismissed"];
@@ -33,7 +33,7 @@ const taskListQuerySchema = v.object({
 });
 
 export const tasks = new Hono<Env>()
-	.get("/", vValidator("query", taskListQuerySchema), async (c) => {
+	.get("/", validate("query", taskListQuerySchema), async (c) => {
 		const { status, dueBefore, dueAfter } = c.req.valid("query");
 		const rows = await getDb(c.env)
 			.select()
@@ -48,14 +48,14 @@ export const tasks = new Hono<Env>()
 			.orderBy(asc(tasksTable.dueAt));
 		return c.json(rows, 200);
 	})
-	.get("/:id", vValidator("param", idParamSchema), async (c) => {
+	.get("/:id", validate("param", idParamSchema), async (c) => {
 		const [row] = await getDb(c.env)
 			.select()
 			.from(tasksTable)
 			.where(eq(tasksTable.id, c.req.valid("param").id));
 		return row ? c.json(row, 200) : c.json(NOT_FOUND, 404);
 	})
-	.post("/", vValidator("json", taskCreateSchema), async (c) => {
+	.post("/", validate("json", taskCreateSchema), async (c) => {
 		const input = c.req.valid("json");
 		const db = getDb(c.env);
 		if (input.courseId && !(await courseExists(db, input.courseId))) return c.json(INVALID_COURSE, 400);
@@ -67,7 +67,7 @@ export const tasks = new Hono<Env>()
 		triggerReplan(c);
 		return c.json(row, 201);
 	})
-	.patch("/:id", vValidator("param", idParamSchema), vValidator("json", taskUpdateSchema), async (c) => {
+	.patch("/:id", validate("param", idParamSchema), validate("json", taskUpdateSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const patch = c.req.valid("json");
 		const db = getDb(c.env);
@@ -112,7 +112,7 @@ export const tasks = new Hono<Env>()
 		if (submittedAt === now) c.executionCtx.waitUntil(notifySubmitted(db, id, now));
 		return c.json(row, 200);
 	})
-	.delete("/:id", vValidator("param", idParamSchema), async (c) => {
+	.delete("/:id", validate("param", idParamSchema), async (c) => {
 		const [row] = await getDb(c.env)
 			.delete(tasksTable)
 			.where(eq(tasksTable.id, c.req.valid("param").id))

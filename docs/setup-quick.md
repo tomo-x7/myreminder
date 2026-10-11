@@ -55,6 +55,11 @@ curl -s -H "CF-Access-Client-Id: $CF_ID" -H "CF-Access-Client-Secret: $CF_SECRET
 
 更新は `pnpm gas build` して貼り直すだけ(トリガーはそのまま)。302/401/403 は Service Token か Access アプリ 2 の設定。
 
+## 7. Android アプリ(将来。アプリを作るまで不要)
+
+- [ ] Service Token `android-app` を作り、**Access アプリ 1** に Policy を足す(Action は **Service Auth**、Include = `android-app`。`owner` の Allow は残す)
+- [ ] Client ID / Secret はアプリの設定画面から入れて `expo-secure-store` に保存する(リポジトリ・`app.json`・`EXPO_PUBLIC_` には置かない)。端末をなくしたら Token を **Revoke** する(setup.md 6)
+
 ## デプロイ後に試すこと
 
 - [ ] スライドの写真を1枚読ませる(#25: 読み取りの精度、Workers AI のダッシュボードで neurons)

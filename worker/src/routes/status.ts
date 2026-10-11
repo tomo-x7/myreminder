@@ -1,14 +1,14 @@
-import { vValidator } from "@hono/valibot-validator";
 import { Hono } from "hono";
 import { getDb } from "../db";
 import type { Env } from "../env";
 import { triggerReplan } from "../notify/replan";
 import { statusSetSchema, workingStartSchema, workingStopSchema } from "../schemas/status";
 import { findOpenSessions, getEffectiveStatus, setManualStatus, startWorking, stopWorking } from "../services/status";
+import { validate } from "../services/validate";
 
 export const status = new Hono<Env>()
 	.get("/", async (c) => c.json(await getEffectiveStatus(getDb(c.env), Date.now()), 200))
-	.put("/", vValidator("json", statusSetSchema), async (c) => {
+	.put("/", validate("json", statusSetSchema), async (c) => {
 		const { mode, until } = c.req.valid("json");
 		const db = getDb(c.env);
 		const now = Date.now();
@@ -19,7 +19,7 @@ export const status = new Hono<Env>()
 		triggerReplan(c);
 		return c.json(await getEffectiveStatus(db, now), 200);
 	})
-	.post("/working", vValidator("json", workingStartSchema), async (c) => {
+	.post("/working", validate("json", workingStartSchema), async (c) => {
 		const db = getDb(c.env);
 		const now = Date.now();
 		const result = await startWorking(db, c.req.valid("json").taskId, now);
@@ -32,7 +32,7 @@ export const status = new Hono<Env>()
 		triggerReplan(c);
 		return c.json(await getEffectiveStatus(db, now), 200);
 	})
-	.post("/working/stop", vValidator("json", workingStopSchema), async (c) => {
+	.post("/working/stop", validate("json", workingStopSchema), async (c) => {
 		const db = getDb(c.env);
 		const now = Date.now();
 		const result = await stopWorking(db, c.req.valid("json"), now);

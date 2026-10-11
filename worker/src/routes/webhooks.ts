@@ -1,4 +1,3 @@
-import { vValidator } from "@hono/valibot-validator";
 import { asc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { getDb } from "../db";
@@ -7,33 +6,26 @@ import type { Env } from "../env";
 import { sendWebhook } from "../notify/webhook";
 import { isValidWebhookUrl, maskWebhookUrl, webhookCreateSchema, webhookUpdateSchema } from "../schemas/webhook";
 import { idParamSchema, NOT_FOUND } from "../services/http";
+import { validate } from "../services/validate";
 
 type WebhookRow = typeof webhooksTable.$inferSelect;
 
 /** URL は秘密情報。API には出さず、マスクした形だけ返す */
 const toPublic = ({ url, ...rest }: WebhookRow) => ({ ...rest, maskedUrl: maskWebhookUrl(url) });
 
-// 検証エラーに入力(URL)をそのまま返さない
-const rejectInvalid: Parameters<typeof vValidator>[2] = (result, c) => {
-	if (!result.success) {
-		const issues = result.issues.map((i) => `${i.path?.map((p) => String(p.key)).join(".") ?? ""}: ${i.message}`);
-		return c.json({ error: "invalid_webhook", issues }, 400);
-	}
-};
-
 export const webhooks = new Hono<Env>()
 	.get("/", async (c) => {
 		const rows = await getDb(c.env).select().from(webhooksTable).orderBy(asc(webhooksTable.id));
 		return c.json(rows.map(toPublic), 200);
 	})
-	.post("/", vValidator("json", webhookCreateSchema, rejectInvalid), async (c) => {
+	.post("/", validate("json", webhookCreateSchema, "invalid_webhook"), async (c) => {
 		const [row] = await getDb(c.env).insert(webhooksTable).values(c.req.valid("json")).returning();
 		return c.json(toPublic(row), 201);
 	})
 	.patch(
 		"/:id",
-		vValidator("param", idParamSchema),
-		vValidator("json", webhookUpdateSchema, rejectInvalid),
+		validate("param", idParamSchema),
+		validate("json", webhookUpdateSchema, "invalid_webhook"),
 		async (c) => {
 			const { id } = c.req.valid("param");
 			const body = c.req.valid("json");
@@ -50,7 +42,7 @@ export const webhooks = new Hono<Env>()
 			return c.json(toPublic(row), 200);
 		},
 	)
-	.delete("/:id", vValidator("param", idParamSchema), async (c) => {
+	.delete("/:id", validate("param", idParamSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const [row] = await getDb(c.env)
 			.delete(webhooksTable)
@@ -58,7 +50,7 @@ export const webhooks = new Hono<Env>()
 			.returning({ id: webhooksTable.id });
 		return row ? c.json({ ok: true as const }, 200) : c.json(NOT_FOUND, 404);
 	})
-	.post("/:id/test", vValidator("param", idParamSchema), async (c) => {
+	.post("/:id/test", validate("param", idParamSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const db = getDb(c.env);
 		const [row] = await db.select().from(webhooksTable).where(eq(webhooksTable.id, id));

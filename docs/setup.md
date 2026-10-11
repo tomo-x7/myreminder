@@ -5,6 +5,7 @@
 | 秘密情報 | 置き場所 |
 |---|---|
 | Access の Service Token(Client ID / Secret) | Apps Script の Script Properties |
+| Android アプリ用の Service Token(将来。6 を参照) | 端末の `expo-secure-store`(ビルドに埋め込むなら EAS secrets / ローカルの環境変数) |
 | FCM のサービスアカウント JSON | Worker の secret(`FCM_SERVICE_ACCOUNT`) |
 | Cloudflare API トークン、Account ID | GitHub の repository secret |
 | webhook URL(Discord / Slack) | D1(アプリの設定画面で登録) |
@@ -373,6 +374,63 @@ pnpm gas build
 | Classroom の拡張サービスが有効ではありません | マニフェストの `enabledAdvancedServices` が入っていない。5-2 をやり直す |
 
 - Service Token の期限は、1-5 で決めた期間です。切れる日をカレンダーに入れておくと止まりにくくなります
+
+---
+
+## 6. Android アプリ用の Service Token(将来。いまは不要)
+
+将来、Expo(React Native)で Android アプリを作ったときのための準備です。**アプリを作るまでやらなくてかまいません**(いまの web の PWA で足ります)。サーバーの側は、通知の `android` ブロック、`push_tokens.platform`、`GET /api/health` の `apiVersion` まで入れてあります。アプリの契約は [ai-docs/specs/client.md](../ai-docs/specs/client.md)。
+
+アプリは Access のログイン画面を通れないので、Apps Script と同じく Service Token のヘッダー(`CF-Access-Client-Id` / `CF-Access-Client-Secret`)で `/api/*` を呼びます。Token は Apps Script 用と分け、用途ごとに失効できるようにします。
+
+### 6-1. Service Token を作り、Access アプリ 1 に Service Auth を足す
+
+1. 1-5 と同じ手順で Service Token を作る。Name: `android-app`、期限を選ぶ(切れる日をカレンダーに入れる)。Client ID / Secret はその場で控える(再表示されない)
+2. Zero Trust > **Access controls** > **Applications** > アプリ 1 `myreminder` を **Edit** > **Policies** で、Policy を**足す**
+   - Policy name: `android-app`
+   - Action: **Service Auth**(Allow ではない)
+   - Include: Selector **Service Token**、値 `android-app`
+3. 既存の `owner`(Allow、メール)は**そのまま残す**。web のログインはこれまでどおり
+4. 保存する
+
+- アプリ 1 はドメイン全体なので、この Token は `/api/*` 以外(web の画面)にも入れます。アプリは `/api/*` しか呼びませんが、Token は端末の外に出さないでください
+- `/api/ingest/*` はアプリ 2 が先に効き、`apps-script` の Token だけを通します。アプリは取り込み API を使わないので、このままでかまいません
+- 参照: https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/ / https://developers.cloudflare.com/cloudflare-one/access-controls/policies/
+
+### 6-2. 動作確認
+
+`CF_ID` と `CF_SECRET` は環境変数で渡し、コマンドラインや履歴に値を直接書かないでください。
+
+```sh
+curl -s \
+  -H "CF-Access-Client-Id: $CF_ID" \
+  -H "CF-Access-Client-Secret: $CF_SECRET" \
+  https://reminder.tomo-x.win/api/health
+```
+
+- `{"ok":true,"now":...,"apiVersion":1}` が返れば OK です
+- 302 やログイン画面なら、Policy の Action が Service Auth でない、または Token の名前違いです。403 / 401 は Token の期限切れか値の誤りです
+
+### 6-3. 秘密情報をリポジトリに入れない
+
+このリポジトリは public です。Client Secret は、コード・`app.json`・`app.config.*`・`.env`(コミットされるもの)・チャットに書かないでください。
+
+- **推奨: アプリの設定画面で入力して、端末の `expo-secure-store` に保存する。** 初回起動時に Client ID / Secret を貼り付けて保存します(Android では Keystore で守られます)。APK にも EAS にも値が入らないので、APK が漏れても Token は漏れません。端末を初期化したら入れ直しです
+- ビルドに埋め込む場合は、値を **EAS secrets**(`eas secret:create` など)かビルドするマシンの環境変数で渡し、リポジトリのファイルには書かないでください。ただし、ビルドに埋め込んだ値は **APK から取り出せます**。その場合は APK を公開せず(GitHub の Releases に置かない)、自分の端末にだけ入れてください
+- `EXPO_PUBLIC_` で始まる環境変数は、アプリの JS にそのまま入るので使わない方が安全です
+- `google-services.json`(Firebase の Android アプリの設定)は `firebaseConfig` と同じ公開してよい種類の設定ですが、使うときは EAS のファイル secret で渡すと無難です。Firebase のプロジェクトは 2 のものと同じにします(Worker の `FCM_SERVICE_ACCOUNT` はそのまま使えて、追加の secret は不要です)
+
+### 6-4. 端末をなくしたとき・Token を入れ替えるとき
+
+端末をなくした、または Client Secret が漏れたかもしれないときは、**まず Token を失効させます**。
+
+1. Zero Trust > **Access controls** > **Service credentials** > **Service Tokens** で `android-app` を **Revoke**(または削除)する。以後、その Secret では `/api/*` に入れません
+2. 新しい端末で使うときは、6-1 の手順で新しい Token(例: `android-app-2`)を作り、アプリ 1 の Policy `android-app` の Include に**足す**(または Policy を作り直す)。アプリに新しい Client ID / Secret を入れる
+3. 古い Token を Policy の Include から外す
+
+期限が近づいたときの入れ替えも同じ順番です。新しい Token を足す → アプリを更新する → 古い Token を外して失効させる、の順にすると、切り替えの間もアプリが止まりません(「Refresh」で期限を延ばすだけでもかまいません)。
+
+あわせて、なくした端末の通知の登録(FCM の登録トークン)は、次に送ったときに FCM が `UNREGISTERED` を返せば Worker が `push_tokens` から自動で消します。すぐ消したいときは `DELETE /api/push/tokens/<token>` を呼びます。
 
 ---
 

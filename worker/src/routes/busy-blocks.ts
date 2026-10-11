@@ -1,4 +1,3 @@
-import { vValidator } from "@hono/valibot-validator";
 import { asc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import * as v from "valibot";
@@ -8,6 +7,7 @@ import type { Env } from "../env";
 import { triggerReplan } from "../notify/replan";
 import { busyBlockCreateSchema, busyBlockUpdateSchema } from "../schemas/busy-block";
 import { idParamSchema, NOT_FOUND } from "../services/http";
+import { formatIssues, validate } from "../services/validate";
 
 export const busyBlocks = new Hono<Env>()
 	.get("/", async (c) =>
@@ -19,12 +19,12 @@ export const busyBlocks = new Hono<Env>()
 			200,
 		),
 	)
-	.post("/", vValidator("json", busyBlockCreateSchema), async (c) => {
+	.post("/", validate("json", busyBlockCreateSchema), async (c) => {
 		const [row] = await getDb(c.env).insert(busyBlocksTable).values(c.req.valid("json")).returning();
 		triggerReplan(c);
 		return c.json(row, 201);
 	})
-	.patch("/:id", vValidator("param", idParamSchema), vValidator("json", busyBlockUpdateSchema), async (c) => {
+	.patch("/:id", validate("param", idParamSchema), validate("json", busyBlockUpdateSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const db = getDb(c.env);
 		const [current] = await db.select().from(busyBlocksTable).where(eq(busyBlocksTable.id, id));
@@ -33,13 +33,13 @@ export const busyBlocks = new Hono<Env>()
 		const { id: _id, ...currentFields } = current;
 		const merged = v.safeParse(busyBlockCreateSchema, { ...currentFields, ...c.req.valid("json") });
 		if (!merged.success) {
-			return c.json({ error: "invalid_busy_block", issues: merged.issues.map((i) => i.message) }, 400);
+			return c.json({ error: "invalid_busy_block", issues: formatIssues(merged.issues) }, 400);
 		}
 		const [row] = await db.update(busyBlocksTable).set(merged.output).where(eq(busyBlocksTable.id, id)).returning();
 		triggerReplan(c);
 		return c.json(row, 200);
 	})
-	.delete("/:id", vValidator("param", idParamSchema), async (c) => {
+	.delete("/:id", validate("param", idParamSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const [row] = await getDb(c.env)
 			.delete(busyBlocksTable)

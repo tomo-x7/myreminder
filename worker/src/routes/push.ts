@@ -1,16 +1,18 @@
-import { vValidator } from "@hono/valibot-validator";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import * as v from "valibot";
 import { getDb } from "../db";
-import { notifications, pushTokens } from "../db/schema";
+import { notifications, PUSH_PLATFORMS, pushTokens } from "../db/schema";
 import type { Env } from "../env";
 import { dispatchDueNotifications } from "../notify/dispatch";
+import { validate } from "../services/validate";
 
 const tokenBodySchema = v.object({
 	// FID または登録トークン
 	token: v.pipe(v.string(), v.minLength(10), v.maxLength(4096)),
 	label: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(100))),
+	// 省略は web(新規登録のとき DB の既定値)。既存の web クライアントは送らない
+	platform: v.optional(v.picklist(PUSH_PLATFORMS)),
 });
 
 const tokenParamSchema = v.object({ token: v.pipe(v.string(), v.minLength(1)) });
@@ -22,26 +24,30 @@ const testBodySchema = v.object({
 
 export const push = new Hono<Env>()
 	// 端末の登録(upsert)。アプリを開くたびに呼ばれ、last_seen_at を更新する
-	.post("/tokens", vValidator("json", tokenBodySchema), async (c) => {
-		const { token, label } = c.req.valid("json");
+	.post("/tokens", validate("json", tokenBodySchema), async (c) => {
+		const { token, label, platform } = c.req.valid("json");
 		const now = Date.now();
 		await getDb(c.env)
 			.insert(pushTokens)
-			.values({ token, label, createdAt: now, lastSeenAt: now })
+			.values({ token, label, platform, createdAt: now, lastSeenAt: now })
 			.onConflictDoUpdate({
 				target: pushTokens.token,
-				// label は渡されたときだけ上書きする
-				set: { lastSeenAt: now, ...(label !== undefined ? { label } : {}) },
+				// label・platform は渡されたときだけ上書きする
+				set: {
+					lastSeenAt: now,
+					...(label !== undefined ? { label } : {}),
+					...(platform !== undefined ? { platform } : {}),
+				},
 			});
 		return c.json({ ok: true as const }, 200);
 	})
-	.delete("/tokens/:token", vValidator("param", tokenParamSchema), async (c) => {
+	.delete("/tokens/:token", validate("param", tokenParamSchema), async (c) => {
 		const { token } = c.req.valid("param");
 		await getDb(c.env).delete(pushTokens).where(eq(pushTokens.token, token));
 		return c.json({ ok: true as const }, 200);
 	})
 	// テスト送信。cron を待たずその場で送り、宛先ごとの結果を返す
-	.post("/test", vValidator("json", testBodySchema), async (c) => {
+	.post("/test", validate("json", testBodySchema), async (c) => {
 		const { title, body } = c.req.valid("json");
 		const now = Date.now();
 		const db = getDb(c.env);

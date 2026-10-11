@@ -271,3 +271,5 @@ Google Calendar はほぼ使っていない。予定を見るなら TimeTree だ
 - [提案] アプリからの認証は Access の Service Token をヘッダーで送る(Allow のポリシーに Service Auth を足す)。認証のコードは書かないまま
 - 見積もり(アプリ本体): 12〜18 人日。画面の書き直しが7〜8割。クラウドの環境では Android のエミュレーターが動かないので、確認は実機頼み
 - pnpm は 11 を使う(`devEngines`)。手元の pnpm 10 で install すると lockfile が書き換わるので、`npx pnpm@11` で入れる
+- [提案] `POST /api/push/tokens` の `platform` は、渡されたときだけ上書きする(省略した古いクライアントが android の行を web に戻さないように)。新規で省略したら web
+- [提案] FCM の `android.priority` は proto の enum 名(`HIGH` / `NORMAL`)で送る。android ブロックが不正だと同じメッセージの webpush も落ちるため、正規の形にする(実機・本物の FCM では未確認)

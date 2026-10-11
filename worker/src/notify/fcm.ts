@@ -128,8 +128,40 @@ async function invalidateAccessToken(env: Bindings) {
 	await getDb(env).delete(settings).where(eq(settings.key, ACCESS_TOKEN_KEY));
 }
 
-/** FID(新しい web SDK の register())は22文字ほどの URL-safe 文字列。旧式の登録トークンは長くて ":" を含む */
+/** FID(新しい web SDK の register())は22文字ほどの URL-safe 文字列。旧式の登録トークン・Android のネイティブ SDK のトークンは長くて ":" を含む */
 const looksLikeFid = (token: string) => token.length <= 40 && !token.includes(":");
+
+/** Android の通知チャンネル。アプリが起動時に同じ id で作る(ai-docs/specs/client.md) */
+const CHANNEL_CRITICAL = "critical";
+const CHANNEL_DEFAULT = "default";
+
+/**
+ * FCM HTTP v1 の message を作る(純粋関数)。
+ * 1通に webpush(web 向け)と android(アプリ向け)の両方を入れ、宛先の種類は token の形で決める。
+ * `data` は値が文字列のみ。どちらの向きも data.url(開く画面のパス)と data.notificationId を持つ
+ */
+export function buildFcmMessage(token: string, message: PushMessage, origin: string) {
+	const link = new URL(message.url, origin).toString();
+	const critical = message.urgency === "high";
+	return {
+		...(looksLikeFid(token) ? { fid: token } : { token }),
+		notification: { title: message.title, body: message.body },
+		data: { url: message.url, notificationId: message.notificationId },
+		webpush: {
+			headers: { Urgency: message.urgency, TTL: String(message.ttlSec) },
+			notification: { icon: "/icons/icon-192.png", tag: message.notificationId },
+			fcm_options: { link },
+		},
+		android: {
+			// HIGH は Doze 中でも届けるよう要求する(致命のみ)。値は proto の enum 名(AndroidMessagePriority)で大文字。
+			// android ブロックが不正だと同じメッセージの webpush も 400 で落ちるので、正規の形にしておく
+			priority: message.urgency === "high" ? "HIGH" : "NORMAL",
+			ttl: `${Math.max(0, Math.floor(message.ttlSec))}s`,
+			// tag が同じ通知は置き換わる。通知ごとに一意なので、再送しても二重に並ばない
+			notification: { channel_id: critical ? CHANNEL_CRITICAL : CHANNEL_DEFAULT, tag: message.notificationId },
+		},
+	};
+}
 
 type FcmError = {
 	error?: {
@@ -164,20 +196,7 @@ export async function sendToToken(
 		return { ok: false, reason: "not_configured" };
 	}
 
-	const link = new URL(message.url, env.APP_ORIGIN ?? DEFAULT_APP_ORIGIN).toString();
-	const body = JSON.stringify({
-		message: {
-			...(looksLikeFid(token) ? { fid: token } : { token }),
-			notification: { title: message.title, body: message.body },
-			// data は値が文字列のみ
-			data: { url: message.url, notificationId: message.notificationId },
-			webpush: {
-				headers: { Urgency: message.urgency, TTL: String(message.ttlSec) },
-				notification: { icon: "/icons/icon-192.png", tag: message.notificationId },
-				fcm_options: { link },
-			},
-		},
-	});
+	const body = JSON.stringify({ message: buildFcmMessage(token, message, env.APP_ORIGIN ?? DEFAULT_APP_ORIGIN) });
 
 	const post = async () =>
 		fetch(`https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {

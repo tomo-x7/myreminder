@@ -1,5 +1,4 @@
 // 受信箱(仕様: ai-docs/specs/ingest.md §2)。取り込んだ課題を、本人が承認してはじめてタスクになる
-import { vValidator } from "@hono/valibot-validator";
 import { and, eq, isNotNull, ne, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { loadParseContext } from "../ai/parse";
@@ -13,6 +12,7 @@ import { taskCreateSchema } from "../schemas/task";
 import { courseExists, INVALID_COURSE, idParamSchema, NOT_FOUND } from "../services/http";
 import { readPayload, readPendingChange } from "../services/ingest";
 import { type CandidateReason, findCandidates } from "../services/ingest-candidates";
+import { validate } from "../services/validate";
 
 const NOT_PENDING = { error: "not_pending" } as const;
 const NO_CHANGE = { error: "no_change" } as const;
@@ -128,7 +128,7 @@ export const inbox = new Hono<Env>()
 			.from(ingestItems);
 		return c.json({ pending: row?.pending ?? 0, changes: row?.changes ?? 0 }, 200);
 	})
-	.post("/:id/accept", vValidator("param", idParamSchema), vValidator("json", taskCreateSchema), async (c) => {
+	.post("/:id/accept", validate("param", idParamSchema), validate("json", taskCreateSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const input = c.req.valid("json");
 		const db = getDb(c.env);
@@ -160,7 +160,7 @@ export const inbox = new Hono<Env>()
 		triggerReplan(c);
 		return c.json(row, 201);
 	})
-	.post("/:id/link", vValidator("param", idParamSchema), vValidator("json", inboxLinkSchema), async (c) => {
+	.post("/:id/link", validate("param", idParamSchema), validate("json", inboxLinkSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const { taskId } = c.req.valid("json");
 		const db = getDb(c.env);
@@ -176,7 +176,7 @@ export const inbox = new Hono<Env>()
 			.where(and(eq(ingestItems.id, id), eq(ingestItems.status, "pending")));
 		return c.json({ ok: true as const }, 200);
 	})
-	.post("/:id/ignore", vValidator("param", idParamSchema), async (c) => {
+	.post("/:id/ignore", validate("param", idParamSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const db = getDb(c.env);
 		const [item] = await db.select({ status: ingestItems.status }).from(ingestItems).where(eq(ingestItems.id, id));
@@ -188,7 +188,7 @@ export const inbox = new Hono<Env>()
 			.where(and(eq(ingestItems.id, id), eq(ingestItems.status, "pending")));
 		return c.json({ ok: true as const }, 200);
 	})
-	.post("/:id/change/accept", vValidator("param", idParamSchema), async (c) => {
+	.post("/:id/change/accept", validate("param", idParamSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const db = getDb(c.env);
 		const [item] = await db.select().from(ingestItems).where(eq(ingestItems.id, id));
@@ -225,7 +225,7 @@ export const inbox = new Hono<Env>()
 		triggerReplan(c);
 		return c.json({ ok: true as const }, 200);
 	})
-	.post("/:id/change/dismiss", vValidator("param", idParamSchema), async (c) => {
+	.post("/:id/change/dismiss", validate("param", idParamSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const [row] = await getDb(c.env)
 			.update(ingestItems)

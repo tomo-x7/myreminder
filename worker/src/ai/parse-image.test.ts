@@ -136,16 +136,18 @@ describe("POST /image(DB に触れる前の検査)", () => {
 	it("上限を超えたら 413", async () => {
 		const res = await post(new File([new Uint8Array(MAX_IMAGE_BYTES + 1)], "a.jpg", { type: "image/jpeg" }));
 		expect(res.status).toBe(413);
-		expect(await res.json()).toEqual({ error: expect.stringContaining("大きすぎ") });
+		expect(await res.json()).toEqual({ error: "too_large", message: expect.stringContaining("大きすぎ") });
 	});
 
 	it("画像以外は 415", async () => {
 		const res = await post(new File(["hello"], "a.txt", { type: "text/plain" }));
 		expect(res.status).toBe(415);
+		expect(await res.json()).toMatchObject({ error: "unsupported_media_type" });
 	});
 
 	it("image フィールドがなければ 400", async () => {
 		const res = await parse.request("/image", { method: "POST", body: new FormData() }, {});
 		expect(res.status).toBe(400);
+		expect(await res.json()).toMatchObject({ error: "invalid_input", issues: [expect.stringContaining("image")] });
 	});
 });

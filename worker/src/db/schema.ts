@@ -28,6 +28,7 @@ export const NOTIFICATION_KINDS = [
 	"inbox",
 ] as const;
 export const NOTIFICATION_STATUSES = ["pending", "sent", "deferred", "merged", "skipped"] as const;
+export const PUSH_PLATFORMS = ["web", "android"] as const;
 export const WEBHOOK_KINDS = ["discord", "slack"] as const;
 export const WEBHOOK_EVENTS = ["submitted", "daily_summary"] as const;
 export const AI_LOG_STATUSES = ["ok", "error"] as const;
@@ -177,6 +178,8 @@ export const notifications = sqliteTable(
 export const pushTokens = sqliteTable("push_tokens", {
 	token: text("token").primaryKey(),
 	label: text("label"),
+	// 登録元。web は FID、android は FCM の登録トークン
+	platform: text("platform", { enum: PUSH_PLATFORMS }).notNull().default("web"),
 	createdAt: integer("created_at").notNull(),
 	lastSeenAt: integer("last_seen_at").notNull(),
 });

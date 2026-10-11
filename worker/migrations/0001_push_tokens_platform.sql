@@ -1,0 +1,1 @@
+ALTER TABLE `push_tokens` ADD `platform` text DEFAULT 'web' NOT NULL;
