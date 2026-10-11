@@ -9,7 +9,7 @@ import type { Bindings } from "../env";
 import { DAY, HOUR, type Ms } from "../planner/types";
 import { getEffectiveStatus } from "../services/status";
 import { getSettings } from "../settings";
-import { isFcmConfigured, type PushMessage, sendToToken } from "./fcm";
+import { DEFAULT_APP_ORIGIN, isFcmConfigured, type PushMessage, sendToToken } from "./fcm";
 import {
 	type AnyKind,
 	appendCapped,
@@ -24,6 +24,7 @@ import {
 	summarizeDeferred,
 	taskClosedForNotify,
 } from "./policy";
+import { formatNotificationForWebhook, loadMirrorTargets, postToTargets } from "./webhook";
 
 /** 1回の実行で送る FCM リクエストの上限(無料プランのサブリクエスト 50/回 から、D1 などの分を引いた値) */
 const MAX_SENDS_PER_RUN = 30;
@@ -114,6 +115,9 @@ export async function dispatchDueNotifications(
 
 	const db = getDb(env);
 	const tokens = (await db.select({ token: pushTokens.token }).from(pushTokens)).map((t) => t.token);
+	// 「すべての通知」の webhook(プッシュと同じ内容を一緒に送る先)。実行の最初に1回だけ読む
+	const mirrorTargets = await loadMirrorTargets(db);
+	const origin = env.APP_ORIGIN ?? DEFAULT_APP_ORIGIN;
 	// テスト送信(onlyIds)は方針を通さずそのまま送る
 	const policy = !opts.onlyIds;
 	const due = and(
@@ -122,7 +126,8 @@ export async function dispatchDueNotifications(
 		opts.onlyIds ? inArray(notifications.id, opts.onlyIds) : undefined,
 	);
 
-	if (tokens.length === 0) {
+	// 登録端末も webhook もなければ、今までどおり捨てる
+	if (tokens.length === 0 && mirrorTargets.length === 0) {
 		const rows = await db
 			.update(notifications)
 			.set({ status: "skipped" })
@@ -134,8 +139,8 @@ export async function dispatchDueNotifications(
 		};
 	}
 
-	// 宛先 × 通知 の送信数が上限に収まる件数だけ送る
-	const limit = Math.max(1, Math.floor(MAX_SENDS_PER_RUN / tokens.length));
+	// 宛先(端末と webhook)× 通知 の送信数が上限に収まる件数だけ送る
+	const limit = Math.max(1, Math.floor(MAX_SENDS_PER_RUN / Math.max(1, tokens.length + mirrorTargets.length)));
 	let selected: (typeof notifications.$inferSelect)[];
 	if (policy) {
 		selected = await selectByPolicy(db, now, due, limit);

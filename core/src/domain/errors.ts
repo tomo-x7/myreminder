@@ -25,7 +25,7 @@ const ERROR_TEXT: Record<string, string> = {
 	invalid_end_at: "終了が範囲外(開始〜現在)",
 	not_working: "作業中ではない",
 	working: "作業中",
-	task_closed: "提出済み・取り下げのタスク",
+	task_closed: "提出済み・取り下げのタスクは開始できない",
 	invalid_until: "期限が過去",
 	// 受信箱(取り込み済みの項目が別の端末で処理されたとき)
 	not_pending: ALREADY_DONE,

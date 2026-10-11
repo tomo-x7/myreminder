@@ -6,6 +6,7 @@ import {
 	decideDailySummary,
 	formatDailySummary,
 	formatDuration,
+	formatNotificationForWebhook,
 	formatSubmitted,
 	type SummarySession,
 	sleepStartOfDay,
@@ -176,5 +177,19 @@ describe("sleepStartOfDay", () => {
 	});
 	it("睡眠なし(開始=終了)は活動日の終わり", () => {
 		expect(sleepStartOfDay(wake, 480, 480)).toBe(Date.parse("2026-10-14T08:00:00+09:00"));
+	});
+});
+
+describe("すべての通知の文面", () => {
+	const origin = "https://reminder.tomo-x.win";
+	it("タイトル・本文・絶対 URL を改行でつなぐ", () => {
+		expect(formatNotificationForWebhook({ title: "着手", body: "レポート 1h30m", url: "/tasks/t1" }, origin)).toBe(
+			"着手\nレポート 1h30m\nhttps://reminder.tomo-x.win/tasks/t1",
+		);
+	});
+	it("本文が空なら行を付けない", () => {
+		expect(formatNotificationForWebhook({ title: "今日", body: "", url: "/" }, origin)).toBe(
+			"今日\nhttps://reminder.tomo-x.win/",
+		);
 	});
 });
