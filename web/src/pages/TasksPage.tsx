@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "wouter";
-import { btnPrimary, ErrorNotice, PageHeader, QueryState } from "../components/ui";
+import { btnPrimary, chipClass, Empty, ErrorNotice, listClass, PageHeader, QueryState } from "../components/ui";
 import { InboxBanner } from "../features/inbox";
 import { AddTaskSheet } from "../features/tasks/AddTaskSheet";
 import { FILTERS, isStatusFilter, matchesFilter, type StatusFilter } from "../features/tasks/status";
@@ -26,9 +26,9 @@ function TaskList({
 		<>
 			{update.isError && <ErrorNotice>更新できませんでした: {update.error.message}</ErrorNotice>}
 			{rows.length === 0 ? (
-				<p className="py-8 text-center text-sm text-gray-500">該当するタスクはありません</p>
+				<Empty>該当するタスクはありません</Empty>
 			) : (
-				<ul className="flex flex-col gap-2">
+				<ul className={`${listClass} border-t`}>
 					{rows.map((t) => (
 						<TaskRow
 							key={t.id}
@@ -54,17 +54,17 @@ export function TasksPage() {
 	const [adding, setAdding] = useState(false);
 
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex flex-col gap-3">
 			<PageHeader
 				title="一覧"
 				action={
-					<button type="button" onClick={() => setAdding(true)} className={`${btnPrimary} px-4 py-2`}>
+					<button type="button" onClick={() => setAdding(true)} className={btnPrimary}>
 						＋ 追加
 					</button>
 				}
 			/>
-			<InboxBanner className="rounded-lg border border-blue-400 bg-blue-50 px-4 py-3 text-base font-semibold text-blue-900" />
-			<div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label="状態で絞り込み">
+			<InboxBanner />
+			<div className="-mx-3 flex gap-1.5 overflow-x-auto px-3" role="tablist" aria-label="状態で絞り込み">
 				{FILTERS.map((f) => (
 					<button
 						key={f.value}
@@ -72,11 +72,7 @@ export function TasksPage() {
 						role="tab"
 						aria-selected={filter === f.value}
 						onClick={() => setParams({ s: f.value }, { replace: true })}
-						className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium ${
-							filter === f.value
-								? "bg-gray-900 text-white"
-								: "bg-white text-gray-700 ring-1 ring-gray-300"
-						}`}
+						className={chipClass(filter === f.value)}
 					>
 						{f.label}
 					</button>

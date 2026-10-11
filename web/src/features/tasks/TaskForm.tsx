@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { DueLabel } from "../../components/DueLabel";
-import { btnPrimary, ErrorNotice, Field, inputClass } from "../../components/ui";
+import { btnPrimary, ErrorNotice, Field, inputClass, Notice } from "../../components/ui";
 import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/date";
 import type { Course, Task, TaskPatch } from "../../lib/queries";
 import { CATEGORY_OPTIONS } from "../quick-add/types";
@@ -96,7 +96,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 
 	return (
 		<form
-			className="flex flex-col gap-4"
+			className="flex flex-col gap-3"
 			onSubmit={(e) => {
 				e.preventDefault();
 				submit();
@@ -118,9 +118,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				</select>
 			</Field>
 			{form.status === "done" && (
-				<p className="rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900">
-					完了(未提出)です。提出したら「提出済み」にしてください
-				</p>
+				<Notice tone="warn">完了(未提出)です。提出したら「提出済み」にしてください</Notice>
 			)}
 
 			<Field label="タイトル" error={errors.title}>
@@ -142,7 +140,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				/>
 			</Field>
 
-			<div className="grid grid-cols-2 gap-3">
+			<div className="grid grid-cols-2 gap-2">
 				<Field label="科目">
 					<select
 						value={form.courseId}
@@ -172,7 +170,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				</Field>
 			</div>
 
-			<div className="grid grid-cols-2 gap-3">
+			<div className="grid grid-cols-2 gap-2">
 				<Field
 					label="見積もり(分)"
 					error={errors.estimateMin}
@@ -210,27 +208,29 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				/>
 			</Field>
 
-			<Field label="着手する時刻(任意)" hint="決めた時刻に合図します">
-				<input
-					type="datetime-local"
-					value={form.plannedLocal}
-					onChange={(e) => set("plannedLocal", e.target.value)}
-					className={inputClass}
-				/>
-			</Field>
+			<div className="grid grid-cols-2 gap-2">
+				<Field label="着手する時刻(任意)" hint="決めた時刻に合図します">
+					<input
+						type="datetime-local"
+						value={form.plannedLocal}
+						onChange={(e) => set("plannedLocal", e.target.value)}
+						className={inputClass}
+					/>
+				</Field>
 
-			<Field label="公開日時(任意)" hint="これより前は着手できない課題のとき">
-				<input
-					type="datetime-local"
-					value={form.releaseLocal}
-					onChange={(e) => set("releaseLocal", e.target.value)}
-					className={inputClass}
-				/>
-			</Field>
+				<Field label="公開日時(任意)" hint="これより前は着手できない課題のとき">
+					<input
+						type="datetime-local"
+						value={form.releaseLocal}
+						onChange={(e) => set("releaseLocal", e.target.value)}
+						className={inputClass}
+					/>
+				</Field>
+			</div>
 
 			<Field label="メモ(任意)">
 				<textarea
-					rows={4}
+					rows={3}
 					value={form.note}
 					maxLength={2000}
 					onChange={(e) => set("note", e.target.value)}
@@ -239,7 +239,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 			</Field>
 
 			{error && <ErrorNotice>保存できませんでした: {error}</ErrorNotice>}
-			<button type="submit" disabled={saving} className={btnPrimary}>
+			<button type="submit" disabled={saving} className={`${btnPrimary} w-full`}>
 				{saving ? "保存中…" : "保存"}
 			</button>
 		</form>

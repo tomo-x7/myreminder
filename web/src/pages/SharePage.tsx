@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { PageHeader } from "../components/ui";
+import { Notice, PageHeader } from "../components/ui";
 import { takeSharedImage } from "../features/quick-add/image";
 import { QuickAdd } from "../features/quick-add/QuickAdd";
 import { useCreateTasks } from "../lib/queries";
@@ -52,10 +52,10 @@ export function SharePage() {
 	const cancel = useCallback(() => navigate("/", { replace: true }), [navigate]);
 
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex flex-col gap-3">
 			<PageHeader title="共有から追加" />
 			{image === undefined ? (
-				<p className="text-sm text-gray-700">共有された画像を読み込んでいます…</p>
+				<p className="py-6 text-center text-xs text-faint">共有された画像を読み込んでいます…</p>
 			) : (
 				<QuickAdd
 					onConfirm={save}
@@ -67,9 +67,11 @@ export function SharePage() {
 				/>
 			)}
 			{wantsImage && image === null && (
-				<p role="alert" className="rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900">
-					共有された画像を受け取れませんでした。アプリの「写真から」で選び直してください
-				</p>
+				<div role="alert">
+					<Notice tone="warn">
+						共有された画像を受け取れませんでした。アプリの「写真から」で選び直してください
+					</Notice>
+				</div>
 			)}
 		</div>
 	);

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
-import { btnDanger, btnSecondary, ErrorNotice, QueryState } from "../components/ui";
+import { btnDanger, btnGhost, btnSecondary, ErrorNotice, PageHeader, QueryState } from "../components/ui";
 import { TaskForm } from "../features/tasks/TaskForm";
 import { useCourses, useDeleteTask, useTask, useUpdateTask } from "../lib/queries";
 import { useNow } from "../lib/use-now";
@@ -17,10 +17,15 @@ export function TaskDetailPage() {
 	const [confirming, setConfirming] = useState(false);
 
 	return (
-		<div className="flex flex-col gap-4">
-			<Link href="/tasks" className="text-sm font-medium text-blue-700">
-				← 一覧へ
-			</Link>
+		<div className="flex flex-col gap-3">
+			<PageHeader
+				title="タスクの編集"
+				action={
+					<Link href="/tasks" className={btnGhost}>
+						← 一覧へ
+					</Link>
+				}
+			/>
 			<QueryState query={task}>
 				{(t) => (
 					<>
@@ -37,18 +42,14 @@ export function TaskDetailPage() {
 							}}
 						/>
 						{saved && !update.isPending && (
-							<output className="block rounded-md bg-green-100 px-3 py-2 text-sm text-green-800">
-								保存しました
-							</output>
+							<output className="block border-l-2 border-ink py-0.5 pl-2 text-xs">保存しました</output>
 						)}
 
-						<section className="mt-4 flex flex-col gap-2 border-t border-gray-200 pt-4">
+						<section className="mt-1 flex flex-col gap-2 border-t border-line pt-3">
 							{remove.isError && <ErrorNotice>削除できませんでした: {remove.error.message}</ErrorNotice>}
 							{confirming ? (
 								<>
-									<p className="text-sm font-medium text-gray-900">
-										「{t.title}」を削除します。元に戻せません。
-									</p>
+									<p className="font-medium">「{t.title}」を削除します。元に戻せません。</p>
 									<div className="grid grid-cols-2 gap-2">
 										<button
 											type="button"
@@ -74,7 +75,7 @@ export function TaskDetailPage() {
 							) : (
 								<button
 									type="button"
-									className="self-start px-1 py-2 text-sm font-medium text-red-600"
+									className={`${btnDanger} self-start`}
 									onClick={() => setConfirming(true)}
 								>
 									このタスクを削除

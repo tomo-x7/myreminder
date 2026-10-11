@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { DueLabel } from "../../components/DueLabel";
+import { btnSecondary, Tag } from "../../components/ui";
 import { formatJstDateTime } from "../../lib/date";
 import type { Course, Task } from "../../lib/queries";
 import { formatDuration } from "../../lib/time-input";
@@ -14,55 +15,49 @@ type Props = {
 	busy?: boolean;
 };
 
-/** 一覧の 1 行。完了(未提出)は黄色で目立たせ、提出済み・取り下げは薄くする */
+/** 一覧の 1 行。完了(未提出)は左の黄土の線と文字色で目立たせ、提出済み・取り下げは灰色にする */
 export function TaskRow({ task, course, now, onSubmit, busy }: Props) {
 	const awaitingSubmit = task.status === "done";
 	const finished = task.status === "submitted" || task.status === "dismissed";
 	return (
-		<li
-			className={`rounded-lg border p-3 ${
-				awaitingSubmit
-					? "border-amber-400 border-l-8 bg-amber-50"
-					: finished
-						? "border-gray-200 bg-white opacity-70"
-						: "border-gray-300 bg-white"
-			}`}
-		>
-			<Link href={`/tasks/${task.id}`} className="flex flex-col gap-1">
-				<span className="flex items-start justify-between gap-2">
-					<span className="text-base font-semibold text-gray-900">{task.title}</span>
-					{task.status !== "todo" && (
+		<li>
+			<div className={`border-l-2 pl-2 ${awaitingSubmit ? "border-warn" : "border-transparent"}`}>
+				<Link href={`/tasks/${task.id}`} className="flex flex-col gap-0.5 py-2 active:bg-wash">
+					<span className="flex items-center justify-between gap-2">
 						<span
-							className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-bold ${
-								awaitingSubmit ? "bg-amber-500 text-white" : "bg-gray-200 text-gray-700"
-							}`}
+							className={`min-w-0 truncate font-medium ${awaitingSubmit ? "text-warn" : finished ? "text-sub" : ""}`}
 						>
-							{STATUS_LABEL[task.status]}
+							{task.title}
 						</span>
-					)}
-				</span>
-				{finished ? (
-					<span className="text-sm text-gray-600">締切 {formatJstDateTime(task.dueAt)}</span>
-				) : (
-					<DueLabel dueAt={task.dueAt} now={now} />
+						{task.status !== "todo" && (
+							<Tag tone={awaitingSubmit ? "warn" : "plain"}>{STATUS_LABEL[task.status]}</Tag>
+						)}
+					</span>
+					<span className="flex flex-wrap items-baseline justify-between gap-x-3">
+						{finished ? (
+							<span className="text-xs text-faint">締切 {formatJstDateTime(task.dueAt)}</span>
+						) : (
+							<DueLabel dueAt={task.dueAt} now={now} />
+						)}
+						<span className={`text-xs ${finished ? "text-faint" : "text-sub"}`}>
+							{[course?.name, formatDuration(task.estimateMin)].filter(Boolean).join(" ・ ")}
+						</span>
+					</span>
+				</Link>
+				{awaitingSubmit && onSubmit && (
+					<div className="flex items-center gap-2 pb-2">
+						<span className="text-xs text-warn">提出した?</span>
+						<button
+							type="button"
+							disabled={busy}
+							onClick={() => onSubmit(task)}
+							className={`${btnSecondary} py-1 text-xs`}
+						>
+							提出済みにする
+						</button>
+					</div>
 				)}
-				<span className="text-xs text-gray-600">
-					{[course?.name, formatDuration(task.estimateMin)].filter(Boolean).join(" ・ ")}
-				</span>
-			</Link>
-			{awaitingSubmit && onSubmit && (
-				<div className="mt-2 flex items-center gap-2">
-					<span className="text-sm font-medium text-amber-900">提出した?</span>
-					<button
-						type="button"
-						disabled={busy}
-						onClick={() => onSubmit(task)}
-						className="rounded-md bg-amber-500 px-3 py-1.5 text-sm font-bold text-white disabled:opacity-50"
-					>
-						提出済みにする
-					</button>
-				</div>
-			)}
+			</div>
 		</li>
 	);
 }

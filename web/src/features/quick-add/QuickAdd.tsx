@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { btnGhost, btnPrimary, btnSecondary, chipClass, ErrorNotice, inputClass, Notice } from "../../components/ui";
 import { api } from "../../lib/api";
 import { CandidateCard } from "./CandidateCard";
 import { candidateToDraft, draftToInput, emptyDraft, hasProblems, validateDraft } from "./draft";
@@ -206,13 +207,9 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 	// 写真を読み取っている間
 	if (outcome === null && parse.isPending && preview) {
 		return (
-			<div className="flex flex-col items-center gap-3 py-2" aria-live="polite">
-				<img
-					src={preview}
-					alt="選んだ写真"
-					className="max-h-64 rounded-md border border-gray-200 object-contain"
-				/>
-				<p className="text-sm text-gray-700">写真から課題を読み取っています…(数秒かかります)</p>
+			<div className="flex flex-col items-center gap-2 py-2" aria-live="polite">
+				<img src={preview} alt="選んだ写真" className="max-h-64 rounded-sm border border-line object-contain" />
+				<p className="text-xs text-sub">写真から課題を読み取っています…(数秒かかります)</p>
 			</div>
 		);
 	}
@@ -222,13 +219,13 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 		const max = mode === "line" ? LINE_MAX : TEXT_MAX;
 		return (
 			<form
-				className="flex flex-col gap-3"
+				className="flex flex-col gap-2"
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit();
 				}}
 			>
-				<div className="flex gap-2" role="tablist" aria-label="入力方法">
+				<div className="flex gap-1.5" role="tablist" aria-label="入力方法">
 					{(
 						[
 							["line", "1行で入力"],
@@ -241,9 +238,7 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 							role="tab"
 							aria-selected={mode === m}
 							onClick={() => setMode(m)}
-							className={`rounded-full px-3 py-1.5 text-sm ${
-								mode === m ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700"
-							}`}
+							className={chipClass(mode === m)}
 						>
 							{label}
 						</button>
@@ -259,7 +254,7 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 						onChange={(e) => setText(e.target.value)}
 						placeholder="例: 情報倫理 来週月曜の授業前までにレポート2000字"
 						aria-label="課題を1行で入力"
-						className="w-full rounded-md border border-gray-300 bg-white px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+						className={inputClass}
 					/>
 				) : (
 					<textarea
@@ -270,23 +265,19 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 						onChange={(e) => setText(e.target.value)}
 						placeholder="ポータルのお知らせやメールの本文を貼り付けてください。課題を複数まとめて取り出します"
 						aria-label="告知文を貼り付け"
-						className="w-full rounded-md border border-gray-300 bg-white px-3 py-3 text-base focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+						className={inputClass}
 					/>
 				)}
 
-				<div className="flex flex-wrap items-center gap-2">
-					<button
-						type="submit"
-						disabled={!text.trim() || parse.isPending}
-						className="rounded-md bg-blue-600 px-4 py-3 text-base font-semibold text-white disabled:bg-gray-300"
-					>
+				<div className="flex flex-wrap items-center gap-1.5">
+					<button type="submit" disabled={!text.trim() || parse.isPending} className={btnPrimary}>
 						{parse.isPending ? "解析中…" : "解析する"}
 					</button>
 					<button
 						type="button"
 						onClick={() => fileInput.current?.click()}
 						disabled={parse.isPending}
-						className="rounded-md border border-gray-300 px-4 py-3 text-base text-gray-800"
+						className={btnSecondary}
 					>
 						写真から
 					</button>
@@ -303,16 +294,11 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 							if (file) submitImage(file);
 						}}
 					/>
-					<button
-						type="button"
-						onClick={startManual}
-						disabled={parse.isPending}
-						className="rounded-md border border-gray-300 px-4 py-3 text-base text-gray-800"
-					>
+					<button type="button" onClick={startManual} disabled={parse.isPending} className={btnSecondary}>
 						手入力で登録
 					</button>
 					{onCancel && (
-						<button type="button" onClick={onCancel} className="ml-auto px-2 py-3 text-sm text-gray-600">
+						<button type="button" onClick={onCancel} className={`${btnGhost} ml-auto`}>
 							閉じる
 						</button>
 					)}
@@ -325,21 +311,21 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 	const problems = drafts.map(validateDraft);
 	const saving = save.isPending;
 	return (
-		<div className="flex flex-col gap-3">
+		<div className="flex flex-col gap-2">
 			{outcome.notice && (
-				<p role="alert" className="rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900">
-					{outcome.notice}
-				</p>
+				<div role="alert">
+					<Notice tone="warn">{outcome.notice}</Notice>
+				</div>
 			)}
 			{preview && (
 				<img
 					src={preview}
 					alt="読み取った写真"
-					className="max-h-40 self-start rounded-md border border-gray-200 object-contain"
+					className="max-h-40 self-start rounded-sm border border-line object-contain"
 				/>
 			)}
 			{drafts.length > 1 && (
-				<p className="text-sm text-gray-700">{drafts.length}件の課題を見つけました。内容を確認してください</p>
+				<p className="text-xs text-sub">{drafts.length}件の課題を見つけました。内容を確認してください</p>
 			)}
 
 			{drafts.map((d, i) => (
@@ -357,26 +343,17 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 				/>
 			))}
 
-			{saveError && (
-				<p role="alert" className="rounded-md bg-red-100 px-3 py-2 text-sm text-red-800">
-					保存できませんでした: {saveError}
-				</p>
-			)}
+			{saveError && <ErrorNotice>保存できませんでした: {saveError}</ErrorNotice>}
 
-			<div className="sticky bottom-0 flex gap-2 border-t border-gray-200 bg-white/95 py-3">
-				<button
-					type="button"
-					onClick={reset}
-					disabled={saving}
-					className="rounded-md border border-gray-300 px-4 py-3 text-base text-gray-800"
-				>
+			<div className="sticky bottom-0 flex gap-2 border-t border-line bg-paper py-2">
+				<button type="button" onClick={reset} disabled={saving} className={btnSecondary}>
 					戻る
 				</button>
 				<button
 					type="button"
 					onClick={confirm}
 					disabled={saving || drafts.length === 0}
-					className="flex-1 rounded-md bg-blue-600 px-4 py-3 text-base font-semibold text-white disabled:bg-gray-300"
+					className={`${btnPrimary} flex-1`}
 				>
 					{saving ? "保存中…" : drafts.length > 1 ? `${drafts.length}件を登録` : "登録する"}
 				</button>
