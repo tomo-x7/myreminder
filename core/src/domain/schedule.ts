@@ -26,7 +26,6 @@ export function pickNext<T extends Pick<PlanTask, "risk" | "latestStartUsual" | 
 	)[0];
 }
 
-/** 90 → `1h30m`、40 → `40m`、120 → `2h` */
 /** formatDuration と同じ(`1h30m`)。呼び出し側の名前を変えないための別名 */
 export const formatShort = formatDuration;
 
@@ -51,13 +50,9 @@ export function progressText(t: Pick<PlanTask, "progress" | "actualMin" | "remai
 	return `残り ${formatShort(t.remainingP80)}`;
 }
 
-/** 山場の見出し: `今週の山場: 11/18(水)、余裕 1.5h` */
+/** 山場: `11/18(水) ・ 今週 ・ 余裕 1.5h`。足りないときは `余裕 -28m` */
 export function bottleneckText(b: { dueAt: number; slackUsual: number }, now: number): string {
-	const week = formatWeekLabel(b.dueAt, now);
-	const head = week ? `${week}の山場` : "山場";
-	const slack =
-		b.slackUsual < 0
-			? `普段のペースでは ${formatHours(-b.slackUsual)} 足りない`
-			: `余裕 ${formatHours(b.slackUsual)}`;
-	return `${head}: ${formatJstDate(b.dueAt)}、${slack}`;
+	return [formatJstDate(b.dueAt), formatWeekLabel(b.dueAt, now), `余裕 ${formatHours(b.slackUsual)}`]
+		.filter(Boolean)
+		.join(" ・ ");
 }

@@ -18,7 +18,7 @@ export type BlockForm = {
 	weekday: number;
 	startMin: number | null;
 	endMin: number | null;
-	/** 期間(学期)。JST のその日の 0:00。任意 */
+	/** 期間(学期)。JST のその日の 0:00。空でもよい */
 	dateFrom: number | null;
 	dateTo: number | null;
 	/** 単発の開始・終了 */
@@ -66,13 +66,13 @@ export function blockToForm(block: BusyBlock, defaultWeekday = 1): BlockForm {
 export function validateBlockForm(f: BlockForm): BlockFormProblems {
 	const problems: BlockFormProblems = {};
 	if (f.shape === "recurring") {
-		if (f.startMin === null || f.endMin === null) problems.startMin = "開始と終了の時刻を入力してください";
-		else if (f.endMin <= f.startMin) problems.endMin = "終了は開始より後にしてください";
+		if (f.startMin === null || f.endMin === null) problems.startMin = "時刻が未入力";
+		else if (f.endMin <= f.startMin) problems.endMin = "終了が開始より前";
 		if (f.dateFrom !== null && f.dateTo !== null && f.dateTo < f.dateFrom)
-			problems.dateTo = "期間の終わりが始まりより前です";
+			problems.dateTo = "期間の終了が開始より前";
 	} else {
-		if (f.startAt === null || f.endAt === null) problems.startAt = "開始と終了の日時を入力してください";
-		else if (f.endAt <= f.startAt) problems.endAt = "終了は開始より後にしてください";
+		if (f.startAt === null || f.endAt === null) problems.startAt = "日時が未入力";
+		else if (f.endAt <= f.startAt) problems.endAt = "終了が開始より前";
 	}
 	return problems;
 }

@@ -46,10 +46,10 @@ const isPositiveInt = (s: string) => Number.isInteger(Number(s)) && Number(s) >=
 
 export function validateTaskForm(f: TaskForm): TaskFormProblems {
 	const problems: TaskFormProblems = {};
-	if (!f.title.trim()) problems.title = "タイトルを入力してください";
-	if (f.dueAt === null) problems.dueAt = "締切を入力してください";
-	if (!isPositiveInt(f.estimateMin)) problems.estimateMin = "1分以上の整数で入力してください";
-	if (!isPositiveInt(f.minBlockMin)) problems.minBlockMin = "1分以上の整数で入力してください";
+	if (!f.title.trim()) problems.title = "タイトルが未入力";
+	if (f.dueAt === null) problems.dueAt = "締切が未入力";
+	if (!isPositiveInt(f.estimateMin)) problems.estimateMin = "1以上の整数";
+	if (!isPositiveInt(f.minBlockMin)) problems.minBlockMin = "1以上の整数";
 	return problems;
 }
 
@@ -73,9 +73,8 @@ export function toTaskPatch(f: TaskForm, task: Task): TaskPatch {
 	};
 }
 
-/** 状態を変えたときの注意書き。完了(未提出)は、提出するまで終わりではない */
-export const statusNotice = (status: TaskStatus): string | null =>
-	status === "done" ? "完了(未提出)です。提出したら「提出済み」にしてください" : null;
+/** 状態の補足。完了は提出するまで終わりではないので、未提出と示す */
+export const statusNotice = (status: TaskStatus): string | null => (status === "done" ? "未提出" : null);
 
 /** 全項目の編集フォームの状態。submit は検証を通ったときだけ onSave を呼ぶ */
 export function useTaskForm(task: Task) {
@@ -92,7 +91,7 @@ export function useTaskForm(task: Task) {
 	return { form, set, problems, notice: statusNotice(form.status), submit };
 }
 
-/** 詳細画面の保存と削除。保存したあとの「保存しました」の表示もここで持つ */
+/** 詳細画面の保存と削除。保存したあとの「保存済み」の表示もここで持つ */
 export function useTaskEditor(taskId: string) {
 	const update = useUpdateTask();
 	const remove = useDeleteTask();

@@ -10,8 +10,8 @@ export async function uploadPushToken(
 	input: { token: string; label?: string; platform: "web" | "android" },
 ): Promise<void> {
 	const res = await api.api.push.tokens.$post({ json: input }).catch(() => null);
-	if (!res) throw new Error("サーバーへの登録に失敗しました(通信エラー)");
-	if (!res.ok) throw new Error(`サーバーへの登録に失敗しました (${res.status})`);
+	if (!res) throw new Error("登録失敗: 通信エラー");
+	if (!res.ok) throw new Error(`登録失敗 (${res.status})`);
 }
 
 /** 端末の登録を消す。失敗は握りつぶす(消えなくても、届かなければサーバーが後で片付ける) */
@@ -23,14 +23,14 @@ export async function deletePushToken(api: Api, token: string): Promise<void> {
 export async function sendTestPush(api: Api): Promise<PushResult> {
 	try {
 		const res = await api.api.push.test.$post({ json: {} });
-		if (!res.ok) return { ok: false, message: `送信に失敗しました (${res.status})` };
+		if (!res.ok) return { ok: false, message: `送信失敗 (${res.status})` };
 		const data = await res.json();
-		if (!data.configured) return { ok: false, message: "サーバーに FCM_SERVICE_ACCOUNT が未設定です" };
-		if (data.results.length === 0) return { ok: false, message: "登録された端末がありません" };
+		if (!data.configured) return { ok: false, message: "FCM_SERVICE_ACCOUNT が未設定" };
+		if (data.results.length === 0) return { ok: false, message: "端末が未登録" };
 		return data.ok
 			? { ok: true }
-			: { ok: false, message: `届きませんでした: ${data.results.map((r) => r.code ?? "ok").join(", ")}` };
+			: { ok: false, message: `不達: ${data.results.map((r) => r.code ?? "ok").join(", ")}` };
 	} catch (e) {
-		return { ok: false, message: e instanceof Error ? e.message : "送信に失敗しました" };
+		return { ok: false, message: e instanceof Error ? e.message : "送信失敗" };
 	}
 }

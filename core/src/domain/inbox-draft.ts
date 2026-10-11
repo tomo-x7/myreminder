@@ -22,6 +22,6 @@ export function itemToDraft(item: InboxItem, courses: readonly CourseOption[]): 
 		category: (item.kind && KIND_CATEGORY[item.kind]) || "other",
 		dueAt: item.dueAt,
 		needsReview,
-		reviewReasons: needsReview ? ["取り込み元に締切がありません。締切を入力してください"] : [],
+		reviewReasons: needsReview ? ["取り込み元に締切なし"] : [],
 	};
 }

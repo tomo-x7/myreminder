@@ -7,6 +7,7 @@ import { MINUTE } from "../planner/types";
 import type { WebhookKind } from "../schemas/webhook";
 import { activityDayKey, activityDayOf, activityDayStart } from "../services/planning-helpers";
 import { getSettings } from "../settings";
+import { formatDuration } from "./format";
 
 const DISCORD_LIMIT = 2000;
 const SLACK_LIMIT = 3000;
@@ -17,14 +18,8 @@ const LAST_DAY_KEY = "webhook_daily_summary_last_day";
 
 export type SendResult = { ok: boolean; status: number | null; error: string | null };
 
-/** 2h10m / 2h / 45m。分は四捨五入 */
-export function formatDuration(minutes: number): string {
-	const total = Math.max(0, Math.round(minutes));
-	const h = Math.floor(total / 60);
-	const m = total % 60;
-	if (h === 0) return `${m}m`;
-	return m === 0 ? `${h}h` : `${h}h${m}m`;
-}
+// 2h10m / 2h / 45m(定義は format.ts)
+export { formatDuration };
 
 /** 科目名があれば先頭に付ける */
 export const taskLabel = (task: { title: string; courseName?: string | null }): string =>

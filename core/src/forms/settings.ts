@@ -69,17 +69,17 @@ const validCapacity = (min: number, text: string) => text !== "" && Number.isFin
 
 export function validateSettingsForm(f: SettingsForm): SettingsFormProblems {
 	const problems: SettingsFormProblems = {};
-	if (f.sleepStartMin === null || f.sleepEndMin === null) problems.sleep = "睡眠の時刻を入力してください";
-	if (f.morningMin === null || f.eveningMin === null) problems.digest = "ダイジェストの時刻を入力してください";
+	if (f.sleepStartMin === null || f.sleepEndMin === null) problems.sleep = "睡眠の時刻が未入力";
+	if (f.morningMin === null || f.eveningMin === null) problems.digest = "まとめの時刻が未入力";
 	if (
 		!validCapacity(hoursToMin(f.weekdayHours), f.weekdayHours) ||
 		!validCapacity(hoursToMin(f.holidayHours), f.holidayHours)
 	)
-		problems.capacity = "作業時間は 0〜24 時間で入力してください";
+		problems.capacity = "作業時間は 0〜24h";
 
 	const limit = Number(f.dailyLimit);
 	if (f.dailyLimit === "" || !Number.isInteger(limit) || limit < 0 || limit > 100)
-		problems.dailyLimit = "通知の上限は 0〜100 の整数で入力してください";
+		problems.dailyLimit = "通知の上限は 0〜100";
 
 	const periodProblem = validatePeriods(f.periods);
 	if (periodProblem) problems.periods = periodProblem;
@@ -90,11 +90,11 @@ export function validateSettingsForm(f: SettingsForm): SettingsFormProblems {
 function validatePeriods(rows: readonly PeriodRow[]): string | null {
 	for (const row of rows) {
 		const period = Number(row.period);
-		if (!Number.isInteger(period) || period < 1 || period > 20) return "時限は 1〜20 の整数で入力してください";
+		if (!Number.isInteger(period) || period < 1 || period > 20) return "時限は 1〜20";
 		if (row.startMin === null || row.endMin === null || row.endMin <= row.startMin)
-			return `${period}限の終了は開始より後にしてください`;
+			return `${period}限の終了が開始より前`;
 	}
-	if (new Set(rows.map((r) => Number(r.period))).size !== rows.length) return "同じ時限が重複しています";
+	if (new Set(rows.map((r) => Number(r.period))).size !== rows.length) return "時限が重複";
 	return null;
 }
 
@@ -138,7 +138,7 @@ export function useSettingsForm(settings: Settings) {
 	};
 }
 
-/** 設定の保存と、「保存しました」の表示 */
+/** 設定の保存と、「保存済み」の表示 */
 export function useSaveSettings() {
 	const update = useUpdateSettings();
 	const [saved, setSaved] = useState(false);

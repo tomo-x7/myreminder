@@ -18,7 +18,7 @@ export const courseById = (courses: readonly Course[], id: string | null): Cours
 	courses.find((c) => c.id === id);
 
 export type TaskRowView = {
-	/** 完了したけど未提出。目立たせる */
+	/** 未提出(done)。目立たせる */
 	awaitingSubmit: boolean;
 	/** 提出済み・取り下げ。控えめにする */
 	finished: boolean;
@@ -26,7 +26,7 @@ export type TaskRowView = {
 	statusLabel: string | null;
 	/** finished のときの締切の言い方。それ以外は null(画面は相対表示つきの締切を出す) */
 	closedDue: string | null;
-	/** `科目名 ・ 1時間30分` */
+	/** `科目名 ・ 1h30m` */
 	meta: string;
 };
 

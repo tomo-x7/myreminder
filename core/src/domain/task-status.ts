@@ -6,7 +6,7 @@ export const STATUS_LABEL: Record<TaskStatus, string> = {
 	todo: "未着手",
 	doing: "作業中",
 	// plan.md §3.1: done(作業完了)と submitted(提出済み)は別。完了しても提出するまでは終わりではない
-	done: "完了(未提出)",
+	done: "未提出",
 	submitted: "提出済み",
 	dismissed: "取り下げ",
 };
@@ -23,7 +23,7 @@ export const FILTERS: readonly { value: StatusFilter; label: string }[] = [
 	{ value: "open", label: "未完了" },
 	{ value: "todo", label: "未着手" },
 	{ value: "doing", label: "作業中" },
-	{ value: "done", label: "完了(未提出)" },
+	{ value: "done", label: "未提出" },
 	{ value: "submitted", label: "提出済み" },
 	{ value: "all", label: "全部" },
 ];

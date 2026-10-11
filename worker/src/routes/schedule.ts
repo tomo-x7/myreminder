@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import * as v from "valibot";
+import { loadParseContext } from "../ai/parse";
+import { computeStartSuggestions } from "../ai/suggest";
 import { getDb } from "../db";
 import type { Env } from "../env";
 import { idParamSchema, NOT_FOUND } from "../services/http";
@@ -26,6 +28,12 @@ export const schedule = new Hono<Env>()
 			c.req.valid("query").startAt,
 		);
 		return result ? c.json(result, 200) : c.json(NOT_FOUND, 404);
+	})
+	// 手入力のカードの「いつ始める?」の候補。AI の解析なしで(parse の応答と同じ形で)返す
+	.get("/start-suggestions", async (c) => {
+		const now = Date.now();
+		const ctx = await loadParseContext(getDb(c.env));
+		return c.json({ startSuggestions: computeStartSuggestions({ now, busy: ctx.busy, sleep: ctx.sleep }), now }, 200);
 	})
 	.get("/slack", validate("query", slackQuerySchema), async (c) =>
 		c.json(await computeSlackList(getDb(c.env), Date.now(), c.req.valid("query").spareMin), 200),

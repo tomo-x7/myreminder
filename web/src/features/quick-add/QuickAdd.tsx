@@ -1,3 +1,4 @@
+import type { InputMode } from "core/domain/draft";
 import { useQuickAddFlow } from "core/forms/quick-add";
 import { useNow } from "core/hooks/use-now";
 import { useEffect, useRef, useState } from "react";
@@ -8,12 +9,12 @@ import { prepareParseImage } from "./image";
 type Props = {
 	/** 登録し終えたとき(シートを閉じる・ホームへ戻るなど) */
 	onDone: () => void;
-	/** 閉じるボタン。省略するとボタンを出さない */
+	/** やめるボタン。省略するとボタンを出さない(シートは自分の閉じるを持つ) */
 	onCancel?: () => void;
 	/** 入力欄の初期値(Web Share Target などから渡す)。省略時は空 */
 	initialText?: string;
-	/** 最初の入力方法。省略時は 1 行入力 */
-	initialMode?: "line" | "text";
+	/** 最初の入力方法。省略時は手入力 */
+	initialMode?: InputMode;
 	/** true なら、初期値を入れた状態で最初に一度だけ解析を始める(initialText が空なら何もしない) */
 	autoSubmit?: boolean;
 	/** 共有メニューから届いた画像。渡されたら、最初に一度だけ写真として解析を始める */
@@ -35,6 +36,59 @@ function useObjectUrl(blob: Blob | null): string | null {
 	return url;
 }
 
+const MODES: readonly (readonly [InputMode, string])[] = [
+	["manual", "手入力"],
+	["line", "1行"],
+	["text", "貼り付け"],
+];
+
+type Flow = ReturnType<typeof useQuickAddFlow<Blob>>;
+
+/** 入力方法のチップ。写真は選んだ時点で解析に進むので、タブではなくボタン */
+function ModeChips({ flow }: { flow: Flow }) {
+	const fileInput = useRef<HTMLInputElement>(null);
+	return (
+		<div className="flex gap-1.5">
+			<div role="tablist" aria-label="入力方法" className="flex gap-1.5">
+				{MODES.map(([m, label]) => (
+					<button
+						key={m}
+						type="button"
+						role="tab"
+						aria-selected={flow.mode === m}
+						disabled={flow.parsing}
+						onClick={() => flow.setMode(m)}
+						className={chipClass(flow.mode === m)}
+					>
+						{label}
+					</button>
+				))}
+			</div>
+			<button
+				type="button"
+				disabled={flow.parsing}
+				onClick={() => fileInput.current?.click()}
+				className={chipClass(false)}
+			>
+				写真
+			</button>
+			<input
+				ref={fileInput}
+				type="file"
+				accept="image/*"
+				capture="environment"
+				hidden
+				aria-label="写真を選ぶ"
+				onChange={(e) => {
+					const file = e.target.files?.[0];
+					e.target.value = "";
+					if (file) flow.submitImage(file);
+				}}
+			/>
+		</div>
+	);
+}
+
 export function QuickAdd({ onDone, onCancel, initialText, initialMode, autoSubmit, initialImage }: Props) {
 	const now = useNow();
 	const flow = useQuickAddFlow({
@@ -45,28 +99,23 @@ export function QuickAdd({ onDone, onCancel, initialText, initialMode, autoSubmi
 		autoSubmit,
 		initialImage,
 	});
-	const { outcome, drafts, mode } = flow;
+	const { screen, outcome, drafts } = flow;
 	const preview = useObjectUrl(flow.image);
-	const fileInput = useRef<HTMLInputElement>(null);
 
 	// 写真を読み取っている間
 	if (outcome === null && flow.parsing && flow.image !== null) {
 		return (
 			<div className="flex flex-col items-center gap-2 py-2" aria-live="polite">
 				{preview && (
-					<img
-						src={preview}
-						alt="選んだ写真"
-						className="max-h-64 rounded-sm border border-line object-contain"
-					/>
+					<img src={preview} alt="写真" className="max-h-64 rounded-sm border border-line object-contain" />
 				)}
-				<p className="text-xs text-sub">写真から課題を読み取っています…(数秒かかります)</p>
+				<p className="text-xs text-sub">読み取り中…</p>
 			</div>
 		);
 	}
 
-	// 入力画面
-	if (outcome === null) {
+	// 1行・告知文の入力欄
+	if (screen === "input") {
 		return (
 			<form
 				className="flex flex-col gap-2"
@@ -75,35 +124,17 @@ export function QuickAdd({ onDone, onCancel, initialText, initialMode, autoSubmi
 					flow.submit();
 				}}
 			>
-				<div className="flex gap-1.5" role="tablist" aria-label="入力方法">
-					{(
-						[
-							["line", "1行で入力"],
-							["text", "告知文を貼り付け"],
-						] as const
-					).map(([m, label]) => (
-						<button
-							key={m}
-							type="button"
-							role="tab"
-							aria-selected={mode === m}
-							onClick={() => flow.setMode(m)}
-							className={chipClass(mode === m)}
-						>
-							{label}
-						</button>
-					))}
-				</div>
+				<ModeChips flow={flow} />
 
-				{mode === "line" ? (
+				{flow.mode === "line" ? (
 					<input
 						type="text"
 						value={flow.text}
 						maxLength={flow.textMax}
 						disabled={flow.parsing}
 						onChange={(e) => flow.setText(e.target.value)}
-						placeholder="例: 情報倫理 来週月曜の授業前までにレポート2000字"
-						aria-label="課題を1行で入力"
+						placeholder="情報倫理 来週月曜の授業前までにレポート2000字"
+						aria-label="1行"
 						className={inputClass}
 					/>
 				) : (
@@ -113,43 +144,19 @@ export function QuickAdd({ onDone, onCancel, initialText, initialMode, autoSubmi
 						rows={8}
 						disabled={flow.parsing}
 						onChange={(e) => flow.setText(e.target.value)}
-						placeholder="ポータルのお知らせやメールの本文を貼り付けてください。課題を複数まとめて取り出します"
-						aria-label="告知文を貼り付け"
+						placeholder="告知文"
+						aria-label="告知文"
 						className={inputClass}
 					/>
 				)}
 
 				<div className="flex flex-wrap items-center gap-1.5">
 					<button type="submit" disabled={!flow.canSubmit} className={btnPrimary}>
-						{flow.parsing ? "解析中…" : "解析する"}
-					</button>
-					<button
-						type="button"
-						onClick={() => fileInput.current?.click()}
-						disabled={flow.parsing}
-						className={btnSecondary}
-					>
-						写真から
-					</button>
-					<input
-						ref={fileInput}
-						type="file"
-						accept="image/*"
-						capture="environment"
-						hidden
-						aria-label="写真を選ぶ"
-						onChange={(e) => {
-							const file = e.target.files?.[0];
-							e.target.value = "";
-							if (file) flow.submitImage(file);
-						}}
-					/>
-					<button type="button" onClick={flow.startManual} disabled={flow.parsing} className={btnSecondary}>
-						手入力で登録
+						{flow.parsing ? "解析中…" : "解析"}
 					</button>
 					{onCancel && (
 						<button type="button" onClick={onCancel} className={`${btnGhost} ml-auto`}>
-							閉じる
+							やめる
 						</button>
 					)}
 				</div>
@@ -157,18 +164,20 @@ export function QuickAdd({ onDone, onCancel, initialText, initialMode, autoSubmi
 		);
 	}
 
-	// 確認画面
+	// 手入力のカード(screen === "manual")と、解析の結果の確認(screen === "confirm")
+	const manual = screen === "manual";
 	const saving = flow.saving;
 	return (
 		<div className="flex flex-col gap-2">
-			{outcome.notice && (
+			{manual && <ModeChips flow={flow} />}
+			{outcome?.notice && (
 				<div role="alert">
 					<Notice tone="warn">{outcome.notice}</Notice>
 				</div>
 			)}
-			{outcome.pasted && (
+			{outcome?.pasted && (
 				<details open className="text-xs text-sub">
-					<summary className="cursor-pointer">貼り付けた本文</summary>
+					<summary className="cursor-pointer">本文</summary>
 					<p className="mt-1 max-h-40 overflow-y-auto border-l-2 border-line pl-2 break-words whitespace-pre-wrap">
 						{outcome.pasted}
 					</p>
@@ -177,42 +186,48 @@ export function QuickAdd({ onDone, onCancel, initialText, initialMode, autoSubmi
 			{preview && (
 				<img
 					src={preview}
-					alt="読み取った写真"
+					alt="写真"
 					className="max-h-40 self-start rounded-sm border border-line object-contain"
 				/>
-			)}
-			{drafts.length > 1 && (
-				<p className="text-xs text-sub">{drafts.length}件の課題を見つけました。内容を確認してください</p>
 			)}
 
 			{drafts.map((d, i) => (
 				<CandidateCard
 					key={d.key}
 					draft={d}
+					titleFirst={manual}
 					problems={flow.problems[i] ?? {}}
 					showProblems={flow.showProblems}
 					courses={flow.courses}
-					startSuggestions={outcome.startSuggestions}
+					startSuggestions={flow.startSuggestions}
 					now={now}
 					disabled={saving}
 					onChange={(patch) => flow.patchDraft(d.key, patch)}
-					onRemove={drafts.length > 1 ? () => flow.removeDraft(d.key) : undefined}
+					onRemove={!manual && drafts.length > 1 ? () => flow.removeDraft(d.key) : undefined}
 				/>
 			))}
 
-			{flow.saveError && <ErrorNotice>保存できませんでした: {flow.saveError}</ErrorNotice>}
+			{flow.saveError && <ErrorNotice>保存失敗: {flow.saveError}</ErrorNotice>}
 
 			<div className="sticky bottom-0 flex gap-2 border-t border-line bg-paper py-2">
-				<button type="button" onClick={flow.back} disabled={saving} className={btnSecondary}>
-					戻る
-				</button>
+				{manual ? (
+					onCancel && (
+						<button type="button" onClick={onCancel} disabled={saving} className={btnSecondary}>
+							やめる
+						</button>
+					)
+				) : (
+					<button type="button" onClick={flow.back} disabled={saving} className={btnSecondary}>
+						戻る
+					</button>
+				)}
 				<button
 					type="button"
 					onClick={flow.confirm}
 					disabled={saving || drafts.length === 0}
 					className={`${btnPrimary} flex-1`}
 				>
-					{saving ? "保存中…" : drafts.length > 1 ? `${drafts.length}件を登録` : "登録する"}
+					{saving ? "保存中…" : drafts.length > 1 ? `${drafts.length}件を登録` : "登録"}
 				</button>
 			</div>
 		</div>

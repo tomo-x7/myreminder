@@ -7,15 +7,15 @@ import { useCreateWebhook, useDeleteWebhook, useTestWebhook, useUpdateWebhook } 
 
 export const WEBHOOK_KIND_LABEL: Record<WebhookKind, string> = { discord: "Discord", slack: "Slack" };
 
-/** URL の形のヒント(入力欄の placeholder と「形: …」) */
+/** URL の形のヒント(入力欄の placeholder) */
 export const WEBHOOK_URL_HINT: Record<WebhookKind, string> = {
 	discord: "https://discord.com/api/webhooks/…",
 	slack: "https://hooks.slack.com/services/…",
 };
 
 export const WEBHOOK_EVENTS: { value: WebhookEvent; label: string }[] = [
-	{ value: "submitted", label: "提出済みにしたら報告" },
-	{ value: "daily_summary", label: "その日に課題に使った時間(夜のまとめの時刻)" },
+	{ value: "submitted", label: "提出済み" },
+	{ value: "daily_summary", label: "1日の課題時間" },
 ];
 
 /** イベントのチェックを入れる・外す */

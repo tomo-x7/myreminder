@@ -11,8 +11,8 @@ export function snoozeOptions(now: number): SnoozeOption[] {
 	const tomorrow = today + DAY;
 	const out: SnoozeOption[] = [];
 	if (at(today, 21) > now + 30 * MINUTE) out.push({ label: "今夜 21:00", at: at(today, 21) });
-	out.push({ label: "明日の夕方 17:00", at: at(tomorrow, 17) });
-	out.push({ label: "明日の夜 21:00", at: at(tomorrow, 21) });
+	out.push({ label: "明日 17:00", at: at(tomorrow, 17) });
+	out.push({ label: "明日 21:00", at: at(tomorrow, 21) });
 	// 週末: 次に来る土日の 10:00(1時間以上先)
 	for (let d = 0; d <= 7; d++) {
 		const day = today + d * DAY;

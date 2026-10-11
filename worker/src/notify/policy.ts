@@ -8,6 +8,7 @@ import { jstDayStart } from "../planner/busy";
 import { DAY, HOUR, type Interval, MINUTE, type Minutes, type Ms, type Risk, type SleepWindow } from "../planner/types";
 import { activityDayKey, activityDayOf } from "../services/planning-helpers";
 import { sleepWindowAt } from "../services/status";
+import { formatDuration, formatHours } from "./format";
 
 // ---------- 型 ----------
 
@@ -128,18 +129,19 @@ const fmtDate = (t: Ms): string => {
 	return `${p.month}/${p.day}(${WEEKDAYS_JA[p.weekday]})`;
 };
 
-/** "約3時間" "45分" */
+/** "3h" "2h45m" "45m"(締切までの残り) */
 export function fmtSpan(ms: Ms): string {
-	const min = Math.max(0, Math.round(ms / MINUTE));
-	if (min < 60) return `${min}分`;
-	if (min < 36 * 60) return `約${Math.round(min / 60)}時間`;
-	return `約${Math.round(min / (24 * 60))}日`;
+	return formatDuration(ms / MINUTE);
 }
 
-/** "1.5h"(余裕の表示) */
-const fmtHours = (min: Minutes): string => `${Math.round((Math.abs(min) / 60) * 10) / 10}h`;
-const fmtMinutes = (min: Minutes): string =>
-	min < 60 ? `${Math.max(5, Math.round(min / 5) * 5)}分` : `${Math.round((min / 60) * 10) / 10}時間`;
+/** 必要な時間。見積もりの精度を超えた細かさにならないよう5分単位: "1h35m" "45m" */
+const fmtNeed = (min: Minutes): string => formatDuration(Math.max(5, Math.round(min / 5) * 5));
+
+/** t と同じ日なら "21:30"、違えば "明日 9:00" */
+const fmtAt = (t: Ms, base: Ms): string => {
+	const day = relDay(t, base);
+	return day === "今日" ? fmtTime(t) : `${day} ${fmtTime(t)}`;
+};
 
 // ---------- 切れ目(breakpoint) ----------
 
@@ -190,63 +192,41 @@ export function makeCalendar(busy: Interval[], sleep: SleepWindow): Calendar {
 }
 
 // ---------- 文面 ----------
+// 規則は ai-docs/specs/ui.md「通知・ダイジェスト」: タイトルは「<種類の語>: <課題名>」、本文は事実を「・」か改行で並べるだけ
 
 type RiskCtx = {
-	title: string;
+	/** "締切 10/14(水) 23:59・3日後" */
 	due: string;
-	startBy: string | null;
+	/** "着手の限界 21:30"。普段のペースで間に合う着手時刻がなければ null */
+	limit: string | null;
+	/** "必要 2h" */
 	need: string;
-	first: string | null;
 };
 
-const withFirst = (body: string, first: string | null): string => (first ? `${body}\nまず5分: ${first}` : body);
+const joinFacts = (sep: string, parts: (string | null)[]): string => parts.filter((p) => p !== null).join(sep);
 
-/** 危険(普段のペースで足りる)。同じタスクで続けて同じ文面にならないよう、複数用意して順番に使う */
-const DANGER_TEMPLATES: ((c: RiskCtx) => { title: string; body: string })[] = [
-	(c) => ({
-		title: `そろそろ着手: ${c.title}`,
-		body: `${c.startBy ? `${c.startBy}までに始めないと` : "そろそろ始めないと"}余裕がなくなる。締切 ${c.due}`,
-	}),
-	(c) => ({
-		title: `いまの空きで一歩: ${c.title}`,
-		body: `あと${c.need}ほど必要。今の空きに最初の一歩だけでも。締切 ${c.due}`,
-	}),
-	(c) => ({
-		title: `着手の限界が近い: ${c.title}`,
-		body: `${c.startBy ? `着手の目安は${c.startBy}。` : ""}ここを過ぎると徹夜コースになる。`,
-	}),
-	(c) => ({
-		title: `10分だけ触ろう: ${c.title}`,
-		body: `始めてしまえば続けやすい。必要な時間は${c.need}、締切 ${c.due}`,
-	}),
-	(c) => ({
-		title: `まだ間に合う: ${c.title}`,
-		body: `今ならまだ普段のペースで終わる${c.startBy ? `(${c.startBy}が限界)` : ""}。締切 ${c.due}`,
-	}),
-	(c) => ({
-		title: `先送りの前に: ${c.title}`,
-		body: `回すなら、いつ始めるかを決めよう。必要な時間は${c.need}。締切 ${c.due}`,
-	}),
+const withFirst = (body: string, first: string | null): string => (first ? `${body}\nまず: ${first}` : body);
+
+/**
+ * 危険の本文。同じタスクで続けて同じ文面にならないよう、事実は同じで先頭と並べ方だけ変えた型を順番に使う。
+ * 事実が2つ(限界なし)でも3型が別の文字列になるよう、最後の型は改行で区切る
+ */
+type Variant = (c: RiskCtx) => string;
+
+/** 危険(普段のペースで足りる) */
+const DANGER_VARIANTS: Variant[] = [
+	(c) => joinFacts("・", [c.due, c.need, c.limit]),
+	(c) => joinFacts("・", [c.limit, c.need, c.due]),
+	(c) => joinFacts("\n", [c.need, c.due, c.limit]),
 ];
 
+const PACE_SHORT = "普段のペースでは間に合わない";
+
 /** 危険(普段のペースでは足りない=本気が必要) */
-const FULL_EFFORT_TEMPLATES: ((c: RiskCtx) => { title: string; body: string })[] = [
-	(c) => ({
-		title: `本気モードで: ${c.title}`,
-		body: `普段のペースだと間に合わない。今日から本気モードで。必要な時間は${c.need}、締切 ${c.due}`,
-	}),
-	(c) => ({
-		title: `今日から本気: ${c.title}`,
-		body: `普段の時間配分では足りない(必要 ${c.need})。空き時間を多めに取ろう。締切 ${c.due}`,
-	}),
-	(c) => ({
-		title: `余裕がない: ${c.title}`,
-		body: `普段のペースでは終わらない計算。今日のうちに時間をまとめて確保しよう。締切 ${c.due}`,
-	}),
-	(c) => ({
-		title: `いま動けば間に合う: ${c.title}`,
-		body: `本気で取り組めば間に合う。${c.startBy ? `着手の限界は${c.startBy}。` : ""}締切 ${c.due}`,
-	}),
+const FULL_EFFORT_VARIANTS: Variant[] = [
+	(c) => joinFacts("・", [PACE_SHORT, c.need, c.due, c.limit]),
+	(c) => joinFacts("・", [c.due, c.need, c.limit, PACE_SHORT]),
+	(c) => joinFacts("\n", [PACE_SHORT, joinFacts("・", [c.need, c.due, c.limit])]),
 ];
 
 type Candidate = { n: DesiredNotification; rank: number };

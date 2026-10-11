@@ -5,16 +5,16 @@ import { SOURCE_LABEL } from "./inbox-draft";
 
 export const REASON_LABEL: Record<InboxCandidate["reason"], string> = {
 	same_title: "同じタイトル",
-	similar_title: "タイトルが似ている",
-	near_due: "同じ科目で締切が近い",
+	similar_title: "似たタイトル",
+	near_due: "同科目で締切が近い",
 };
 
 const STATE_NOTE: Record<string, string> = {
-	TURNED_IN: "取り込み元では提出済み",
-	RETURNED: "取り込み元では返却済み",
+	TURNED_IN: "提出済み",
+	RETURNED: "返却済み",
 };
 
-/** `科目 ・ Classroom ・ 取り込み元では提出済み` */
+/** `科目 ・ Classroom ・ 提出済み`(最後は取り込み元での状態) */
 export function itemMeta(item: Pick<InboxItem, "courseName" | "source" | "remoteState">): string {
 	const note = item.remoteState ? STATE_NOTE[item.remoteState] : undefined;
 	return [item.courseName, SOURCE_LABEL[item.source] ?? item.source, note].filter(Boolean).join(" ・ ");

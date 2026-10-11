@@ -5,7 +5,7 @@ import type { Draft } from "./draft-types";
 let keySeq = 0;
 const newKey = () => `draft-${++keySeq}`;
 
-/** 手入力用の空のカード(解析に失敗したときの逃げ道。title には入力文を入れておく) */
+/** 手入力用の空のカード(クイック追加の既定。解析に失敗したときの逃げ道にもなる。title には入力文を入れておく) */
 export function emptyDraft(title = ""): Draft {
 	return {
 		key: newKey(),
@@ -61,8 +61,11 @@ export function resolveCourseId(draft: Draft, courses: readonly CourseOption[]):
 export const TITLE_MAX = 200;
 export const FIRST_STEP_MAX = 200;
 
-/** 入力方法。line=1行、text=告知文の貼り付け */
+/** AI で解析する入力方法。line=1行、text=告知文の貼り付け */
 export type ParseMode = "line" | "text";
+
+/** クイック追加の入力方法。manual=手入力(既定)。写真は選んだ時点で解析に進むので、モードではない */
+export type InputMode = "manual" | ParseMode;
 
 /** 手入力カードの題。1行ならその行、告知文なら最初の空でない行(本文は確認画面に残す) */
 export function draftTitle(mode: ParseMode, text: string): string {
@@ -74,12 +77,12 @@ export type DraftProblems = { title?: string; due?: string; estimate?: string; f
 
 export function validateDraft(d: Draft): DraftProblems {
 	const problems: DraftProblems = {};
-	if (!d.title.trim()) problems.title = "タイトルを入力してください";
-	else if (d.title.trim().length > TITLE_MAX) problems.title = `タイトルは${TITLE_MAX}文字以内にしてください`;
-	if (d.firstStep.trim().length > FIRST_STEP_MAX) problems.firstStep = `${FIRST_STEP_MAX}文字以内にしてください`;
-	if (d.dueAt === null) problems.due = "締切を入力してください";
+	if (!d.title.trim()) problems.title = "タイトルが未入力";
+	else if (d.title.trim().length > TITLE_MAX) problems.title = `${TITLE_MAX}字まで`;
+	if (d.firstStep.trim().length > FIRST_STEP_MAX) problems.firstStep = `${FIRST_STEP_MAX}字まで`;
+	if (d.dueAt === null) problems.due = "締切が未入力";
 	const est = Number(d.estimateMin);
-	if (!Number.isInteger(est) || est < 1) problems.estimate = "見積もりは1分以上の整数で入力してください";
+	if (!Number.isInteger(est) || est < 1) problems.estimate = "1以上の整数";
 	return problems;
 }
 

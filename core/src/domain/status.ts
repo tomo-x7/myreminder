@@ -1,6 +1,7 @@
 // ステータス(通常・作業中・取り込み中・おやすみ)の表示の規則と、手動の切り替え・作業の終了の入力
 import type { EffectiveStatus, SetStatusInput } from "../api/types";
 import { DAY, formatJstTime, MINUTE, startOfJstDay } from "./date";
+import { formatDuration } from "./time-input";
 import { fmtClock } from "./work-log";
 
 export type StatusMode = SetStatusInput["mode"];
@@ -27,10 +28,10 @@ export type StatusPreset = { label: string; until: number | null };
 /** 手動の切り替えの期限の選択肢。通常に期限なしはない(= 手動設定の解除) */
 export function statusPresets(mode: StatusMode, now: number): StatusPreset[] {
 	return [
-		{ label: "30分", until: now + 30 * MINUTE },
-		{ label: "1時間", until: now + 60 * MINUTE },
+		{ label: formatDuration(30), until: now + 30 * MINUTE },
+		{ label: formatDuration(60), until: now + 60 * MINUTE },
 		{ label: "今日中", until: startOfJstDay(now) + DAY },
-		{ label: mode === "normal" ? "自動に任せる" : "解除するまで", until: null },
+		{ label: mode === "normal" ? "自動" : "期限なし", until: null },
 	];
 }
 
@@ -42,16 +43,16 @@ export function statusHeadline(s: Pick<EffectiveStatus, "mode" | "taskTitle" | "
 	return text;
 }
 
-/** 見出しの補足。作業中は開始時刻と経過、それ以外は期限 */
+/** 見出しの補足。作業中は開始時刻と経過、それ以外は期限。自動で期限もなければ空 */
 export function statusDetail(s: EffectiveStatus, now: number): string {
 	if (s.mode === "working" && s.openSession) {
 		return `${formatJstTime(s.openSession.startAt)} から ${fmtClock(now - s.openSession.startAt)}`;
 	}
 	if (s.until) return `${formatJstTime(s.until)} まで${s.source === "auto" ? "(自動)" : ""}`;
-	return s.source === "manual" ? "解除するまで(手動)" : "自動で切り替わります";
+	return s.source === "manual" ? "手動" : "";
 }
 
-/** 作業を終えるときの進捗(0 は「ほとんど進まなかった」) */
+/** 作業を終えるときの進捗 */
 export type StopProgress = 0 | 25 | 50 | 75 | 100;
 
 /** 「何分前に終わった」の選択肢 */

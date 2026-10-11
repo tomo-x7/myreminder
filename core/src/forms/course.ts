@@ -25,7 +25,7 @@ export const emptyCourseForm = (): CourseForm => ({ name: "", aliases: "" });
 export const courseToForm = (c: Course): CourseForm => ({ name: c.name, aliases: c.aliases.join(", ") });
 
 export function validateCourseForm(f: CourseForm): CourseFormProblems {
-	return f.name.trim() ? {} : { name: "科目名を入力してください" };
+	return f.name.trim() ? {} : { name: "科目名が未入力" };
 }
 
 /** 検証済みの入力 → 保存内容 */

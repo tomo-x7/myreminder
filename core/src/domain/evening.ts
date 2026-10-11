@@ -16,9 +16,9 @@ export function todaysTasks<T extends Planned>(tasks: readonly T[], now: number)
 	});
 }
 
-/** 「着手予定 1:10」「おすすめの着手 2:10」。時刻がなければ null */
+/** 「着手予定 1:10」「おすすめ着手 2:10」。時刻がなければ null */
 export function plannedText(t: Planned): string | null {
 	const at = plannedFor(t);
 	if (at === null) return null;
-	return `${t.plannedStartAt !== null ? "着手予定" : "おすすめの着手"} ${formatJstTime(at)}`;
+	return `${t.plannedStartAt !== null ? "着手予定" : "おすすめ着手"} ${formatJstTime(at)}`;
 }

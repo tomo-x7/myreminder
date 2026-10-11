@@ -19,8 +19,7 @@ export type ParseOutcome = {
 /** 解析の入力。image は選ばれた写真(web は Blob、RN は uri など)。縮小は prepareImage の仕事 */
 export type ParseInput<Img> = { mode: ParseMode; text: string } | { image: Img };
 
-const FAILED = "解析できませんでした。手入力してください";
-const PHOTO_NOTICE = "写真から読み取りました。文字の読み違いがないか確認してください";
+const FAILED = "解析できなかった";
 
 async function parseText(api: Api, mode: ParseMode, text: string): Promise<ParseOutcome> {
 	const fallback = (notice: string): ParseOutcome => ({
@@ -49,7 +48,7 @@ async function parseText(api: Api, mode: ParseMode, text: string): Promise<Parse
 			pasted: null,
 		};
 	} catch {
-		return fallback("通信に失敗しました。手入力してください");
+		return fallback("通信エラー");
 	}
 }
 
@@ -67,7 +66,7 @@ async function parseImage<Img>(
 	});
 	try {
 		const res = await api.api.parse.image.$post({ form: { image: await prepareImage(image) } });
-		if (res.status === 413) return fallback("画像が大きすぎます。手入力してください");
+		if (res.status === 413) return fallback("画像は 1.5MB まで");
 		if (!res.ok) return fallback(FAILED);
 		const data = await res.json();
 		if (data.candidates.length === 0) {
@@ -78,11 +77,11 @@ async function parseImage<Img>(
 			drafts: data.candidates.map(candidateToDraft),
 			startSuggestions: data.startSuggestions,
 			now: data.now,
-			notice: PHOTO_NOTICE,
+			notice: null,
 			pasted: null,
 		};
 	} catch {
-		return fallback("写真を読み込めませんでした。手入力してください");
+		return fallback("写真を読み込めなかった");
 	}
 }
 
