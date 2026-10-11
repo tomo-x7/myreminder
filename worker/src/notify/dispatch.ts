@@ -198,12 +198,21 @@ export async function dispatchDueNotifications(
 			if (!r.ok && r.reason === "error" && r.transient) transientFailure = true;
 		}
 
-		const delivered = results.some((r) => r.ok);
 		const payload = asPayload(n.payload);
+		// webhook(すべての通知)へは、プッシュと同じ内容を1回目の試行でだけ送る。やり直しで二重に投稿しない
+		let webhookFailed = false;
+		let webhookOk = false;
+		if (mirrorTargets.length > 0 && (payload.attempts ?? 0) === 0) {
+			webhookOk = await postToTargets(db, mirrorTargets, formatNotificationForWebhook(message, origin));
+			webhookFailed = !webhookOk;
+		}
+		// 端末か webhook のどちらかに届けば送信済み。webhook が届けば、プッシュが全滅していても送信済みにする
+		const delivered = webhookOk || results.some((r) => r.ok);
 		const attempts = (payload.attempts ?? 0) + 1;
-		// 1台も届かず、一時的な失敗があれば次の分でやり直す。やり直さない未達は skipped(原因は payload.error)
+		// どこにも届かず、一時的な失敗があれば次の分でやり直す。やり直さない未達は skipped(原因は payload.error)
 		const retry = !delivered && transientFailure && attempts < MAX_ATTEMPTS;
 		const status = retry ? "pending" : delivered ? "sent" : "skipped";
+		const failure = [...results.map((r) => r.code), ...(webhookFailed ? ["WEBHOOK"] : [])].join(",");
 		await db
 			.update(notifications)
 			.set({
@@ -212,7 +221,7 @@ export async function dispatchDueNotifications(
 					...payload,
 					attempts,
 					...(retry ? {} : { sentAt: now }),
-					...(!delivered && !retry ? { error: results.map((r) => r.code).join(",") } : {}),
+					...(!delivered && !retry ? { error: failure || "NO_DESTINATION" } : {}),
 				} satisfies NotificationPayload,
 			})
 			.where(eq(notifications.id, n.id));

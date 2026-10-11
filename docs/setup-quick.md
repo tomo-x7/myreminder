@@ -6,7 +6,7 @@
 
 ## 1. Cloudflare
 
-- [ ] **D1**: `pnpm -F worker exec wrangler d1 create myreminder` → `database_id` を `worker/wrangler.jsonc` に書いてコミット
+- [ ] **D1**: `pnpm -F worker exec wrangler d1 create myreminder-db` → `database_id` を `worker/wrangler.jsonc` に書いてコミット
 - [ ] **Access アプリ 1**(デプロイより前に): Self-hosted、`reminder.tomo-x.win` 全体、Allow、Emails = `<あなたのメールアドレス>`、セッション 1 month
 - [ ] **Service Token**: 名前 `apps-script`。Client ID / Secret はその場で控える(再表示されない)。期限をカレンダーに入れる
 - [ ] **Access アプリ 2**: `reminder.tomo-x.win/api/ingest/*`、Action は **Service Auth**(Allow ではない)、Include = Service Token `apps-script`
@@ -27,7 +27,7 @@ Workers AI とカスタムドメインは `wrangler.jsonc` の設定だけで済
 - [ ] repository secret に `CLOUDFLARE_API_TOKEN`(1 のトークン)と `CLOUDFLARE_ACCOUNT_ID` を登録
 - [ ] main に push(または Actions から手動実行)→ チェック・D1 のマイグレーション・デプロイまで走る
 
-手元からなら `pnpm web build && pnpm -F worker exec wrangler d1 migrations apply myreminder --remote && pnpm -F worker exec wrangler deploy`。
+手元からなら `pnpm web build && pnpm -F worker exec wrangler d1 migrations apply myreminder-db --remote && pnpm -F worker exec wrangler deploy`。
 
 ## 4. Worker の secret と通知の確認
 

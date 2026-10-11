@@ -32,6 +32,9 @@ function dayLabel(ms: number, now: number): string {
 	return `${p.month}/${p.day}(${WEEKDAYS_JA[p.weekday]})`;
 }
 
+/** 候補のラベルは日と時刻だけ(`今日 21:00`)。「夕方」などの語は、空きがずれると時刻と食い違うので付けない */
+const slotLabel = (ms: number, now: number) => `${dayLabel(ms, now)} ${hhmm(ms)}`;
+
 /** [start, start+duration) が intervals のどれとも重ならない最初の開始時刻(from 以降、limit 未満)。なければ null */
 export function findFreeSlot(
 	from: number,
@@ -69,22 +72,19 @@ export function computeStartSuggestions({ now, busy, sleep = DEFAULT_SLEEP }: Su
 
 	// 1. 最短の空き(今から10分後以降)
 	const soonest = findFreeSlot(now + MIN_LEAD_MS, slotMs, intervals, horizon);
-	if (soonest !== null) out.push({ label: `最短の空き ${dayLabel(soonest, now)} ${hhmm(soonest)}`, at: soonest });
+	if (soonest !== null) out.push({ label: slotLabel(soonest, now), at: soonest });
 
 	// 2. 今日の夜: 21:00 がまだ先ならそこ。過ぎていれば 1時間後(5分単位に切り上げ)
 	const night = fromJstParts(toJstParts(now).year, toJstParts(now).month, toJstParts(now).day, NIGHT_HOUR);
 	const nightFrom = night > now + MIN_LEAD_MS ? night : now + HOUR_MS;
 	const nightAt = findFreeSlot(nightFrom, slotMs, intervals, today + DAY_MS);
-	if (nightAt !== null) {
-		const label = nightFrom === night ? "今日の夜" : "1時間後";
-		out.push({ label: `${label} ${hhmm(nightAt)}`, at: nightAt });
-	}
+	if (nightAt !== null) out.push({ label: slotLabel(nightAt, now), at: nightAt });
 
 	// 3. 明日の夕方 18:00
 	const tomorrow = today + DAY_MS;
 	const tp = toJstParts(tomorrow);
 	const eveningAt = findFreeSlot(fromJstParts(tp.year, tp.month, tp.day, EVENING_HOUR), slotMs, intervals, horizon);
-	if (eveningAt !== null) out.push({ label: `明日の夕方 ${hhmm(eveningAt)}`, at: eveningAt });
+	if (eveningAt !== null) out.push({ label: slotLabel(eveningAt, now), at: eveningAt });
 
 	// 近すぎる候補(30分以内)は選ぶ意味がないので、時刻順に見て後ろを落とす
 	const result: StartSuggestion[] = [];

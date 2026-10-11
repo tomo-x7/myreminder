@@ -41,7 +41,7 @@ Wrangler のログインには Cloudflare の公式ドキュメントに従っ�
 ### 1-1. D1 データベースを作る
 
 ```sh
-pnpm -F worker exec wrangler d1 create myreminder
+pnpm -F worker exec wrangler d1 create myreminder-db
 ```
 
 出力に表示される `database_id`(UUID)を、`worker/wrangler.jsonc` の `d1_databases` に書きます。`database_id` は秘密ではないのでコミットしてかまいません。
@@ -59,7 +59,7 @@ pnpm -F worker exec wrangler d1 create myreminder
 マイグレーションは `worker/migrations` にあり、CI でも同じコマンドが実行されます。手元で適用する場合は次のとおりです。
 
 ```sh
-pnpm -F worker exec wrangler d1 migrations apply myreminder --remote
+pnpm -F worker exec wrangler d1 migrations apply myreminder-db --remote
 ```
 
 - `--remote` を付けないとローカルの D1 に適用されます
@@ -468,7 +468,7 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 ### D1
 
 ```sh
-pnpm -F worker exec wrangler d1 execute myreminder --remote --command "select 1"
+pnpm -F worker exec wrangler d1 execute myreminder-db --remote --command "select 1"
 ```
 
 `results` が返れば、D1 に接続できています。

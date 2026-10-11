@@ -16,7 +16,11 @@ export const WEBHOOK_URL_HINT: Record<WebhookKind, string> = {
 export const WEBHOOK_EVENTS: { value: WebhookEvent; label: string }[] = [
 	{ value: "submitted", label: "提出済み" },
 	{ value: "daily_summary", label: "1日の課題時間" },
+	{ value: "all_notifications", label: "すべての通知" },
 ];
+
+/** 新しい webhook の既定。「すべての通知」は webpush が不安定なときの保険なので、既定には入れない */
+const DEFAULT_NEW_WEBHOOK_EVENTS: WebhookEvent[] = ["submitted", "daily_summary"];
 
 /** イベントのチェックを入れる・外す */
 export const toggleWebhookEvent = (
@@ -30,7 +34,7 @@ export function useAddWebhookForm() {
 	const create = useCreateWebhook();
 	const [kind, setKind] = useState<WebhookKind>("discord");
 	const [url, setUrl] = useState("");
-	const [events, setEvents] = useState<WebhookEvent[]>(WEBHOOK_EVENTS.map((e) => e.value));
+	const [events, setEvents] = useState<WebhookEvent[]>(DEFAULT_NEW_WEBHOOK_EVENTS);
 
 	return {
 		kind,

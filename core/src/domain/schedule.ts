@@ -52,7 +52,6 @@ export function progressText(t: Pick<PlanTask, "progress" | "actualMin" | "remai
 
 /** 山場: `11/18(水) ・ 今週 ・ 余裕 1.5h`。足りないときは `余裕 -28m` */
 export function bottleneckText(b: { dueAt: number; slackUsual: number }, now: number): string {
-	return [formatJstDate(b.dueAt), formatWeekLabel(b.dueAt, now), `余裕 ${formatHours(b.slackUsual)}`]
-		.filter(Boolean)
-		.join(" ・ ");
+	const slack = b.slackUsual < 0 ? `不足 ${formatHours(-b.slackUsual)}` : `余裕 ${formatHours(b.slackUsual)}`;
+	return [formatJstDate(b.dueAt), formatWeekLabel(b.dueAt, now), slack].filter(Boolean).join(" ・ ");
 }

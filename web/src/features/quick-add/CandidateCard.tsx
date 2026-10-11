@@ -32,7 +32,8 @@ type Props = {
 /** 締切を曜日+相対つきで大きく見せる。日付の取り違えを防ぐ要(plan.md §3.2) */
 function DuePreview({ dueAt, now, error }: { dueAt: number | null; now: number; error?: string }) {
 	if (dueAt === null) {
-		return <p className={`text-base font-semibold ${error ? "text-danger" : "text-faint"}`}>締切が未入力</p>;
+		// 入力前はエラーを見せない(保存しようとして初めて error が来る)
+		return error ? <p className="text-base font-semibold text-danger">{error}</p> : null;
 	}
 	return <DueLabel dueAt={dueAt} now={now} size="lg" />;
 }
