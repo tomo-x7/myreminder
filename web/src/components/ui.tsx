@@ -1,5 +1,6 @@
 // 共通の部品とクラス。色・角丸・影は theme.css のトークンだけを使う(#29)
 // 方針: 余白は詰める、面ではなく罫線で区切る、塗るのは主要な操作だけ
+import { errorText } from "core/domain/errors";
 import type { ReactNode } from "react";
 
 export const inputClass =
@@ -122,7 +123,7 @@ export function QueryState<T>({
 	if (query.data === undefined) {
 		return (
 			<div className="flex flex-col items-start gap-2 py-3">
-				<ErrorNotice>読み込めませんでした: {query.error?.message ?? "不明なエラー"}</ErrorNotice>
+				<ErrorNotice>読み込めませんでした: {query.error ? errorText(query.error) : "不明なエラー"}</ErrorNotice>
 				<button type="button" className={btnSecondary} onClick={() => query.refetch()}>
 					再読み込み
 				</button>

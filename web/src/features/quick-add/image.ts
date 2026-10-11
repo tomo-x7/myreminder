@@ -4,7 +4,7 @@ const MAX_SIDE = 1280;
 const JPEG_QUALITY = 0.8;
 
 /** 画像を長辺 MAX_SIDE 以下の JPEG にする。拡大はしない。EXIF の向きは反映する */
-export async function resizeImage(file: Blob): Promise<Blob> {
+async function resizeImage(file: Blob): Promise<Blob> {
 	const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
 	try {
 		const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
@@ -29,6 +29,11 @@ export async function resizeImage(file: Blob): Promise<Blob> {
 	} finally {
 		bitmap.close();
 	}
+}
+
+/** 解析 API(core の useParse)に渡す形: 縮めた JPEG の File */
+export async function prepareParseImage(file: Blob): Promise<File> {
+	return new File([await resizeImage(file)], "slide.jpg", { type: "image/jpeg" });
 }
 
 // 共有メニューから届いた画像。Service Worker(web/public/firebase-messaging-sw.js)が Cache に入れ、/share?image=1 に飛ばす。

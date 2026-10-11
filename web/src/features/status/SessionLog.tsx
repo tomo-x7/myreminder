@@ -11,16 +11,19 @@ import {
 	Tag,
 } from "../../components/ui";
 import {
-	errorText,
-	type SessionRow,
-	useCreateSession,
-	useDeleteSession,
-	useNow,
-	useSessions,
-	useTaskOptions,
-	useUpdateSession,
-} from "./hooks";
-import { DAY, fmtDate, fmtDuration, fmtTime, fromInput, startOfJstDay, toInput } from "./time";
+	DAY,
+	formatJstDate,
+	formatJstTime,
+	fromDatetimeLocal,
+	startOfJstDay,
+	toDatetimeLocal,
+} from "core/domain/date";
+import { errorText } from "core/domain/errors";
+import { fmtDuration } from "core/domain/work-log";
+import { type SessionRow } from "core/api/types";
+import { useCreateSession, useDeleteSession, useSessions, useUpdateSession } from "core/queries/sessions";
+import { useNow } from "core/hooks/use-now";
+import { useTaskOptions } from "core/queries/tasks";
 
 /** 行の中の小さな文字ボタン */
 const rowBtn = "inline-flex items-center rounded-sm px-2 py-0.5 text-xs active:bg-wash disabled:opacity-40";
@@ -81,22 +84,22 @@ function SessionItem({ session }: { session: SessionRow }) {
 	const update = useUpdateSession();
 	const remove = useDeleteSession();
 	const [editing, setEditing] = useState(false);
-	const [start, setStart] = useState(toInput(session.startAt));
-	const [end, setEnd] = useState(toInput(session.endAt ?? session.startAt));
+	const [start, setStart] = useState(toDatetimeLocal(session.startAt));
+	const [end, setEnd] = useState(toDatetimeLocal(session.endAt ?? session.startAt));
 	const [progress, setProgress] = useState<number | null>(session.progress);
 	const error = update.error ?? remove.error;
 
 	const save = () => {
-		const startAt = fromInput(start);
-		const endAt = fromInput(end);
+		const startAt = fromDatetimeLocal(start);
+		const endAt = fromDatetimeLocal(end);
 		if (startAt === null || endAt === null) return;
 		update.mutate({ id: session.id, patch: { startAt, endAt, progress } }, { onSuccess: () => setEditing(false) });
 	};
 
 	// 編集を始めるたびに、いまの記録の値から入れ直す(やめた編集の値を引きずらない)
 	const startEdit = () => {
-		setStart(toInput(session.startAt));
-		setEnd(toInput(session.endAt ?? session.startAt));
+		setStart(toDatetimeLocal(session.startAt));
+		setEnd(toDatetimeLocal(session.endAt ?? session.startAt));
 		setProgress(session.progress);
 		update.reset();
 		setEditing(true);
@@ -109,7 +112,7 @@ function SessionItem({ session }: { session: SessionRow }) {
 		<li className="flex flex-col gap-1 py-2">
 			<div className="flex items-baseline gap-2">
 				<span className="w-24 shrink-0 text-xs text-sub">
-					{fmtTime(session.startAt)}〜{session.endAt === null ? "作業中" : fmtTime(session.endAt)}
+					{formatJstTime(session.startAt)}〜{session.endAt === null ? "作業中" : formatJstTime(session.endAt)}
 				</span>
 				<span className="min-w-0 flex-1 font-medium">{session.taskTitle}</span>
 				{session.endAt !== null && (
@@ -163,11 +166,11 @@ function AddForm({ onDone }: { onDone: () => void }) {
 	const tasks = useTaskOptions();
 	const create = useCreateSession();
 	const [taskId, setTaskId] = useState("");
-	const [start, setStart] = useState(() => toInput(Date.now() - 60 * 60_000));
-	const [end, setEnd] = useState(() => toInput(Date.now()));
+	const [start, setStart] = useState(() => toDatetimeLocal(Date.now() - 60 * 60_000));
+	const [end, setEnd] = useState(() => toDatetimeLocal(Date.now()));
 	const [progress, setProgress] = useState<number | null>(null);
-	const startAt = fromInput(start);
-	const endAt = fromInput(end);
+	const startAt = fromDatetimeLocal(start);
+	const endAt = fromDatetimeLocal(end);
 
 	return (
 		<div className="flex flex-col gap-2 border-l-2 border-ink pl-3">
@@ -241,7 +244,7 @@ export function SessionLog({ initialDays = 14 }: { initialDays?: number }) {
 				return (
 					<div key={day} className="flex flex-col">
 						<SectionTitle action={<span className="text-xs text-sub">合計 {fmtDuration(total)}</span>}>
-							{fmtDate(day)}
+							{formatJstDate(day)}
 						</SectionTitle>
 						<ul className={listClass}>
 							{[...items]

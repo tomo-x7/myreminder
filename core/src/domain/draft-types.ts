@@ -1,14 +1,6 @@
-import type { InferRequestType, InferResponseType } from "hono/client";
-import type { api } from "../../lib/api";
+import type { TaskCreate } from "../api/types";
 
-/** POST /api/tasks の本文。worker の taskCreateSchema の入力型 */
-export type TaskCreateInput = InferRequestType<typeof api.api.tasks.$post>["json"];
-
-type ParseResponse = InferResponseType<typeof api.api.parse.line.$post, 200>;
-export type ParsedCandidate = ParseResponse["candidates"][number];
-export type StartSuggestion = ParseResponse["startSuggestions"][number];
-
-export type Category = NonNullable<TaskCreateInput["category"]>;
+export type Category = NonNullable<TaskCreate["category"]>;
 
 export const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
 	{ value: "report", label: "レポート" },

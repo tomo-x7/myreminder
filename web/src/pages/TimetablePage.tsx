@@ -1,22 +1,18 @@
+import { errorText } from "core/domain/errors";
 import { useState } from "react";
 import { Link } from "wouter";
 import { Sheet } from "../components/Sheet";
 import { btnPrimary, linkClass, Notice, PageHeader, QueryState, SectionTitle } from "../components/ui";
 import { BlockForm } from "../features/timetable/BlockForm";
-import { isOneOff, isRecurring } from "../features/timetable/blocks";
+import { isOneOff, isRecurring } from "core/domain/timetable";
+import { type BusyBlock } from "core/api/types";
+import { useBusyBlocks, useCreateBusyBlock, useDeleteBusyBlock, useUpdateBusyBlock } from "core/queries/busy-blocks";
+import { useCourses } from "core/queries/courses";
+import { useSettings } from "core/queries/settings";
 import { CourseManager } from "../features/timetable/CourseManager";
 import { OneOffList } from "../features/timetable/OneOffList";
 import { WeekList } from "../features/timetable/WeekList";
-import {
-	type BusyBlock,
-	useBusyBlocks,
-	useCourses,
-	useCreateBusyBlock,
-	useDeleteBusyBlock,
-	useSettings,
-	useUpdateBusyBlock,
-} from "../lib/queries";
-import { useNow } from "../lib/use-now";
+import { useNow } from "core/hooks/use-now";
 
 /** 追加(weekday 付き=毎週 / なし)か、編集か */
 type Editing = { kind: "new"; weekday?: number } | { kind: "edit"; block: BusyBlock };
@@ -39,7 +35,7 @@ function BlockSheet({ editing, onClose }: { editing: Editing; onClose: () => voi
 				periods={settings.data?.timetablePeriods ?? []}
 				courses={courses.data ?? []}
 				saving={busy}
-				error={error?.message ?? null}
+				error={error ? errorText(error) : null}
 				onSave={(input) =>
 					block
 						? update.mutate({ id: block.id, patch: input }, { onSuccess: onClose })

@@ -1,15 +1,8 @@
 import { Link, useSearchParams } from "wouter";
 import { btnSecondary, PageHeader, QueryState } from "../components/ui";
-import {
-	EstimateCard,
-	FreshStart,
-	NoAllNighterCard,
-	SubmittedList,
-	TotalCard,
-	useReview,
-	WeekBars,
-	weekLabel,
-} from "../features/review";
+import { useReview } from "core/queries/review";
+import { weekLabel } from "core/domain/review";
+import { EstimateCard, FreshStart, NoAllNighterCard, SubmittedList, TotalCard, WeekBars } from "../features/review";
 
 /** 移動できない側(今週より先)。枠だけ残して薄くする */
 const navOff = `${btnSecondary} opacity-40`;

@@ -1,10 +1,10 @@
 import { Link } from "wouter";
 import { DueLabel } from "../../components/DueLabel";
 import { btnSecondary, Tag } from "../../components/ui";
-import { formatJstDateTime } from "../../lib/date";
-import type { Course, Task } from "../../lib/queries";
-import { formatDuration } from "../../lib/time-input";
-import { STATUS_LABEL } from "./status";
+import { formatJstDateTime } from "core/domain/date";
+import { type Course, type Task } from "core/api/types";
+import { STATUS_LABEL } from "core/domain/task-status";
+import { formatDuration } from "core/domain/time-input";
 
 type Props = {
 	task: Task;

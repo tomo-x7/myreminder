@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, btnSecondary, ErrorNotice, Notice } from "../../components/ui";
-import { formatJstDateTime } from "../../lib/date";
-import type { Course } from "../../lib/queries";
-import { useUpdateTask } from "../../lib/queries";
-import { formatDuration } from "../../lib/time-input";
-import { errorText, useStartWorking, useStatus } from "../status";
-import { formatHours, progressText, RISK_LABEL, RISK_STYLE, startDeadline } from "./format";
-import type { PlanTask } from "./hooks";
+import { formatJstDateTime } from "core/domain/date";
+import { type Course, type PlanTask } from "core/api/types";
+import { useUpdateTask } from "core/queries/tasks";
+import { errorText } from "core/domain/errors";
+import { useStartWorking, useStatus } from "core/queries/status";
+import { formatHours, progressText, RISK_LABEL, startDeadline } from "core/domain/schedule";
+import { RISK_STYLE } from "./risk-style";
+import { formatDuration } from "core/domain/time-input";
 import { SnoozeSheet } from "./SnoozeSheet";
 
 /** 着手デッドラインと、その正直な根拠(plan.md §2.2-1) */
@@ -57,7 +58,8 @@ export function NextCard({ task, course, now }: { task: PlanTask; course: Course
 	const style = RISK_STYLE[task.risk];
 	const workingHere = status.data?.mode === "working" && status.data.taskId === task.id;
 	const progress = progressText(task);
-	const error = update.error?.message ?? (start.error ? errorText(start.error) : null);
+	const failure = update.error ?? start.error;
+	const error = failure ? errorText(failure) : null;
 
 	return (
 		<section className={`flex flex-col gap-2 border-l-2 pl-3 ${style.border}`}>

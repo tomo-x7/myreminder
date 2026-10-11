@@ -1,9 +1,11 @@
+import { errorText } from "core/domain/errors";
 import { useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { btnDanger, btnGhost, btnSecondary, ErrorNotice, PageHeader, QueryState } from "../components/ui";
 import { TaskForm } from "../features/tasks/TaskForm";
-import { useCourses, useDeleteTask, useTask, useUpdateTask } from "../lib/queries";
-import { useNow } from "../lib/use-now";
+import { useCourses } from "core/queries/courses";
+import { useDeleteTask, useTask, useUpdateTask } from "core/queries/tasks";
+import { useNow } from "core/hooks/use-now";
 
 export function TaskDetailPage() {
 	const { id = "" } = useParams<{ id: string }>();
@@ -35,7 +37,7 @@ export function TaskDetailPage() {
 							courses={courses.data ?? []}
 							now={now}
 							saving={update.isPending}
-							error={update.isError ? update.error.message : null}
+							error={update.isError ? errorText(update.error) : null}
 							onSave={(patch) => {
 								setSaved(false);
 								update.mutate({ id: t.id, patch }, { onSuccess: () => setSaved(true) });
@@ -46,7 +48,7 @@ export function TaskDetailPage() {
 						)}
 
 						<section className="mt-1 flex flex-col gap-2 border-t border-line pt-3">
-							{remove.isError && <ErrorNotice>削除できませんでした: {remove.error.message}</ErrorNotice>}
+							{remove.isError && <ErrorNotice>削除できませんでした: {errorText(remove.error)}</ErrorNotice>}
 							{confirming ? (
 								<>
 									<p className="font-medium">「{t.title}」を削除します。元に戻せません。</p>

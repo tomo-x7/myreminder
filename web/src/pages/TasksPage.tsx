@@ -1,12 +1,15 @@
+import { errorText } from "core/domain/errors";
 import { useState } from "react";
 import { useSearchParams } from "wouter";
 import { btnPrimary, chipClass, Empty, ErrorNotice, listClass, PageHeader, QueryState } from "../components/ui";
 import { InboxBanner } from "../features/inbox";
+import { FILTERS, isStatusFilter, matchesFilter, type StatusFilter } from "core/domain/task-status";
+import { type Course, type Task } from "core/api/types";
+import { useCourses } from "core/queries/courses";
+import { useTasks, useUpdateTask } from "core/queries/tasks";
 import { AddTaskSheet } from "../features/tasks/AddTaskSheet";
-import { FILTERS, isStatusFilter, matchesFilter, type StatusFilter } from "../features/tasks/status";
 import { TaskRow } from "../features/tasks/TaskRow";
-import { type Course, type Task, useCourses, useTasks, useUpdateTask } from "../lib/queries";
-import { useNow } from "../lib/use-now";
+import { useNow } from "core/hooks/use-now";
 
 function TaskList({
 	tasks,
@@ -24,7 +27,7 @@ function TaskList({
 	if (filter === "submitted") rows.reverse();
 	return (
 		<>
-			{update.isError && <ErrorNotice>更新できませんでした: {update.error.message}</ErrorNotice>}
+			{update.isError && <ErrorNotice>更新できませんでした: {errorText(update.error)}</ErrorNotice>}
 			{rows.length === 0 ? (
 				<Empty>該当するタスクはありません</Empty>
 			) : (

@@ -1,7 +1,10 @@
-import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/date";
-import type { Draft, ParsedCandidate, TaskCreateInput } from "./types";
+import type { ParsedCandidate, TaskCreate } from "../api/types";
+import { fromDatetimeLocal, toDatetimeLocal } from "./date";
+import type { Draft } from "./draft-types";
 
-const newKey = () => crypto.randomUUID();
+// React の key になるだけ。端末をまたがないので連番でよい(RN の Hermes には crypto.randomUUID がない)
+let keySeq = 0;
+const newKey = () => `draft-${++keySeq}`;
 
 /** 手入力用の空のカード(解析に失敗したときの逃げ道。title には入力文を入れておく) */
 export function emptyDraft(title = ""): Draft {
@@ -59,6 +62,15 @@ export function resolveCourseId(draft: Draft, courses: readonly CourseOption[]):
 export const TITLE_MAX = 200;
 export const FIRST_STEP_MAX = 200;
 
+/** 入力方法。line=1行、text=告知文の貼り付け */
+export type ParseMode = "line" | "text";
+
+/** 手入力カードの題。1行ならその行、告知文なら最初の空でない行(本文は確認画面に残す) */
+export function draftTitle(mode: ParseMode, text: string): string {
+	const line = mode === "line" ? text : (text.split("\n").find((l) => l.trim()) ?? "");
+	return line.trim().slice(0, TITLE_MAX);
+}
+
 export type DraftProblems = { title?: string; due?: string; estimate?: string; firstStep?: string };
 
 export function validateDraft(d: Draft): DraftProblems {
@@ -75,7 +87,7 @@ export function validateDraft(d: Draft): DraftProblems {
 export const hasProblems = (p: DraftProblems) => Object.keys(p).length > 0;
 
 /** 検証済みのカード → 保存用の入力。validateDraft が通ったものだけ渡す */
-export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCreateInput {
+export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCreate {
 	return {
 		title: d.title.trim(),
 		courseId: resolveCourseId(d, courses),

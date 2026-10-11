@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, ErrorNotice, Field, inputClass, Notice } from "../../components/ui";
-import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/date";
-import type { Course, Task, TaskPatch } from "../../lib/queries";
-import { CATEGORY_OPTIONS } from "../quick-add/types";
-import { STATUS_LABEL, STATUS_ORDER, type TaskStatus } from "./status";
+import { fromDatetimeLocal, toDatetimeLocal } from "core/domain/date";
+import { type Course, type Task, type TaskPatch } from "core/api/types";
+import { STATUS_LABEL, STATUS_ORDER, type TaskStatus } from "core/domain/task-status";
+import { CATEGORY_OPTIONS } from "core/domain/draft-types";
 
 type Props = {
 	task: Task;

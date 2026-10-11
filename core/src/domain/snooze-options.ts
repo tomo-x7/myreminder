@@ -1,8 +1,5 @@
 // 「いつに回す?」の候補。あいまいな「あとで」は置かず、必ず時刻を選ばせる(plan.md §2.2-4)
-import { jstParts, startOfJstDay } from "../../lib/date";
-
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
+import { DAY, HOUR, jstParts, MINUTE, startOfJstDay } from "./date";
 
 export type SnoozeOption = { label: string; at: number };
 
@@ -13,7 +10,7 @@ export function snoozeOptions(now: number): SnoozeOption[] {
 	const today = startOfJstDay(now);
 	const tomorrow = today + DAY;
 	const out: SnoozeOption[] = [];
-	if (at(today, 21) > now + 30 * 60_000) out.push({ label: "今夜 21:00", at: at(today, 21) });
+	if (at(today, 21) > now + 30 * MINUTE) out.push({ label: "今夜 21:00", at: at(today, 21) });
 	out.push({ label: "明日の夕方 17:00", at: at(tomorrow, 17) });
 	out.push({ label: "明日の夜 21:00", at: at(tomorrow, 21) });
 	// 週末: 次に来る土日の 10:00(1時間以上先)

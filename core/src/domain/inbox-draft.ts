@@ -1,7 +1,7 @@
-import { toDatetimeLocal } from "../../lib/date";
-import { type CourseOption, emptyDraft, resolveCourseId } from "../quick-add/draft";
-import type { Category, Draft } from "../quick-add/types";
-import type { InboxItem } from "./hooks";
+import type { InboxItem } from "../api/types";
+import { toDatetimeLocal } from "./date";
+import { type CourseOption, emptyDraft, resolveCourseId } from "./draft";
+import type { Category, Draft } from "./draft-types";
 
 /** 取り込み元の種類 → 種類の初期値。当てずっぽうなので、確認カードで直せる */
 const KIND_CATEGORY: Record<string, Category> = {

@@ -3,8 +3,6 @@ import { useLocation } from "wouter";
 import { Notice, PageHeader } from "../components/ui";
 import { takeSharedImage } from "../features/quick-add/image";
 import { QuickAdd } from "../features/quick-add/QuickAdd";
-import type { TaskCreateInput } from "../features/quick-add/types";
-import { useCreateTasks } from "../lib/queries";
 
 // QuickAdd の貼り付け入力の上限(TEXT_MAX)に合わせる
 const SHARE_TEXT_MAX = 8000;
@@ -31,7 +29,6 @@ export function combineShared(params: URLSearchParams): string {
  */
 export function SharePage() {
 	const [, navigate] = useLocation();
-	const create = useCreateTasks();
 	// 共有された内容は最初の描画で固定する(再描画で入力が書き換わらないように)
 	const [params] = useState(() => new URLSearchParams(window.location.search));
 	const shared = combineShared(params);
@@ -44,7 +41,7 @@ export function SharePage() {
 	}, [wantsImage]);
 
 	const save = useCallback(
-		async (inputs: TaskCreateInput[], onSaved: (index: number) => void) => {
+		async (inputs: TaskCreate[], onSaved: (index: number) => void) => {
 			await create.mutateAsync({ inputs, onSaved });
 			navigate("/", { replace: true });
 		},
@@ -59,8 +56,8 @@ export function SharePage() {
 				<p className="py-6 text-center text-xs text-faint">共有された画像を読み込んでいます…</p>
 			) : (
 				<QuickAdd
-					onConfirm={save}
-					onCancel={cancel}
+					onDone={home}
+					onCancel={home}
 					initialText={shared}
 					initialMode={shared ? "text" : "line"}
 					autoSubmit={shared !== ""}

@@ -1,8 +1,10 @@
 import { listClass, PageHeader, QueryState, SectionTitle } from "../components/ui";
-import { InboxChangeCard, InboxItemCard, useInbox } from "../features/inbox";
-import type { Inbox } from "../features/inbox/hooks";
-import { type Course, type Task, useCourses, useTasks } from "../lib/queries";
-import { useNow } from "../lib/use-now";
+import { useInbox } from "core/queries/inbox";
+import { InboxChangeCard, InboxItemCard } from "../features/inbox";
+import { type Inbox, type Course, type Task } from "core/api/types";
+import { useCourses } from "core/queries/courses";
+import { useTasks } from "core/queries/tasks";
+import { useNow } from "core/hooks/use-now";
 
 function InboxBody({ inbox, courses, tasks }: { inbox: Inbox; courses: readonly Course[]; tasks: readonly Task[] }) {
 	const now = useNow();

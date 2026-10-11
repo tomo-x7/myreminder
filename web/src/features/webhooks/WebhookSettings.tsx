@@ -9,17 +9,9 @@ import {
 	Notice,
 	QueryState,
 } from "../../components/ui";
-import {
-	useCreateWebhook,
-	useDeleteWebhook,
-	useTestWebhook,
-	useUpdateWebhook,
-	useWebhooks,
-	type Webhook,
-	WebhookError,
-	type WebhookEvent,
-	type WebhookKind,
-} from "./hooks";
+import type { Webhook, WebhookEvent, WebhookKind } from "core/api/types";
+import { errorText } from "core/domain/errors";
+import { useCreateWebhook, useDeleteWebhook, useTestWebhook, useUpdateWebhook, useWebhooks } from "core/queries/webhooks";
 
 const KIND_LABEL: Record<WebhookKind, string> = { discord: "Discord", slack: "Slack" };
 const URL_HINT: Record<WebhookKind, string> = {
@@ -30,18 +22,6 @@ const EVENTS: { value: WebhookEvent; label: string }[] = [
 	{ value: "submitted", label: "提出済みにしたら報告" },
 	{ value: "daily_summary", label: "その日に課題に使った時間(夜のまとめの時刻)" },
 ];
-
-const URL_FORMAT_ERROR = "URL の形が違います(Discord / Slack の webhook URL を貼ってください)";
-
-/** 画面に出すエラー文。URL の入力値は含めない */
-function errorText(e: unknown): string {
-	if (e instanceof WebhookError) {
-		if (e.code === "invalid_webhook" || e.code === "invalid_webhook_url") return URL_FORMAT_ERROR;
-		if (e.code === "not_found") return "見つかりません(削除済みかもしれません)";
-		return `エラー: ${e.code}`;
-	}
-	return "通信に失敗しました";
-}
 
 function EventChecks({
 	value,

@@ -1,18 +1,9 @@
 import { useId, useState } from "react";
 import { btnDanger, btnPrimary, btnSecondary, chipClass, ErrorNotice, Field, inputClass } from "../../components/ui";
-import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/date";
-import type { BusyBlock, BusyBlockInput, Course } from "../../lib/queries";
-import { fromDateInput, minuteToTimeInput, timeInputToMinute, toDateInput } from "../../lib/time-input";
-import {
-	type BusyKind,
-	isOneOff,
-	isRecurring,
-	KIND_LABEL,
-	KIND_ORDER,
-	type Period,
-	WEEKDAY_LABEL,
-	WEEKDAY_ORDER,
-} from "./blocks";
+import { fromDatetimeLocal, toDatetimeLocal } from "core/domain/date";
+import { type BusyBlock, type BusyBlockInput, type Course } from "core/api/types";
+import { type BusyKind, isOneOff, isRecurring, KIND_LABEL, KIND_ORDER, type Period, WEEKDAY_LABEL, WEEKDAY_ORDER } from "core/domain/timetable";
+import { fromDateInput, minuteToTimeInput, timeInputToMinute, toDateInput } from "core/domain/time-input";
 
 type Props = {
 	/** 編集のとき。新規は undefined */

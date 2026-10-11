@@ -1,11 +1,14 @@
+import { errorText } from "core/domain/errors";
 import { useState } from "react";
 import { Link } from "wouter";
 import { DueLabel } from "../components/DueLabel";
 import { btnPrimary, btnSecondary, Empty, ErrorNotice, listClass, PageHeader, QueryState } from "../components/ui";
-import { type PlanTask, SnoozeSheet, useSchedule } from "../features/schedule";
-import { formatJstTime, startOfJstDay } from "../lib/date";
-import { useUpdateTask } from "../lib/queries";
-import { useNow } from "../lib/use-now";
+import { type PlanTask } from "core/api/types";
+import { useSchedule } from "core/queries/schedule";
+import { SnoozeSheet } from "../features/schedule";
+import { useUpdateTask } from "core/queries/tasks";
+import { formatJstTime, startOfJstDay } from "core/domain/date";
+import { useNow } from "core/hooks/use-now";
 
 const DAY = 86_400_000;
 
@@ -36,7 +39,7 @@ function EveningRow({
 				<span className="font-semibold">{task.title}</span>
 				<DueLabel dueAt={task.dueAt} now={now} />
 			</Link>
-			{update.isError && <ErrorNotice>更新できませんでした: {update.error.message}</ErrorNotice>}
+			{update.isError && <ErrorNotice>更新できませんでした: {errorText(update.error)}</ErrorNotice>}
 			<div className="flex items-center justify-between gap-2">
 				<span className="text-xs text-sub">
 					{at !== null &&

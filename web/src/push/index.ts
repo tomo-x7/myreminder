@@ -1,6 +1,7 @@
 // Web Push の有効化。新しい firebase SDK は getToken ではなく register() + onRegistered() で
 // Firebase Installation ID(FID)を受け取る方式。FID は Worker に登録し、HTTP v1 の `fid` で送る。
 // Google Cloud 側で FCM Registration API の有効化が必要(docs/setup.md 2-2)
+import { deletePushToken, type PushResult, sendTestPush as sendTestPushRequest, uploadPushToken } from "core/queries/push";
 import { type FirebaseApp, initializeApp } from "firebase/app";
 import {
 	getMessaging,
@@ -12,11 +13,10 @@ import {
 	register,
 	unregister,
 } from "firebase/messaging";
-import { api } from "../lib/api";
+import { api } from "../platform/api";
 import { firebaseConfig, isFirebaseConfigured, vapidKey } from "./firebase-config";
 
 export type PushState = "unsupported" | "unconfigured" | "denied" | "off" | "on";
-export type PushResult = { ok: true } | { ok: false; message: string };
 
 const ENABLED_KEY = "push:enabled";
 const REGISTER_TIMEOUT_MS = 20000;
@@ -51,11 +51,7 @@ let registerWaiter: ((fid: string) => void) | undefined;
 
 const label = () => (/Android/i.test(navigator.userAgent) ? "Android" : navigator.platform || "browser");
 
-async function uploadFid(fid: string) {
-	const res = await api.api.push.tokens.$post({ json: { token: fid, label: label() } }).catch(() => null);
-	if (!res) throw new Error("サーバーへの登録に失敗しました(通信エラー)");
-	if (!res.ok) throw new Error(`サーバーへの登録に失敗しました (${res.status})`);
-}
+const uploadFid = (fid: string) => uploadPushToken(api, { token: fid, label: label() });
 
 /** 初回だけ SDK を初期化し、登録・解除・前面受信のハンドラを付ける */
 function setup(): Messaging {
@@ -71,7 +67,7 @@ function setup(): Messaging {
 		else uploadFid(fid).catch((e) => console.error(e));
 	});
 	onUnregistered(messaging, (fid) => {
-		api.api.push.tokens[":token"].$delete({ param: { token: fid } }).catch(() => {});
+		void deletePushToken(api, fid);
 	});
 	// アプリが前面のときは SDK が自動表示しないので、自分で出す(タップ遷移は Service Worker の data.url)
 	onMessage(messaging, (payload) => {
@@ -162,20 +158,7 @@ export async function disablePush(): Promise<void> {
 	setFlag(false);
 	const m = messaging ?? (isFirebaseConfigured ? setup() : undefined);
 	if (m) await unregister(m).catch((e) => console.error(e));
-	if (currentFid) await api.api.push.tokens[":token"].$delete({ param: { token: currentFid } }).catch(() => {});
+	if (currentFid) await deletePushToken(api, currentFid);
 }
 
-export async function sendTestPush(): Promise<PushResult> {
-	try {
-		const res = await api.api.push.test.$post({ json: {} });
-		if (!res.ok) return { ok: false, message: `送信に失敗しました (${res.status})` };
-		const data = await res.json();
-		if (!data.configured) return { ok: false, message: "サーバーに FCM_SERVICE_ACCOUNT が未設定です" };
-		if (data.results.length === 0) return { ok: false, message: "登録された端末がありません" };
-		return data.ok
-			? { ok: true }
-			: { ok: false, message: `届きませんでした: ${data.results.map((r) => r.code ?? "ok").join(", ")}` };
-	} catch (e) {
-		return { ok: false, message: e instanceof Error ? e.message : "送信に失敗しました" };
-	}
-}
+export const sendTestPush = (): Promise<PushResult> => sendTestPushRequest(api);

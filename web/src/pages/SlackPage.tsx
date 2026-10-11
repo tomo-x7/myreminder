@@ -11,10 +11,12 @@ import {
 	PageHeader,
 	QueryState,
 } from "../components/ui";
-import { formatShort } from "../features/schedule/format";
-import { type SlackItem, useSlackList } from "../features/schedule/hooks";
-import { errorText, useStartWorking, useStatus } from "../features/status";
-import { useNow } from "../lib/use-now";
+import { formatShort } from "core/domain/schedule";
+import { type SlackItem } from "core/api/types";
+import { useSlackList } from "core/queries/schedule";
+import { errorText } from "core/domain/errors";
+import { useStartWorking, useStatus } from "core/queries/status";
+import { useNow } from "core/hooks/use-now";
 
 const SPARE_CHOICES = [30, 60, 90] as const;
 

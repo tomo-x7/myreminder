@@ -1,8 +1,9 @@
 import { DueLabel } from "../../components/DueLabel";
 import { btnGhost, chipClass, Field, inputClass, Notice } from "../../components/ui";
-import { formatJstDateTime, fromDatetimeLocal } from "../../lib/date";
-import { type CourseOption, type DraftProblems, FIRST_STEP_MAX, resolveCourseId, TITLE_MAX } from "./draft";
-import { CATEGORY_OPTIONS, type Category, type Draft, type StartSuggestion } from "./types";
+import { formatJstDateTime, fromDatetimeLocal } from "core/domain/date";
+import { type CourseOption, type DraftProblems, FIRST_STEP_MAX, resolveCourseId, TITLE_MAX } from "core/domain/draft";
+import { CATEGORY_OPTIONS, type Category, type Draft } from "core/domain/draft-types";
+import { type StartSuggestion } from "core/api/types";
 
 type Props = {
 	draft: Draft;

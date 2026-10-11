@@ -1,9 +1,9 @@
 import { Link } from "wouter";
 import { listClass, SectionTitle } from "../../components/ui";
-import { formatJstDateTime } from "../../lib/date";
-import { formatHours } from "../schedule/format";
-import { ratioText } from "./format";
-import type { Review } from "./hooks";
+import { formatJstDateTime } from "core/domain/date";
+import { formatHours } from "core/domain/schedule";
+import { ratioText } from "core/domain/review";
+import { type Review } from "core/api/types";
 import { Sparkline } from "./Sparkline";
 
 /** 合計と前の週。前の週は比べるための数字として並べるだけ(増減の色や言葉は付けない) */

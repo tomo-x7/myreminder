@@ -1,3 +1,4 @@
+import { errorText } from "core/domain/errors";
 import { useState } from "react";
 import { Sheet } from "../../components/Sheet";
 import {
@@ -10,7 +11,8 @@ import {
 	listClass,
 	SectionTitle,
 } from "../../components/ui";
-import { type Course, useCourses, useCreateCourse, useDeleteCourse, useUpdateCourse } from "../../lib/queries";
+import { type Course } from "core/api/types";
+import { useCourses, useCreateCourse, useDeleteCourse, useUpdateCourse } from "core/queries/courses";
 
 /** `a, b、c` → ["a","b","c"] */
 const parseAliases = (s: string) =>
@@ -64,7 +66,7 @@ function CourseForm({ course, onDone }: { course?: Course; onDone: () => void })
 					className={inputClass}
 				/>
 			</Field>
-			{error && <ErrorNotice>保存できませんでした: {error.message}</ErrorNotice>}
+			{error && <ErrorNotice>保存できませんでした: {errorText(error)}</ErrorNotice>}
 			<div className="flex gap-2">
 				<button type="submit" disabled={saving || !name.trim()} className={`${btnPrimary} flex-1`}>
 					{saving ? "保存中…" : "保存"}

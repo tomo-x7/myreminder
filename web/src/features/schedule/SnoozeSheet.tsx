@@ -1,12 +1,14 @@
+import { errorText } from "core/domain/errors";
 import { useState } from "react";
 import { Sheet } from "../../components/Sheet";
 import { btnPrimary, btnSecondary, chipClass, ErrorNotice, inputClass, Notice } from "../../components/ui";
-import { formatJstDate, formatJstDateTime, fromDatetimeLocal, toDatetimeLocal } from "../../lib/date";
-import { useUpdateTask } from "../../lib/queries";
-import { useNow } from "../../lib/use-now";
-import { bottleneckText, formatHours, RISK_LABEL } from "./format";
-import { type PlanTask, useWhatIf, type WhatIf } from "./hooks";
-import { snoozeOptions } from "./snooze-options";
+import { formatJstDate, formatJstDateTime, fromDatetimeLocal, toDatetimeLocal } from "core/domain/date";
+import { useUpdateTask } from "core/queries/tasks";
+import { bottleneckText, formatHours, RISK_LABEL } from "core/domain/schedule";
+import { type PlanTask, type WhatIf } from "core/api/types";
+import { useWhatIf } from "core/queries/schedule";
+import { snoozeOptions } from "core/domain/snooze-options";
+import { useNow } from "core/hooks/use-now";
 
 export type SnoozeTarget = Pick<PlanTask, "id" | "title" | "dueAt" | "latestStartUsual" | "latestStartHard">;
 
@@ -152,9 +154,9 @@ export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose
 					<section className="flex flex-col gap-2 border-t border-line pt-2">
 						<p className="text-base font-bold">{formatJstDateTime(startAt)} に回す</p>
 						{whatIf.isPending && <p className="text-xs text-faint">再計画しています…</p>}
-						{whatIf.isError && <ErrorNotice>再計画できませんでした: {whatIf.error.message}</ErrorNotice>}
+						{whatIf.isError && <ErrorNotice>再計画できませんでした: {errorText(whatIf.error)}</ErrorNotice>}
 						{whatIf.data && <Facts target={target} data={whatIf.data} />}
-						{update.isError && <ErrorNotice>保存できませんでした: {update.error.message}</ErrorNotice>}
+						{update.isError && <ErrorNotice>保存できませんでした: {errorText(update.error)}</ErrorNotice>}
 						{saved ? (
 							<>
 								<output className="block border-l-2 border-ink py-0.5 pl-2 text-sm font-semibold">

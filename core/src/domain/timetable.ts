@@ -1,6 +1,6 @@
-import { formatJstDate, formatJstDateTime, formatJstTime } from "../../lib/date";
-import type { BusyBlock, Settings } from "../../lib/queries";
-import { formatMinuteOfDay } from "../../lib/time-input";
+import type { BusyBlock, Settings } from "../api/types";
+import { formatJstDate, formatJstDateTime, formatJstTime } from "./date";
+import { formatMinuteOfDay } from "./time-input";
 
 export type Period = Settings["timetablePeriods"][number];
 export type BusyKind = BusyBlock["kind"];

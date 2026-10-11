@@ -1,5 +1,5 @@
-import { jstParts } from "../../lib/date";
-import { useNow } from "../../lib/use-now";
+import { jstParts } from "core/domain/date";
+import { useNow } from "core/hooks/use-now";
 import { BottleneckLine } from "./BottleneckLine";
 
 /** 今の週への見通し(フレッシュスタート)。月曜は「新しい週」と言う */

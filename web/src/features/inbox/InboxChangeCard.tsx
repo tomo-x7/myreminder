@@ -1,8 +1,10 @@
+import { errorText } from "core/domain/errors";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, btnSecondary, ErrorNotice, linkClass } from "../../components/ui";
-import { formatDue } from "../../lib/date";
-import { SOURCE_LABEL } from "./draft";
-import { type InboxChange, useAcceptChange, useDismissChange } from "./hooks";
+import { formatDue } from "core/domain/date";
+import { SOURCE_LABEL } from "core/domain/inbox-draft";
+import { type InboxChange } from "core/api/types";
+import { useAcceptChange, useDismissChange } from "core/queries/inbox";
 
 /** 紐付け済みのタスクへの、取り込み元の変更の提案。[反映] でタスクを直し、[そのまま] で提案だけ消す */
 export function InboxChangeCard({ item, now }: { item: InboxChange; now: number }) {
@@ -46,7 +48,7 @@ export function InboxChangeCard({ item, now }: { item: InboxChange; now: number 
 				)}
 			</dl>
 
-			{error && <ErrorNotice>{error.message}</ErrorNotice>}
+			{error && <ErrorNotice>{errorText(error)}</ErrorNotice>}
 
 			<div className="flex gap-1.5">
 				<button

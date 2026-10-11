@@ -1,5 +1,5 @@
-import { useSchedule } from "../schedule";
-import { bottleneckText } from "../schedule/format";
+import { useSchedule } from "core/queries/schedule";
+import { bottleneckText } from "core/domain/schedule";
 
 /** /api/schedule の山場を1行で。読み込み中・取れないときは何も出さない */
 export function BottleneckLine({ now }: { now: number }) {

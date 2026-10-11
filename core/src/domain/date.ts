@@ -1,8 +1,8 @@
 // 日付の表示と入力の変換。時刻はすべて epoch ms で持ち、画面には JST(+09:00 固定)で出す。
 // 端末のタイムゾーンに依存しない(plan.md §3.1: 締切は `10/14(火) 23:59 ・ 3日後 ・ 今週`)
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
+export const MINUTE = 60_000;
+export const HOUR = 60 * MINUTE;
+export const DAY = 24 * HOUR;
 const JST_OFFSET = 9 * HOUR;
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;

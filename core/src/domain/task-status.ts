@@ -1,4 +1,4 @@
-import type { Task } from "../../lib/queries";
+import type { Task } from "../api/types";
 
 export type TaskStatus = Task["status"];
 

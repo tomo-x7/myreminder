@@ -1,19 +1,28 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import type { StartSuggestion } from "core/api/types";
+import {
+	candidateToDraft,
+	draftTitle,
+	draftToInput,
+	emptyDraft,
+	hasProblems,
+	type ParseMode,
+	validateDraft,
+} from "core/domain/draft";
+import type { Draft } from "core/domain/draft-types";
+import { errorText } from "core/domain/errors";
+import { useNow } from "core/hooks/use-now";
+import { useCourses } from "core/queries/courses";
+import { useParse } from "core/queries/parse";
+import { useCreateTasks } from "core/queries/tasks";
 import { useEffect, useRef, useState } from "react";
 import { btnGhost, btnPrimary, btnSecondary, chipClass, ErrorNotice, inputClass, Notice } from "../../components/ui";
-import { api } from "../../lib/api";
 import { CandidateCard } from "./CandidateCard";
-import { candidateToDraft, draftToInput, emptyDraft, hasProblems, TITLE_MAX, validateDraft } from "./draft";
-import { resizeImage } from "./image";
-import type { Draft, StartSuggestion, TaskCreateInput } from "./types";
+import { prepareParseImage } from "./image";
 
 type Props = {
-	/**
-	 * 確認済みのタスクを保存する。reject すると画面にエラーを出してカードを残す。
-	 * i 番目を保存できるたびに onSaved(i) を呼ぶこと(保存済みのカードを消し、やり直しで二重に保存しないため)
-	 */
-	onConfirm: (inputs: TaskCreateInput[], onSaved: (index: number) => void) => Promise<void>;
-	/** 登録後・閉じるときに入力に戻したいとき用(任意) */
+	/** 登録し終えたとき(シートを閉じる・ホームへ戻るなど) */
+	onDone: () => void;
+	/** 閉じるボタン。省略するとボタンを出さない */
 	onCancel?: () => void;
 	/** 入力欄の初期値(Web Share Target などから渡す)。省略時は空 */
 	initialText?: string;
@@ -25,105 +34,12 @@ type Props = {
 	initialImage?: Blob;
 };
 
-type Mode = "line" | "text";
-
-type ParseOutcome = {
-	drafts: Draft[];
-	startSuggestions: StartSuggestion[];
-	now: number;
-	/** 解析に失敗/空だったときの案内。drafts は手入力用の空カード */
-	notice: string | null;
-	/** 解析に失敗した告知文の本文。手入力のときに見比べられるよう確認画面に残す */
-	pasted: string | null;
-};
-
 const LINE_MAX = 500;
 const TEXT_MAX = 8000;
 
-/** 手入力カードの題。1行ならその行、告知文なら最初の空でない行(本文は確認画面に残す) */
-function draftTitle(mode: Mode, text: string): string {
-	const line = mode === "line" ? text : (text.split("\n").find((l) => l.trim()) ?? "");
-	return line.trim().slice(0, TITLE_MAX);
-}
-
-function useNow(intervalMs = 30_000): number {
-	const [now, setNow] = useState(() => Date.now());
-	useEffect(() => {
-		const id = setInterval(() => setNow(Date.now()), intervalMs);
-		return () => clearInterval(id);
-	}, [intervalMs]);
-	return now;
-}
-
-/** 解析 API を呼ぶ。失敗しても例外にせず、手入力のカードを返す */
-async function parseInput(mode: Mode, text: string): Promise<ParseOutcome> {
-	const fallback = (notice: string): ParseOutcome => ({
-		drafts: [emptyDraft(draftTitle(mode, text))],
-		startSuggestions: [],
-		now: Date.now(),
-		notice,
-		pasted: mode === "text" ? text : null,
-	});
-	try {
-		const res =
-			mode === "line"
-				? await api.api.parse.line.$post({ json: { text } })
-				: await api.api.parse.text.$post({ json: { text } });
-		if (!res.ok) return fallback("解析できませんでした。手入力してください");
-		const data = await res.json();
-		if (data.candidates.length === 0) {
-			const out = fallback(data.error ?? "解析できませんでした。手入力してください");
-			return { ...out, startSuggestions: data.startSuggestions, now: data.now };
-		}
-		return {
-			drafts: data.candidates.map(candidateToDraft),
-			startSuggestions: data.startSuggestions,
-			now: data.now,
-			notice: null,
-			pasted: null,
-		};
-	} catch {
-		return fallback("通信に失敗しました。手入力してください");
-	}
-}
-
-const PHOTO_NOTICE = "写真から読み取りました。文字の読み違いがないか確認してください";
-
-/** 写真の解析 API を呼ぶ(縮小してから送る)。失敗しても例外にせず、手入力のカードを返す */
-async function parseImageInput(image: Blob): Promise<ParseOutcome> {
-	const fallback = (notice: string): ParseOutcome => ({
-		drafts: [emptyDraft("")],
-		startSuggestions: [],
-		now: Date.now(),
-		notice,
-		pasted: null,
-	});
-	try {
-		const jpeg = await resizeImage(image);
-		const file = new File([jpeg], "slide.jpg", { type: "image/jpeg" });
-		const res = await api.api.parse.image.$post({ form: { image: file } });
-		if (res.status === 413) return fallback("画像が大きすぎます。手入力してください");
-		if (!res.ok) return fallback("解析できませんでした。手入力してください");
-		const data = await res.json();
-		if (data.candidates.length === 0) {
-			const out = fallback(data.error ?? "解析できませんでした。手入力してください");
-			return { ...out, startSuggestions: data.startSuggestions, now: data.now };
-		}
-		return {
-			drafts: data.candidates.map(candidateToDraft),
-			startSuggestions: data.startSuggestions,
-			now: data.now,
-			notice: PHOTO_NOTICE,
-			pasted: null,
-		};
-	} catch {
-		return fallback("写真を読み込めませんでした。手入力してください");
-	}
-}
-
-export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSubmit, initialImage }: Props) {
+export function QuickAdd({ onDone, onCancel, initialText, initialMode, autoSubmit, initialImage }: Props) {
 	const now = useNow();
-	const [mode, setMode] = useState<Mode>(initialMode ?? "line");
+	const [mode, setMode] = useState<ParseMode>(initialMode ?? "line");
 	const [text, setText] = useState(initialText ?? "");
 	const [outcome, setOutcome] = useState<{
 		notice: string | null;
@@ -142,19 +58,10 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 		return () => URL.revokeObjectURL(preview);
 	}, [preview]);
 
-	const coursesQuery = useQuery({
-		queryKey: ["courses"],
-		queryFn: async () => {
-			const res = await api.api.courses.$get();
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			return res.json();
-		},
-	});
+	const coursesQuery = useCourses();
 	const courses = coursesQuery.data ?? [];
 
-	const parse = useMutation({
-		mutationFn: (input: { mode: Mode; text: string } | { image: Blob }) =>
-			"image" in input ? parseImageInput(input.image) : parseInput(input.mode, input.text),
+	const parse = useParse(prepareParseImage, {
 		onSuccess: (r) => {
 			setDrafts(r.drafts);
 			setOutcome({ notice: r.notice, startSuggestions: r.startSuggestions, pasted: r.pasted });
@@ -169,19 +76,7 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 
 	// 途中で失敗したとき、保存できた分は画面から消す(やり直しで二重に保存しない)
 	const savedCount = useRef(0);
-	const save = useMutation({
-		mutationFn: ({ keys, inputs }: { keys: string[]; inputs: TaskCreateInput[] }) =>
-			onConfirm(inputs, (i) => {
-				savedCount.current += 1;
-				const key = keys[i];
-				if (key !== undefined) removeDraft(key);
-			}),
-		onSuccess: () => reset(),
-		onError: (e) => {
-			const msg = e instanceof Error ? e.message : "保存に失敗しました";
-			setSaveError(savedCount.current > 0 ? `${msg}(${savedCount.current}件は保存済み)` : msg);
-		},
-	});
+	const save = useCreateTasks();
 
 	/** 入力画面に戻る。入力した文章は残す */
 	function back() {
@@ -229,7 +124,7 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 		}
 	}, []);
 
-	function confirm() {
+	async function confirm() {
 		const problems = drafts.map(validateDraft);
 		if (problems.some(hasProblems)) {
 			setShowProblems(true);
@@ -237,7 +132,22 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 		}
 		setSaveError(null);
 		savedCount.current = 0;
-		save.mutate({ keys: drafts.map((d) => d.key), inputs: drafts.map((d) => draftToInput(d, courses)) });
+		const keys = drafts.map((d) => d.key);
+		try {
+			await save.mutateAsync({
+				inputs: drafts.map((d) => draftToInput(d, courses)),
+				onSaved: (i) => {
+					savedCount.current += 1;
+					const key = keys[i];
+					if (key !== undefined) removeDraft(key);
+				},
+			});
+			onDone();
+			reset();
+		} catch (e) {
+			const msg = errorText(e);
+			setSaveError(savedCount.current > 0 ? `${msg}(${savedCount.current}件は保存済み)` : msg);
+		}
 	}
 
 	// 写真を読み取っている間

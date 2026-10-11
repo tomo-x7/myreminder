@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { btnSecondary, chipClass, ErrorNotice, inputClass } from "../../components/ui";
-import { errorText, type SessionRow, useDeleteSession, useReviewSessions, useUpdateSession } from "./hooks";
-import { fmtDateTime, fmtDuration, fmtTime, fromInput, toInput } from "./time";
+import { formatJstDateTime, formatJstTime, fromDatetimeLocal, toDatetimeLocal } from "core/domain/date";
+import { errorText } from "core/domain/errors";
+import { fmtDuration } from "core/domain/work-log";
+import { type SessionRow } from "core/api/types";
+import { useDeleteSession, useReviewSessions, useUpdateSession } from "core/queries/sessions";
 
 const MIN = 60_000;
 const PROGRESS_STEPS = [25, 50, 75, 100] as const;
@@ -9,7 +12,7 @@ const PROGRESS_STEPS = [25, 50, 75, 100] as const;
 function ReviewItem({ session }: { session: SessionRow }) {
 	const update = useUpdateSession();
 	const remove = useDeleteSession();
-	const [custom, setCustom] = useState(() => toInput(session.endAt ?? session.startAt));
+	const [custom, setCustom] = useState(() => toDatetimeLocal(session.endAt ?? session.startAt));
 	const [progress, setProgress] = useState<number | null>(null);
 
 	const provisional = session.endAt;
@@ -19,7 +22,7 @@ function ReviewItem({ session }: { session: SessionRow }) {
 			id: session.id,
 			patch: { endAt, review: "confirmed", ...(progress !== null && { progress }) },
 		});
-	const customMs = fromInput(custom);
+	const customMs = fromDatetimeLocal(custom);
 	const error = update.error ?? remove.error;
 
 	return (
@@ -27,7 +30,7 @@ function ReviewItem({ session }: { session: SessionRow }) {
 			<div>
 				<p className="font-semibold">いつ終わった?</p>
 				<p className="text-xs text-sub">
-					「{session.taskTitle}」を {fmtDateTime(session.startAt)} から作業中のままでした
+					「{session.taskTitle}」を {formatJstDateTime(session.startAt)} から作業中のままでした
 				</p>
 			</div>
 			<div className="flex flex-col gap-1.5">
@@ -38,7 +41,7 @@ function ReviewItem({ session }: { session: SessionRow }) {
 						disabled={update.isPending}
 						onClick={() => confirm(provisional)}
 					>
-						仮の時刻のまま: {fmtTime(provisional)}({fmtDuration(provisional - session.startAt)})
+						仮の時刻のまま: {formatJstTime(provisional)}({fmtDuration(provisional - session.startAt)})
 					</button>
 				)}
 				<button
@@ -47,7 +50,7 @@ function ReviewItem({ session }: { session: SessionRow }) {
 					disabled={update.isPending}
 					onClick={() => confirm(byEstimate)}
 				>
-					開始 + 見積もり: {fmtDateTime(byEstimate)}({session.taskEstimateMin}分)
+					開始 + 見積もり: {formatJstDateTime(byEstimate)}({session.taskEstimateMin}分)
 				</button>
 				<div className="flex gap-1.5">
 					<input

@@ -1,6 +1,6 @@
-// 計画まわりの表示用の関数と、リスクの見た目
-import { formatJstDate, formatWeekLabel } from "../../lib/date";
-import type { PlanTask } from "./hooks";
+// 計画まわりの表示用の関数。リスクの色(Tailwind のクラス)は画面の層が決める
+import type { PlanTask } from "../api/types";
+import { formatJstDate, formatWeekLabel } from "./date";
 
 export type Risk = PlanTask["risk"];
 
@@ -9,14 +9,6 @@ export const RISK_LABEL: Record<Risk, string> = {
 	watch: "注意",
 	danger: "危険",
 	critical: "致命",
-};
-
-/** リスクの色。面は塗らず、左の線と文字色だけで示す(余裕は色を付けない) */
-export const RISK_STYLE: Record<Risk, { border: string; text: string }> = {
-	relaxed: { border: "border-line", text: "text-sub" },
-	watch: { border: "border-warn", text: "text-warn" },
-	danger: { border: "border-danger", text: "text-danger" },
-	critical: { border: "border-danger", text: "text-danger font-bold" },
 };
 
 const RISK_RANK: Record<Risk, number> = { relaxed: 0, watch: 1, danger: 2, critical: 3 };

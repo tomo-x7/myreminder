@@ -1,9 +1,10 @@
+import { errorText } from "core/domain/errors";
 import { useState } from "react";
 import { Link } from "wouter";
 import { listClass, PageHeader, QueryState, SectionTitle } from "../components/ui";
 import { SettingsForm } from "../features/settings/SettingsForm";
 import { WebhookSettings } from "../features/webhooks";
-import { useSettings, useUpdateSettings } from "../lib/queries";
+import { useSettings, useUpdateSettings } from "core/queries/settings";
 import { PushToggle } from "../push/PushToggle";
 
 export function SettingsPage() {
@@ -40,7 +41,7 @@ export function SettingsPage() {
 					<SettingsForm
 						settings={s}
 						saving={update.isPending}
-						error={update.isError ? update.error.message : null}
+						error={update.isError ? errorText(update.error) : null}
 						saved={saved}
 						onSave={(patch) => {
 							setSaved(false);

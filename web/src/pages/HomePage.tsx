@@ -2,13 +2,16 @@ import { type ReactNode, useState } from "react";
 import { Link } from "wouter";
 import { btnPrimary, listClass, QueryState } from "../components/ui";
 import { useInboxTotal } from "../features/inbox";
-import { bottleneckText, NextCard, PlanAlerts, pickNext, useSchedule } from "../features/schedule";
-import type { Plan } from "../features/schedule/hooks";
+import { bottleneckText, pickNext } from "core/domain/schedule";
+import { useSchedule } from "core/queries/schedule";
+import { NextCard, PlanAlerts } from "../features/schedule";
+import { type Plan, type Course } from "core/api/types";
 import { StatusSwitcher } from "../features/status";
+import { useCourses } from "core/queries/courses";
+import { useTasks } from "core/queries/tasks";
 import { AddTaskSheet } from "../features/tasks/AddTaskSheet";
-import { formatJstDate, formatJstTime, jstParts } from "../lib/date";
-import { type Course, useCourses, useTasks } from "../lib/queries";
-import { useNow } from "../lib/use-now";
+import { formatJstDate, formatJstTime, jstParts } from "core/domain/date";
+import { useNow } from "core/hooks/use-now";
 
 /** ホーム下部の1行。左に小さな見出し、右に中身 */
 function Row({

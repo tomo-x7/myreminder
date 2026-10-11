@@ -8,17 +8,13 @@ import {
 	inputClass,
 	StaleNotice,
 } from "../../components/ui";
-import {
-	errorText,
-	type SetStatusInput,
-	useNow,
-	useSetStatus,
-	useStartWorking,
-	useStatus,
-	useStopWorking,
-	useTaskOptions,
-} from "./hooks";
-import { DAY, fmtClock, fmtTime, startOfJstDay } from "./time";
+import { DAY, formatJstTime, startOfJstDay } from "core/domain/date";
+import { errorText } from "core/domain/errors";
+import { fmtClock } from "core/domain/work-log";
+import { type SetStatusInput } from "core/api/types";
+import { useNow } from "core/hooks/use-now";
+import { useSetStatus, useStartWorking, useStatus, useStopWorking } from "core/queries/status";
+import { useTaskOptions } from "core/queries/tasks";
 
 const MIN = 60_000;
 type Mode = SetStatusInput["mode"];
@@ -107,9 +103,9 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 					</span>
 					<span className="ml-2 text-xs text-sub">
 						{s.mode === "working" && openSession
-							? `${fmtTime(openSession.startAt)} から ${fmtClock(elapsed)}`
+							? `${formatJstTime(openSession.startAt)} から ${fmtClock(elapsed)}`
 							: s.until
-								? `${fmtTime(s.until)} まで${s.source === "auto" ? "(自動)" : ""}`
+								? `${formatJstTime(s.until)} まで${s.source === "auto" ? "(自動)" : ""}`
 								: s.source === "manual"
 									? "解除するまで(手動)"
 									: "自動で切り替わります"}

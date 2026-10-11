@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { btnGhost, listClass, Tag } from "../../components/ui";
-import type { BusyBlock } from "../../lib/queries";
-import { formatOneOff, KIND_LABEL, type OneOffBlock } from "./blocks";
+import { type BusyBlock } from "core/api/types";
+import { formatOneOff, KIND_LABEL, type OneOffBlock } from "core/domain/timetable";
 
 type Props = { blocks: readonly OneOffBlock[]; now: number; onEdit: (block: BusyBlock) => void };
 

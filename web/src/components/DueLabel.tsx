@@ -1,4 +1,4 @@
-import { formatDueParts } from "../lib/date";
+import { formatDueParts } from "core/domain/date";
 
 /**
  * 締切の表示。`10/14(火) 23:59 ・ 3日後 ・ 今週`(plan.md §2.2-2)。

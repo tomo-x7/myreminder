@@ -1,13 +1,14 @@
+import { errorText } from "core/domain/errors";
 import { useState } from "react";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, btnSecondary, ErrorNotice, Field, inputClass, linkClass, listClass } from "../../components/ui";
-import { formatDue, formatJstDateTime } from "../../lib/date";
-import type { Course, Task } from "../../lib/queries";
+import { formatDue, formatJstDateTime } from "core/domain/date";
+import { type Course, type Task, type InboxCandidate, type InboxItem } from "core/api/types";
+import { itemToDraft, SOURCE_LABEL } from "core/domain/inbox-draft";
+import { useAcceptItem, useIgnoreItem, useLinkItem } from "core/queries/inbox";
 import { CandidateCard } from "../quick-add/CandidateCard";
-import { draftToInput, hasProblems, validateDraft } from "../quick-add/draft";
-import type { Draft, StartSuggestion } from "../quick-add/types";
-import { itemToDraft, SOURCE_LABEL } from "./draft";
-import { type InboxCandidate, type InboxItem, useAcceptItem, useIgnoreItem, useLinkItem } from "./hooks";
+import { draftToInput, hasProblems, validateDraft } from "core/domain/draft";
+import type { Draft, StartSuggestion } from "core/domain/draft-types";
 
 type Props = {
 	item: InboxItem;
@@ -90,7 +91,7 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 				)}
 			</div>
 
-			{error && <ErrorNotice>{error.message}</ErrorNotice>}
+			{error && <ErrorNotice>{errorText(error)}</ErrorNotice>}
 
 			<div className="flex gap-1.5">
 				<button
