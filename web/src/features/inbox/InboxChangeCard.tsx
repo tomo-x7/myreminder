@@ -1,17 +1,13 @@
 import type { InboxChange } from "core/api/types";
 import { formatDue } from "core/domain/date";
-import { errorText } from "core/domain/errors";
-import { SOURCE_LABEL } from "core/domain/inbox-draft";
-import { useAcceptChange, useDismissChange } from "core/queries/inbox";
+import { changeMeta, openSourceLabel } from "core/domain/inbox";
+import { useInboxChangeActions } from "core/forms/inbox";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, btnSecondary, ErrorNotice, linkClass } from "../../components/ui";
 
 /** 紐付け済みのタスクへの、取り込み元の変更の提案。[反映] でタスクを直し、[そのまま] で提案だけ消す */
 export function InboxChangeCard({ item, now }: { item: InboxChange; now: number }) {
-	const accept = useAcceptChange();
-	const dismiss = useDismissChange();
-	const busy = accept.isPending || dismiss.isPending;
-	const error = accept.error ?? dismiss.error;
+	const actions = useInboxChangeActions(item.id);
 	const { dueAt, title } = item.change;
 
 	return (
@@ -19,10 +15,10 @@ export function InboxChangeCard({ item, now }: { item: InboxChange; now: number 
 			<div className="flex flex-col gap-0.5">
 				<p className="text-base font-semibold">{item.taskTitle}</p>
 				<p className="flex flex-wrap items-baseline gap-x-2 text-xs text-sub">
-					{[item.courseName, SOURCE_LABEL[item.source] ?? item.source].filter(Boolean).join(" ・ ")}
+					{changeMeta(item)}
 					{item.url && (
 						<a href={item.url} target="_blank" rel="noreferrer" className={linkClass}>
-							{item.source === "classroom" ? "Classroom で開く" : "取り込み元で開く"}
+							{openSourceLabel(item.source)}
 						</a>
 					)}
 				</p>
@@ -48,21 +44,21 @@ export function InboxChangeCard({ item, now }: { item: InboxChange; now: number 
 				)}
 			</dl>
 
-			{error && <ErrorNotice>{errorText(error)}</ErrorNotice>}
+			{actions.errorMessage && <ErrorNotice>{actions.errorMessage}</ErrorNotice>}
 
 			<div className="flex gap-1.5">
 				<button
 					type="button"
-					disabled={busy}
-					onClick={() => accept.mutate(item.id)}
+					disabled={actions.busy}
+					onClick={actions.accept}
 					className={`${btnPrimary} flex-1`}
 				>
 					反映
 				</button>
 				<button
 					type="button"
-					disabled={busy}
-					onClick={() => dismiss.mutate(item.id)}
+					disabled={actions.busy}
+					onClick={actions.dismiss}
 					className={`${btnSecondary} flex-1`}
 				>
 					そのまま

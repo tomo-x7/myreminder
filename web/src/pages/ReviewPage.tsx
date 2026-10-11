@@ -1,4 +1,5 @@
 import { weekLabel } from "core/domain/review";
+import { reviewPath } from "core/domain/review-view";
 import { useReview } from "core/queries/review";
 import { Link, useSearchParams } from "wouter";
 import { btnSecondary, PageHeader, QueryState } from "../components/ui";
@@ -21,7 +22,7 @@ export function ReviewPage() {
 				{(r) => (
 					<>
 						<nav className="flex items-center justify-between gap-2" aria-label="週の移動">
-							<Link href={`/review?week=${r.prevWeek}`} className={btnSecondary}>
+							<Link href={reviewPath(r.prevWeek)} className={btnSecondary}>
 								← 前の週
 							</Link>
 							<div className="text-center">
@@ -29,7 +30,7 @@ export function ReviewPage() {
 								{r.isCurrentWeek && <p className="text-xs text-sub">今週(途中)</p>}
 							</div>
 							{r.nextWeek ? (
-								<Link href={`/review?week=${r.nextWeek}`} className={btnSecondary}>
+								<Link href={reviewPath(r.nextWeek)} className={btnSecondary}>
 									次の週 →
 								</Link>
 							) : (

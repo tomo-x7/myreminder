@@ -2,7 +2,12 @@
 
 web と将来の Android(RN)アプリが共有する、プラットフォームに依存しない層。規則は [ai-docs/specs/client.md](../../ai-docs/specs/client.md)。
 
-- `api/`: `createApi`(クライアント。`fetch`・`headers`・`onAuthError` は呼び出し側が渡す)、`ApiProvider` / `useApi`、`ApiError` と `unwrap`、API の入出力の型(`types.ts`。`worker` の `AppType` から導く)
-- `queries/`: TanStack Query のキー(`keys.ts`)とフック。API はすべて `useApi()` で受け取ったクライアントで呼ぶ。React の外から呼ぶもの(`push.ts`)だけ、`api` を引数で受ける関数
-- `domain/`: 純粋な関数と定数。日付・時刻の表示、リスク・進捗の言い方、下書きの変換と検証、エラーのコード → 文言(`errors.ts`)。Tailwind のクラスは持たない
-- `hooks/`: API に依存しない React のフック(`useNow`)
+| ディレクトリ | 中身 |
+|---|---|
+| `api/` | `createApi()`(Hono RPC のクライアント)、`ApiProvider` / `useApi()`、`ApiError` / `unwrap`、API の型 |
+| `queries/` | TanStack Query のキーとフック。変更後の取り直しもここで決める |
+| `domain/` | 純粋関数: 日付の言い方、リスク・進捗の言い方、エラーの文言、下書きの変換など |
+| `forms/` | 入力画面の状態・検証・API に送る形への変換(と、それをまとめる小さなフック) |
+| `hooks/` | 画面に依存しない汎用のフック(`useNow`) |
+
+DOM・react-dom・wouter・firebase・JSX・Tailwind のクラス名は使わない(biome で弾く)。web 固有の処理はオプションや引数で受け取る。

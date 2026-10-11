@@ -1,7 +1,5 @@
 import type { Course, Task } from "core/api/types";
-import { formatJstDateTime } from "core/domain/date";
-import { STATUS_LABEL } from "core/domain/task-status";
-import { formatDuration } from "core/domain/time-input";
+import { taskRowView } from "core/domain/task-list";
 import { Link } from "wouter";
 import { DueLabel } from "../../components/DueLabel";
 import { btnSecondary, Tag } from "../../components/ui";
@@ -17,8 +15,7 @@ type Props = {
 
 /** 一覧の 1 行。完了(未提出)は左の黄土の線と文字色で目立たせ、提出済み・取り下げは灰色にする */
 export function TaskRow({ task, course, now, onSubmit, busy }: Props) {
-	const awaitingSubmit = task.status === "done";
-	const finished = task.status === "submitted" || task.status === "dismissed";
+	const { awaitingSubmit, finished, statusLabel, closedDue, meta } = taskRowView(task, course);
 	return (
 		<li>
 			<div className={`border-l-2 pl-2 ${awaitingSubmit ? "border-warn" : "border-transparent"}`}>
@@ -29,19 +26,15 @@ export function TaskRow({ task, course, now, onSubmit, busy }: Props) {
 						>
 							{task.title}
 						</span>
-						{task.status !== "todo" && (
-							<Tag tone={awaitingSubmit ? "warn" : "plain"}>{STATUS_LABEL[task.status]}</Tag>
-						)}
+						{statusLabel && <Tag tone={awaitingSubmit ? "warn" : "plain"}>{statusLabel}</Tag>}
 					</span>
 					<span className="flex flex-wrap items-baseline justify-between gap-x-3">
-						{finished ? (
-							<span className="text-xs text-faint">締切 {formatJstDateTime(task.dueAt)}</span>
+						{closedDue ? (
+							<span className="text-xs text-faint">{closedDue}</span>
 						) : (
 							<DueLabel dueAt={task.dueAt} now={now} />
 						)}
-						<span className={`text-xs ${finished ? "text-faint" : "text-sub"}`}>
-							{[course?.name, formatDuration(task.estimateMin)].filter(Boolean).join(" ・ ")}
-						</span>
+						<span className={`text-xs ${finished ? "text-faint" : "text-sub"}`}>{meta}</span>
 					</span>
 				</Link>
 				{awaitingSubmit && onSubmit && (

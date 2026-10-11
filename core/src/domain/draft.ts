@@ -1,5 +1,4 @@
-import type { ParsedCandidate, TaskCreate } from "../api/types";
-import { fromDatetimeLocal, toDatetimeLocal } from "./date";
+import type { ParsedCandidate, StartSuggestion, TaskCreate } from "../api/types";
 import type { Draft } from "./draft-types";
 
 // React の key になるだけ。端末をまたがないので連番でよい(RN の Hermes には crypto.randomUUID がない)
@@ -14,7 +13,7 @@ export function emptyDraft(title = ""): Draft {
 		courseName: "",
 		aiCourse: null,
 		category: "other",
-		dueLocal: "",
+		dueAt: null,
 		estimateMin: "60",
 		estimateTouched: false,
 		firstStep: "",
@@ -33,7 +32,7 @@ export function candidateToDraft(c: ParsedCandidate): Draft {
 		courseName: c.courseName ?? "",
 		aiCourse: c.courseId && c.courseName ? { id: c.courseId, name: c.courseName } : null,
 		category: c.category ?? "other",
-		dueLocal: c.dueAt === null ? "" : toDatetimeLocal(c.dueAt),
+		dueAt: c.dueAt,
 		estimateMin: String(c.estimateMin),
 		estimateTouched: false,
 		firstStep: c.firstStep ?? "",
@@ -78,7 +77,7 @@ export function validateDraft(d: Draft): DraftProblems {
 	if (!d.title.trim()) problems.title = "タイトルを入力してください";
 	else if (d.title.trim().length > TITLE_MAX) problems.title = `タイトルは${TITLE_MAX}文字以内にしてください`;
 	if (d.firstStep.trim().length > FIRST_STEP_MAX) problems.firstStep = `${FIRST_STEP_MAX}文字以内にしてください`;
-	if (fromDatetimeLocal(d.dueLocal) === null) problems.due = "締切を入力してください";
+	if (d.dueAt === null) problems.due = "締切を入力してください";
 	const est = Number(d.estimateMin);
 	if (!Number.isInteger(est) || est < 1) problems.estimate = "見積もりは1分以上の整数で入力してください";
 	return problems;
@@ -92,10 +91,44 @@ export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCr
 		title: d.title.trim(),
 		courseId: resolveCourseId(d, courses),
 		category: d.category,
-		dueAt: fromDatetimeLocal(d.dueLocal) as number,
+		dueAt: d.dueAt as number,
 		estimateMin: Number(d.estimateMin),
 		estimateSource: d.fromAi && !d.estimateTouched ? "ai" : "manual",
 		firstStep: d.firstStep.trim() || null,
 		plannedStartAt: d.plannedStartAt,
 	};
 }
+
+/** 確認カードで直せる項目 */
+export type DraftPatch = Partial<
+	Pick<Draft, "title" | "courseName" | "category" | "dueAt" | "estimateMin" | "firstStep" | "plannedStartAt">
+>;
+
+/** カードの編集を適用する。直した項目に付随する更新もここでする */
+export function patchDraft(d: Draft, patch: DraftPatch): Draft {
+	const next: Draft = { ...d, ...patch };
+	// 見積もりを本人が直したら "manual" で保存する
+	if (patch.estimateMin !== undefined) next.estimateTouched = true;
+	// 締切を着手の合図より前にしたら、合図は外す(締切の後に鳴らさない)
+	if (
+		patch.dueAt !== undefined &&
+		patch.dueAt !== null &&
+		next.plannedStartAt !== null &&
+		patch.dueAt <= next.plannedStartAt
+	) {
+		next.plannedStartAt = null;
+	}
+	return next;
+}
+
+/** 「いつ始める?」に出す候補。いまより後で、締切より前のものだけ */
+export function selectableStarts(
+	suggestions: readonly StartSuggestion[],
+	now: number,
+	dueAt: number | null,
+): StartSuggestion[] {
+	return suggestions.filter((s) => s.at > now && (dueAt === null || s.at < dueAt));
+}
+
+/** 候補をタップしたときの着手の合図。選択中のものをもう一度タップしたら解除 */
+export const toggleStart = (current: number | null, at: number): number | null => (current === at ? null : at);

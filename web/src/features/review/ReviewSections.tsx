@@ -1,6 +1,5 @@
 import type { Review } from "core/api/types";
-import { formatJstDateTime } from "core/domain/date";
-import { ratioText } from "core/domain/review";
+import { estimateView, submittedText } from "core/domain/review-view";
 import { formatHours } from "core/domain/schedule";
 import { Link } from "wouter";
 import { listClass, SectionTitle } from "../../components/ui";
@@ -49,11 +48,7 @@ export function SubmittedList({ submitted }: { submitted: Review["submitted"] })
 						<li key={t.id}>
 							<Link href={`/tasks/${t.id}`} className="flex flex-col py-2 active:bg-wash">
 								<span className="font-semibold">{t.title}</span>
-								<span className="text-xs text-sub">
-									{t.onTime ? "期限内" : "期限後"}・締切の{" "}
-									{formatHours(Math.abs(t.dueAt - t.submittedAt) / 60_000)}
-									{t.onTime ? "前" : "後"}に提出({formatJstDateTime(t.submittedAt)})
-								</span>
+								<span className="text-xs text-sub">{submittedText(t)}</span>
 							</Link>
 						</li>
 					))}
@@ -66,26 +61,20 @@ export function SubmittedList({ submitted }: { submitted: Review["submitted"] })
 /** 見積もりの精度。この週に完了したものの中央値と、8週の推移 */
 export function EstimateCard({ review }: { review: Review }) {
 	const { estimate, estimateTrend } = review;
-	const latest = [...estimateTrend].reverse().find((t) => t.medianRatio !== null)?.medianRatio ?? null;
-	const ratio = estimate.medianRatio ?? latest;
+	const { text, fromLatestWeek, trendLabel } = estimateView(review);
 	return (
 		<section className="flex flex-col gap-2">
 			<SectionTitle>見積もりの精度</SectionTitle>
-			{ratio === null ? (
+			{text === null ? (
 				<p className="text-xs text-faint">まだ比べられる記録がありません</p>
 			) : (
 				<div className="flex flex-col gap-0.5">
-					<p className="font-bold">{ratioText(ratio)}</p>
-					{estimate.medianRatio === null && (
-						<p className="text-xs text-sub">この週に完了したものはなく、直近の週の値です</p>
-					)}
+					<p className="font-bold">{text}</p>
+					{fromLatestWeek && <p className="text-xs text-sub">この週に完了したものはなく、直近の週の値です</p>}
 				</div>
 			)}
 			<div className="flex flex-col gap-0.5">
-				<Sparkline
-					values={estimateTrend.map((t) => t.medianRatio)}
-					label={`見積もりに対する実績の比率の8週の推移。${estimateTrend.map((t) => (t.medianRatio === null ? "なし" : t.medianRatio.toFixed(1))).join("、")}`}
-				/>
+				<Sparkline values={estimateTrend.map((t) => t.medianRatio)} label={trendLabel} />
 				<p className="text-xs text-faint">8週の中央値の推移(破線が見積もりどおり)</p>
 			</div>
 			{estimate.tasks.length > 0 && (

@@ -1,6 +1,7 @@
 import type { Settings, SettingsPatch } from "core/api/types";
-import { minuteToTimeInput, timeInputToMinute } from "core/domain/time-input";
-import { Fragment, useState } from "react";
+import { useSettingsForm } from "core/forms/settings";
+import { Fragment } from "react";
+import { TimeInput } from "../../components/DateTimeInputs";
 import { btnGhost, btnPrimary, ErrorNotice, Field, inputClass, Notice, SectionTitle } from "../../components/ui";
 
 type Props = {
@@ -10,84 +11,6 @@ type Props = {
 	saved: boolean;
 	onSave: (patch: SettingsPatch) => void;
 };
-
-type PeriodRow = { key: number; period: string; start: string; end: string };
-
-type Form = {
-	sleepStart: string;
-	sleepEnd: string;
-	morning: string;
-	evening: string;
-	weekdayHours: string;
-	holidayHours: string;
-	dailyLimit: string;
-	criticalDuringSleep: boolean;
-	periods: PeriodRow[];
-};
-
-const hoursText = (min: number) => String(min / 60);
-
-const toForm = (s: Settings): Form => ({
-	sleepStart: minuteToTimeInput(s.sleep.startMin),
-	sleepEnd: minuteToTimeInput(s.sleep.endMin),
-	morning: minuteToTimeInput(s.digest.morningMin),
-	evening: minuteToTimeInput(s.digest.eveningMin),
-	weekdayHours: hoursText(s.usualCapacityDefaults.weekday),
-	holidayHours: hoursText(s.usualCapacityDefaults.holiday),
-	dailyLimit: String(s.notificationDailyLimit),
-	criticalDuringSleep: s.criticalDuringSleep,
-	periods: s.timetablePeriods.map((p, i) => ({
-		key: i,
-		period: String(p.period),
-		start: minuteToTimeInput(p.startMin),
-		end: minuteToTimeInput(Math.min(p.endMin, 1439)),
-	})),
-});
-
-/** 入力 → 設定。1 か所でも不正ならエラー文を返す */
-function toPatch(f: Form): { patch: SettingsPatch } | { error: string } {
-	const sleepStart = timeInputToMinute(f.sleepStart);
-	const sleepEnd = timeInputToMinute(f.sleepEnd);
-	const morning = timeInputToMinute(f.morning);
-	const evening = timeInputToMinute(f.evening);
-	if (sleepStart === null || sleepEnd === null) return { error: "睡眠の時刻を入力してください" };
-	if (morning === null || evening === null) return { error: "ダイジェストの時刻を入力してください" };
-
-	const weekday = Math.round(Number(f.weekdayHours) * 60);
-	const holiday = Math.round(Number(f.holidayHours) * 60);
-	const validCap = (m: number) => Number.isFinite(m) && m >= 0 && m <= 1440;
-	if (!validCap(weekday) || !validCap(holiday) || f.weekdayHours === "" || f.holidayHours === "")
-		return { error: "作業時間は 0〜24 時間で入力してください" };
-
-	const limit = Number(f.dailyLimit);
-	if (f.dailyLimit === "" || !Number.isInteger(limit) || limit < 0 || limit > 100)
-		return { error: "通知の上限は 0〜100 の整数で入力してください" };
-
-	const periods: Settings["timetablePeriods"] = [];
-	for (const row of f.periods) {
-		const period = Number(row.period);
-		const startMin = timeInputToMinute(row.start);
-		const endMin = timeInputToMinute(row.end);
-		if (!Number.isInteger(period) || period < 1 || period > 20)
-			return { error: "時限は 1〜20 の整数で入力してください" };
-		if (startMin === null || endMin === null || endMin <= startMin)
-			return { error: `${period}限の終了は開始より後にしてください` };
-		periods.push({ period, startMin, endMin });
-	}
-	if (new Set(periods.map((p) => p.period)).size !== periods.length) return { error: "同じ時限が重複しています" };
-	periods.sort((a, b) => a.period - b.period);
-
-	return {
-		patch: {
-			sleep: { startMin: sleepStart, endMin: sleepEnd },
-			digest: { morningMin: morning, eveningMin: evening },
-			usualCapacityDefaults: { weekday, holiday },
-			notificationDailyLimit: limit,
-			criticalDuringSleep: f.criticalDuringSleep,
-			timetablePeriods: periods,
-		},
-	};
-}
 
 /** 見出し+中身のまとまり。面は作らず、見出しの罫線で区切る */
 const Group = ({ title, children }: { title: string; children: React.ReactNode }) => (
@@ -111,64 +34,30 @@ const ValueRow = ({ label, hint, children }: { label: string; hint?: string; chi
 
 /** 睡眠・ダイジェスト・普段のキャパ・通知の上限・時限の編集。まとめて保存する */
 export function SettingsForm({ settings, saving, error, saved, onSave }: Props) {
-	const [form, setForm] = useState<Form>(() => toForm(settings));
-	const [localError, setLocalError] = useState<string | null>(null);
-	const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
-	const setPeriod = (key: number, patch: Partial<PeriodRow>) =>
-		set(
-			"periods",
-			form.periods.map((p) => (p.key === key ? { ...p, ...patch } : p)),
-		);
-
-	const crossesMidnight = (timeInputToMinute(form.sleepStart) ?? 0) > (timeInputToMinute(form.sleepEnd) ?? 0);
-
-	function addPeriod() {
-		const last = form.periods.at(-1);
-		const nextNo = last ? Number(last.period) + 1 : 1;
-		set("periods", [
-			...form.periods,
-			{
-				key: Math.max(-1, ...form.periods.map((p) => p.key)) + 1,
-				period: String(nextNo),
-				start: last?.end ?? "09:00",
-				end: "10:30",
-			},
-		]);
-	}
-
-	function submit() {
-		const r = toPatch(form);
-		if ("error" in r) {
-			setLocalError(r.error);
-			return;
-		}
-		setLocalError(null);
-		onSave(r.patch);
-	}
+	const { form, set, crossesMidnight, setPeriod, addPeriod, removePeriod, problem, submit } =
+		useSettingsForm(settings);
 
 	return (
 		<form
 			className="flex flex-col gap-3"
 			onSubmit={(e) => {
 				e.preventDefault();
-				submit();
+				submit(onSave);
 			}}
 		>
 			<Group title="睡眠">
 				<div className="grid grid-cols-2 gap-2">
 					<Field label="寝る時刻">
-						<input
-							type="time"
-							value={form.sleepStart}
-							onChange={(e) => set("sleepStart", e.target.value)}
+						<TimeInput
+							value={form.sleepStartMin}
+							onChange={(v) => set("sleepStartMin", v)}
 							className={inputClass}
 						/>
 					</Field>
 					<Field label="起きる時刻">
-						<input
-							type="time"
-							value={form.sleepEnd}
-							onChange={(e) => set("sleepEnd", e.target.value)}
+						<TimeInput
+							value={form.sleepEndMin}
+							onChange={(v) => set("sleepEndMin", v)}
 							className={inputClass}
 						/>
 					</Field>
@@ -181,18 +70,16 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 			<Group title="通知">
 				<div className="grid grid-cols-2 gap-2">
 					<Field label="朝のまとめ">
-						<input
-							type="time"
-							value={form.morning}
-							onChange={(e) => set("morning", e.target.value)}
+						<TimeInput
+							value={form.morningMin}
+							onChange={(v) => set("morningMin", v)}
 							className={inputClass}
 						/>
 					</Field>
 					<Field label="夜のまとめ">
-						<input
-							type="time"
-							value={form.evening}
-							onChange={(e) => set("evening", e.target.value)}
+						<TimeInput
+							value={form.eveningMin}
+							onChange={(v) => set("eveningMin", v)}
 							className={inputClass}
 						/>
 					</Field>
@@ -274,29 +161,22 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 									onChange={(e) => setPeriod(p.key, { period: e.target.value })}
 									className={inputClass}
 								/>
-								<input
-									type="time"
+								<TimeInput
 									aria-label="開始"
-									value={p.start}
-									onChange={(e) => setPeriod(p.key, { start: e.target.value })}
+									value={p.startMin}
+									onChange={(v) => setPeriod(p.key, { startMin: v })}
 									className={inputClass}
 								/>
-								<input
-									type="time"
+								<TimeInput
 									aria-label="終了"
-									value={p.end}
-									onChange={(e) => setPeriod(p.key, { end: e.target.value })}
+									value={p.endMin}
+									onChange={(v) => setPeriod(p.key, { endMin: v })}
 									className={inputClass}
 								/>
 								<button
 									type="button"
 									aria-label={`${p.period}限を削除`}
-									onClick={() =>
-										set(
-											"periods",
-											form.periods.filter((x) => x.key !== p.key),
-										)
-									}
+									onClick={() => removePeriod(p.key)}
 									className="rounded-sm py-1 text-sm text-sub active:bg-wash"
 								>
 									✕
@@ -310,7 +190,7 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 				</button>
 			</Group>
 
-			{(localError || error) && <ErrorNotice>{localError ?? `保存できませんでした: ${error}`}</ErrorNotice>}
+			{(problem || error) && <ErrorNotice>{problem ?? `保存できませんでした: ${error}`}</ErrorNotice>}
 			{saved && !saving && (
 				<Notice>
 					<output>保存しました</output>

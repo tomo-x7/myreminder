@@ -1,7 +1,7 @@
-import { errorText } from "core/domain/errors";
+import { useTaskEditor } from "core/forms/task";
 import { useNow } from "core/hooks/use-now";
 import { useCourses } from "core/queries/courses";
-import { useDeleteTask, useTask, useUpdateTask } from "core/queries/tasks";
+import { useTask } from "core/queries/tasks";
 import { useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { btnDanger, btnGhost, btnSecondary, ErrorNotice, PageHeader, QueryState } from "../components/ui";
@@ -13,9 +13,7 @@ export function TaskDetailPage() {
 	const now = useNow();
 	const task = useTask(id);
 	const courses = useCourses();
-	const update = useUpdateTask();
-	const remove = useDeleteTask();
-	const [saved, setSaved] = useState(false);
+	const editor = useTaskEditor(id);
 	const [confirming, setConfirming] = useState(false);
 
 	return (
@@ -36,20 +34,17 @@ export function TaskDetailPage() {
 							task={t}
 							courses={courses.data ?? []}
 							now={now}
-							saving={update.isPending}
-							error={update.isError ? errorText(update.error) : null}
-							onSave={(patch) => {
-								setSaved(false);
-								update.mutate({ id: t.id, patch }, { onSuccess: () => setSaved(true) });
-							}}
+							saving={editor.saving}
+							error={editor.saveError}
+							onSave={editor.save}
 						/>
-						{saved && !update.isPending && (
+						{editor.saved && (
 							<output className="block border-l-2 border-ink py-0.5 pl-2 text-xs">保存しました</output>
 						)}
 
 						<section className="mt-1 flex flex-col gap-2 border-t border-line pt-3">
-							{remove.isError && (
-								<ErrorNotice>削除できませんでした: {errorText(remove.error)}</ErrorNotice>
+							{editor.removeError && (
+								<ErrorNotice>削除できませんでした: {editor.removeError}</ErrorNotice>
 							)}
 							{confirming ? (
 								<>
@@ -65,14 +60,10 @@ export function TaskDetailPage() {
 										<button
 											type="button"
 											className={btnDanger}
-											disabled={remove.isPending}
-											onClick={() =>
-												remove.mutate(t.id, {
-													onSuccess: () => navigate("/tasks", { replace: true }),
-												})
-											}
+											disabled={editor.removing}
+											onClick={() => editor.remove(() => navigate("/tasks", { replace: true }))}
 										>
-											{remove.isPending ? "削除中…" : "削除する"}
+											{editor.removing ? "削除中…" : "削除する"}
 										</button>
 									</div>
 								</>

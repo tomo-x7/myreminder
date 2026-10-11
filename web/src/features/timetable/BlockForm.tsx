@@ -1,17 +1,15 @@
 import type { BusyBlock, BusyBlockInput, Course } from "core/api/types";
-import { fromDatetimeLocal, toDatetimeLocal } from "core/domain/date";
-import { fromDateInput, minuteToTimeInput, timeInputToMinute, toDateInput } from "core/domain/time-input";
 import {
 	type BusyKind,
-	isOneOff,
-	isRecurring,
 	KIND_LABEL,
 	KIND_ORDER,
 	type Period,
 	WEEKDAY_LABEL,
 	WEEKDAY_ORDER,
 } from "core/domain/timetable";
+import { useBlockForm } from "core/forms/busy-block";
 import { useId, useState } from "react";
+import { DateInput, DatetimeInput, TimeInput } from "../../components/DateTimeInputs";
 import { btnDanger, btnPrimary, btnSecondary, chipClass, ErrorNotice, Field, inputClass } from "../../components/ui";
 
 type Props = {
@@ -26,130 +24,22 @@ type Props = {
 	onDelete?: () => void;
 };
 
-type Shape = "recurring" | "oneoff";
-
-type Form = {
-	shape: Shape;
-	kind: BusyKind;
-	label: string;
-	weekday: string;
-	start: string;
-	end: string;
-	dateFrom: string;
-	dateTo: string;
-	startLocal: string;
-	endLocal: string;
-};
-
-function initialForm(block: BusyBlock | undefined, defaultWeekday: number): Form {
-	const base: Form = {
-		shape: "recurring",
-		kind: "class",
-		label: "",
-		weekday: String(defaultWeekday),
-		start: "09:00",
-		end: "10:30",
-		dateFrom: "",
-		dateTo: "",
-		startLocal: "",
-		endLocal: "",
-	};
-	if (!block) return base;
-	const common = { ...base, kind: block.kind, label: block.label };
-	if (isRecurring(block)) {
-		return {
-			...common,
-			weekday: String(block.weekday),
-			start: minuteToTimeInput(block.startMin),
-			end: minuteToTimeInput(Math.min(block.endMin, 1439)),
-			dateFrom: block.dateFrom === null ? "" : toDateInput(block.dateFrom),
-			dateTo: block.dateTo === null ? "" : toDateInput(block.dateTo),
-		};
-	}
-	if (isOneOff(block)) {
-		return {
-			...common,
-			shape: "oneoff",
-			startLocal: toDatetimeLocal(block.startAt),
-			endLocal: toDatetimeLocal(block.endAt),
-		};
-	}
-	return common;
-}
-
-/** 入力 → 保存内容(繰り返し/単発のどちらか。使わない側は null で消す) */
-function buildInput(f: Form): { input: BusyBlockInput } | { error: string } {
-	const label = f.label.trim();
-	if (f.shape === "recurring") {
-		const startMin = timeInputToMinute(f.start);
-		const endMin = timeInputToMinute(f.end);
-		if (startMin === null || endMin === null) return { error: "開始と終了の時刻を入力してください" };
-		if (endMin <= startMin) return { error: "終了は開始より後にしてください" };
-		const dateFrom = fromDateInput(f.dateFrom);
-		const dateTo = fromDateInput(f.dateTo);
-		if (dateFrom !== null && dateTo !== null && dateTo < dateFrom)
-			return { error: "期間の終わりが始まりより前です" };
-		return {
-			input: {
-				kind: f.kind,
-				label,
-				weekday: Number(f.weekday),
-				startMin,
-				endMin,
-				dateFrom,
-				dateTo,
-				startAt: null,
-				endAt: null,
-			},
-		};
-	}
-	const startAt = fromDatetimeLocal(f.startLocal);
-	const endAt = fromDatetimeLocal(f.endLocal);
-	if (startAt === null || endAt === null) return { error: "開始と終了の日時を入力してください" };
-	if (endAt <= startAt) return { error: "終了は開始より後にしてください" };
-	return {
-		input: {
-			kind: f.kind,
-			label,
-			startAt,
-			endAt,
-			weekday: null,
-			startMin: null,
-			endMin: null,
-			dateFrom: null,
-			dateTo: null,
-		},
-	};
-}
-
 /** 時間割(繰り返し)・単発の予定の追加/編集フォーム */
 export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving, error, onSave, onDelete }: Props) {
-	const [form, setForm] = useState<Form>(() => initialForm(block, defaultWeekday));
-	const [localError, setLocalError] = useState<string | null>(null);
+	const { form, set, setShape, setStartAt, pickPeriod, isPeriodSelected, problem, submit } = useBlockForm(
+		block,
+		defaultWeekday,
+	);
 	const [confirming, setConfirming] = useState(false);
 	const listId = useId();
-	const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
 	const recurring = form.shape === "recurring";
-
-	function submit() {
-		const r = buildInput(form);
-		if ("error" in r) {
-			setLocalError(r.error);
-			return;
-		}
-		setLocalError(null);
-		onSave(r.input);
-	}
-
-	const startMin = timeInputToMinute(form.start);
-	const endMin = timeInputToMinute(form.end);
 
 	return (
 		<form
 			className="flex flex-col gap-3"
 			onSubmit={(e) => {
 				e.preventDefault();
-				submit();
+				submit(onSave);
 			}}
 		>
 			<div className="flex gap-1.5" role="tablist" aria-label="種類">
@@ -164,10 +54,7 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 						type="button"
 						role="tab"
 						aria-selected={form.shape === s}
-						onClick={() => {
-							set("shape", s);
-							if (s === "oneoff" && form.kind === "class") set("kind", "event");
-						}}
+						onClick={() => setShape(s)}
 						className={chipClass(form.shape === s)}
 					>
 						{label}
@@ -217,9 +104,9 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 								<button
 									key={w}
 									type="button"
-									aria-pressed={form.weekday === String(w)}
-									onClick={() => set("weekday", String(w))}
-									className={`${chipClass(form.weekday === String(w))} flex-1 text-center`}
+									aria-pressed={form.weekday === w}
+									onClick={() => set("weekday", w)}
+									className={`${chipClass(form.weekday === w)} flex-1 text-center`}
 								>
 									{WEEKDAY_LABEL[w]}
 								</button>
@@ -235,16 +122,13 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 							) : (
 								<div className="flex flex-wrap gap-1.5">
 									{periods.map((p) => {
-										const selected = startMin === p.startMin && endMin === p.endMin;
+										const selected = isPeriodSelected(p);
 										return (
 											<button
 												key={p.period}
 												type="button"
 												aria-pressed={selected}
-												onClick={() => {
-													set("start", minuteToTimeInput(p.startMin));
-													set("end", minuteToTimeInput(Math.min(p.endMin, 1439)));
-												}}
+												onClick={() => pickPeriod(p)}
 												className={chipClass(selected)}
 											>
 												{p.period}限
@@ -258,71 +142,42 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 
 					<div className="grid grid-cols-2 gap-2">
 						<Field label="開始">
-							<input
-								type="time"
-								value={form.start}
-								onChange={(e) => set("start", e.target.value)}
+							<TimeInput
+								value={form.startMin}
+								onChange={(v) => set("startMin", v)}
 								className={inputClass}
 							/>
 						</Field>
 						<Field label="終了">
-							<input
-								type="time"
-								value={form.end}
-								onChange={(e) => set("end", e.target.value)}
-								className={inputClass}
-							/>
+							<TimeInput value={form.endMin} onChange={(v) => set("endMin", v)} className={inputClass} />
 						</Field>
 					</div>
 
 					<div className="grid grid-cols-2 gap-2">
 						<Field label="期間の開始(任意)" hint="学期の始まり">
-							<input
-								type="date"
+							<DateInput
 								value={form.dateFrom}
-								onChange={(e) => set("dateFrom", e.target.value)}
+								onChange={(v) => set("dateFrom", v)}
 								className={inputClass}
 							/>
 						</Field>
 						<Field label="期間の終了(任意)" hint="学期の終わり(この日を含む)">
-							<input
-								type="date"
-								value={form.dateTo}
-								onChange={(e) => set("dateTo", e.target.value)}
-								className={inputClass}
-							/>
+							<DateInput value={form.dateTo} onChange={(v) => set("dateTo", v)} className={inputClass} />
 						</Field>
 					</div>
 				</>
 			) : (
 				<>
 					<Field label="開始(日本時間)">
-						<input
-							type="datetime-local"
-							value={form.startLocal}
-							onChange={(e) => {
-								set("startLocal", e.target.value);
-								// 終了が空なら、同じ日の 1 時間後を入れておく
-								if (!form.endLocal) {
-									const s = fromDatetimeLocal(e.target.value);
-									if (s !== null) set("endLocal", toDatetimeLocal(s + 3_600_000));
-								}
-							}}
-							className={inputClass}
-						/>
+						<DatetimeInput value={form.startAt} onChange={setStartAt} className={inputClass} />
 					</Field>
 					<Field label="終了(日本時間)">
-						<input
-							type="datetime-local"
-							value={form.endLocal}
-							onChange={(e) => set("endLocal", e.target.value)}
-							className={inputClass}
-						/>
+						<DatetimeInput value={form.endAt} onChange={(v) => set("endAt", v)} className={inputClass} />
 					</Field>
 				</>
 			)}
 
-			{(localError || error) && <ErrorNotice>{localError ?? `保存できませんでした: ${error}`}</ErrorNotice>}
+			{(problem || error) && <ErrorNotice>{problem ?? `保存できませんでした: ${error}`}</ErrorNotice>}
 			<div className="flex gap-2">
 				<button type="submit" disabled={saving} className={`${btnPrimary} flex-1`}>
 					{saving ? "保存中…" : "保存"}

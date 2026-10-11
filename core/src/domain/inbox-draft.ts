@@ -1,5 +1,4 @@
 import type { InboxItem } from "../api/types";
-import { toDatetimeLocal } from "./date";
 import { type CourseOption, emptyDraft, resolveCourseId } from "./draft";
 import type { Category, Draft } from "./draft-types";
 
@@ -21,7 +20,7 @@ export function itemToDraft(item: InboxItem, courses: readonly CourseOption[]): 
 		...named,
 		courseName: course?.name ?? named.courseName,
 		category: (item.kind && KIND_CATEGORY[item.kind]) || "other",
-		dueLocal: item.dueAt === null ? "" : toDatetimeLocal(item.dueAt),
+		dueAt: item.dueAt,
 		needsReview,
 		reviewReasons: needsReview ? ["取り込み元に締切がありません。締切を入力してください"] : [],
 	};

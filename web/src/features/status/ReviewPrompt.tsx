@@ -1,29 +1,15 @@
 import type { SessionRow } from "core/api/types";
-import { formatJstDateTime, formatJstTime, fromDatetimeLocal, toDatetimeLocal } from "core/domain/date";
-import { errorText } from "core/domain/errors";
+import { formatJstDateTime, formatJstTime } from "core/domain/date";
+import { PROGRESS_STEPS } from "core/domain/session";
 import { fmtDuration } from "core/domain/work-log";
-import { useDeleteSession, useReviewSessions, useUpdateSession } from "core/queries/sessions";
-import { useState } from "react";
+import { useSessionReview } from "core/forms/session";
+import { useReviewSessions } from "core/queries/sessions";
+import { DatetimeInput } from "../../components/DateTimeInputs";
 import { btnSecondary, chipClass, ErrorNotice, inputClass } from "../../components/ui";
 
-const MIN = 60_000;
-const PROGRESS_STEPS = [25, 50, 75, 100] as const;
-
 function ReviewItem({ session }: { session: SessionRow }) {
-	const update = useUpdateSession();
-	const remove = useDeleteSession();
-	const [custom, setCustom] = useState(() => toDatetimeLocal(session.endAt ?? session.startAt));
-	const [progress, setProgress] = useState<number | null>(null);
-
-	const provisional = session.endAt;
-	const byEstimate = session.startAt + session.taskEstimateMin * MIN;
-	const confirm = (endAt: number) =>
-		update.mutate({
-			id: session.id,
-			patch: { endAt, review: "confirmed", ...(progress !== null && { progress }) },
-		});
-	const customMs = fromDatetimeLocal(custom);
-	const error = update.error ?? remove.error;
+	const r = useSessionReview(session);
+	const { provisional, byEstimate } = r;
 
 	return (
 		<li className="flex flex-col gap-2 border-l-2 border-warn pl-2">
@@ -38,8 +24,8 @@ function ReviewItem({ session }: { session: SessionRow }) {
 					<button
 						type="button"
 						className={btnSecondary}
-						disabled={update.isPending}
-						onClick={() => confirm(provisional)}
+						disabled={r.confirming}
+						onClick={() => r.confirm(provisional)}
 					>
 						仮の時刻のまま: {formatJstTime(provisional)}({fmtDuration(provisional - session.startAt)})
 					</button>
@@ -47,23 +33,22 @@ function ReviewItem({ session }: { session: SessionRow }) {
 				<button
 					type="button"
 					className={btnSecondary}
-					disabled={update.isPending}
-					onClick={() => confirm(byEstimate)}
+					disabled={r.confirming}
+					onClick={() => r.confirm(byEstimate)}
 				>
 					開始 + 見積もり: {formatJstDateTime(byEstimate)}({session.taskEstimateMin}分)
 				</button>
 				<div className="flex gap-1.5">
-					<input
-						type="datetime-local"
+					<DatetimeInput
 						className={`${inputClass} min-w-0 flex-1`}
-						value={custom}
-						onChange={(e) => setCustom(e.target.value)}
+						value={r.customAt}
+						onChange={r.setCustomAt}
 					/>
 					<button
 						type="button"
 						className={btnSecondary}
-						disabled={update.isPending || customMs === null}
-						onClick={() => customMs !== null && confirm(customMs)}
+						disabled={r.confirming || r.customAt === null}
+						onClick={r.confirmCustom}
 					>
 						この時刻
 					</button>
@@ -75,9 +60,9 @@ function ReviewItem({ session }: { session: SessionRow }) {
 					<button
 						key={p}
 						type="button"
-						aria-pressed={progress === p}
-						className={chipClass(progress === p)}
-						onClick={() => setProgress(progress === p ? null : p)}
+						aria-pressed={r.progress === p}
+						className={chipClass(r.progress === p)}
+						onClick={() => r.toggleProgress(p)}
 					>
 						{p}%
 					</button>
@@ -86,12 +71,12 @@ function ReviewItem({ session }: { session: SessionRow }) {
 			<button
 				type="button"
 				className="self-start text-xs text-danger underline underline-offset-2 disabled:opacity-40"
-				disabled={remove.isPending}
-				onClick={() => window.confirm("この作業記録を削除しますか?") && remove.mutate(session.id)}
+				disabled={r.removing}
+				onClick={() => window.confirm("この作業記録を削除しますか?") && r.remove()}
 			>
 				この記録を削除
 			</button>
-			{error && <ErrorNotice>{errorText(error)}</ErrorNotice>}
+			{r.errorMessage && <ErrorNotice>{r.errorMessage}</ErrorNotice>}
 		</li>
 	);
 }

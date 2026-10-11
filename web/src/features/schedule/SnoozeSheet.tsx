@@ -1,75 +1,22 @@
-import type { PlanTask, WhatIf } from "core/api/types";
-import { formatJstDate, formatJstDateTime, fromDatetimeLocal, toDatetimeLocal } from "core/domain/date";
-import { errorText } from "core/domain/errors";
-import { bottleneckText, formatHours, RISK_LABEL } from "core/domain/schedule";
-import { snoozeOptions } from "core/domain/snooze-options";
-import { useNow } from "core/hooks/use-now";
-import { useWhatIf } from "core/queries/schedule";
-import { useUpdateTask } from "core/queries/tasks";
-import { useState } from "react";
+import type { WhatIf } from "core/api/types";
+import { formatJstDateTime } from "core/domain/date";
+import { type SnoozeTarget, snoozeFacts, useSnooze } from "core/forms/snooze";
+import { DatetimeInput } from "../../components/DateTimeInputs";
 import { Sheet } from "../../components/Sheet";
 import { btnPrimary, btnSecondary, chipClass, ErrorNotice, inputClass, Notice } from "../../components/ui";
 
-export type SnoozeTarget = Pick<PlanTask, "id" | "title" | "dueAt" | "latestStartUsual" | "latestStartHard">;
+export type { SnoozeTarget };
 
 /** 選んだ時刻に回した場合の事実(再計画の結果)。評価や煽りは入れず、数字だけ出す */
-function Facts({ target, data }: { target: SnoozeTarget; data: WhatIf }) {
-	const now = useNow();
-	const { before, after } = data;
-	// label なしの行は、1文のまま横幅いっぱいに出す
-	const lines: { label?: string; text: string; tone?: "warn"; block?: boolean }[] = [];
-	let notice: string | null = null;
-
-	// 着手デッドラインより後なら、先に事実を知らせる
-	if (target.latestStartHard !== null && data.startAt > target.latestStartHard) {
-		notice = `この時刻は着手デッドライン(${formatJstDateTime(target.latestStartHard)})より後。睡眠を削らずには間に合わなくなる`;
-	} else if (target.latestStartUsual !== null && data.startAt > target.latestStartUsual) {
-		notice = `この時刻は着手デッドライン(${formatJstDateTime(target.latestStartUsual)})より後。普段のペースでは間に合わなくなり、本気が必要になる`;
-	}
-
-	const short = data.neededMin - data.availableUsualMin;
-	lines.push({
-		label: "その時刻から締切までの空き",
-		block: true,
-		text: `普段のペースで ${formatHours(data.availableUsualMin)} / 必要 ${formatHours(data.neededMin)}${
-			short > 0 ? `(${formatHours(short)} 足りない)` : ""
-		}`,
-		tone: short > 0 ? "warn" : undefined,
-	});
-	lines.push({
-		label: "リスク",
-		text:
-			before.risk === after.risk
-				? `${RISK_LABEL[after.risk]}(変わらない)`
-				: `${RISK_LABEL[before.risk]} → ${RISK_LABEL[after.risk]}`,
-	});
-	const ls = (v: number | null) => (v === null ? "置けない" : formatJstDateTime(v));
-	lines.push({
-		label: "着手デッドライン",
-		text:
-			before.latestStartUsual === after.latestStartUsual
-				? `${ls(after.latestStartUsual)}(変わらない)`
-				: `${ls(before.latestStartUsual)} → ${ls(after.latestStartUsual)}`,
-	});
-	const { before: bb, after: ba } = data.bottleneck;
-	if (bb && ba) {
-		if (bb.slackUsual === ba.slackUsual) lines.push({ text: `${bottleneckText(ba, now)}(変わらない)` });
-		else
-			lines.push({
-				label: `山場(${formatJstDate(ba.dueAt)})の余裕`,
-				text: `${formatHours(bb.slackUsual)} → ${formatHours(ba.slackUsual)}`,
-			});
-	}
-	for (const o of data.changedOthers) {
-		lines.push({ label: `「${o.title}」`, text: `${RISK_LABEL[o.before]} → ${RISK_LABEL[o.after]}` });
-	}
+function Facts({ target, data, now }: { target: SnoozeTarget; data: WhatIf; now: number }) {
+	const { notice, lines } = snoozeFacts(target, data, now);
 
 	return (
 		<>
 			{notice && <Notice tone="warn">{notice}</Notice>}
 			<dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-0.5 text-xs">
 				{lines.map((l) => {
-					const dd = l.tone === "warn" ? "font-semibold text-warn" : "";
+					const dd = l.warn ? "font-semibold text-warn" : "";
 					if (l.label === undefined)
 						return (
 							<dd key={l.text} className={`col-span-2 ${dd}`}>
@@ -90,21 +37,8 @@ function Facts({ target, data }: { target: SnoozeTarget; data: WhatIf }) {
 
 /** いつに回す?(後回し)。時刻を選ぶ → 再計画の事実を見る → 決める */
 export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose: () => void }) {
-	const now = useNow();
-	const options = snoozeOptions(now);
-	const [startAt, setStartAt] = useState<number | null>(null);
-	const [custom, setCustom] = useState(false);
-	const [customValue, setCustomValue] = useState(() => toDatetimeLocal(now + 3_600_000));
-	const [saved, setSaved] = useState(false);
-	const update = useUpdateTask();
-	const whatIf = useWhatIf(target.id, startAt);
-
-	const choose = (at: number) => {
-		setStartAt(at);
-		setSaved(false);
-		update.reset();
-	};
-	const customAt = fromDatetimeLocal(customValue);
+	const snooze = useSnooze(target);
+	const { startAt, whatIf, saved } = snooze;
 
 	return (
 		<Sheet title="いつに回す?" onClose={onClose}>
@@ -112,37 +46,33 @@ export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose
 				<p className="font-semibold">{target.title}</p>
 				{!saved && (
 					<div className="flex flex-wrap gap-1.5">
-						{options.map((o) => (
+						{snooze.options.map((o) => (
 							<button
 								key={o.label}
 								type="button"
-								onClick={() => {
-									setCustom(false);
-									choose(o.at);
-								}}
-								className={chipClass(startAt === o.at && !custom)}
+								onClick={() => snooze.chooseOption(o.at)}
+								className={chipClass(snooze.selectedOption === o.at)}
 							>
 								{o.label}
 							</button>
 						))}
-						<button type="button" onClick={() => setCustom(true)} className={chipClass(custom)}>
+						<button type="button" onClick={snooze.openCustom} className={chipClass(snooze.custom)}>
 							時刻を指定
 						</button>
 					</div>
 				)}
-				{custom && !saved && (
+				{snooze.custom && !saved && (
 					<div className="flex gap-1.5">
-						<input
-							type="datetime-local"
+						<DatetimeInput
 							aria-label="着手する時刻"
 							className={inputClass}
-							value={customValue}
-							onChange={(e) => setCustomValue(e.target.value)}
+							value={snooze.customAt}
+							onChange={snooze.setCustomAt}
 						/>
 						<button
 							type="button"
-							disabled={customAt === null || customAt <= now}
-							onClick={() => customAt !== null && choose(customAt)}
+							disabled={!snooze.canChooseCustom}
+							onClick={snooze.chooseCustom}
 							className={`${btnSecondary} whitespace-nowrap`}
 						>
 							決める
@@ -153,10 +83,10 @@ export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose
 				{startAt !== null && (
 					<section className="flex flex-col gap-2 border-t border-line pt-2">
 						<p className="text-base font-bold">{formatJstDateTime(startAt)} に回す</p>
-						{whatIf.isPending && <p className="text-xs text-faint">再計画しています…</p>}
-						{whatIf.isError && <ErrorNotice>再計画できませんでした: {errorText(whatIf.error)}</ErrorNotice>}
-						{whatIf.data && <Facts target={target} data={whatIf.data} />}
-						{update.isError && <ErrorNotice>保存できませんでした: {errorText(update.error)}</ErrorNotice>}
+						{whatIf.loading && <p className="text-xs text-faint">再計画しています…</p>}
+						{whatIf.error && <ErrorNotice>再計画できませんでした: {whatIf.error}</ErrorNotice>}
+						{whatIf.data && <Facts target={target} data={whatIf.data} now={snooze.now} />}
+						{snooze.saveError && <ErrorNotice>保存できませんでした: {snooze.saveError}</ErrorNotice>}
 						{saved ? (
 							<>
 								<output className="block border-l-2 border-ink py-0.5 pl-2 text-sm font-semibold">
@@ -169,13 +99,8 @@ export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose
 						) : (
 							<button
 								type="button"
-								disabled={update.isPending || whatIf.isPending}
-								onClick={() =>
-									update.mutate(
-										{ id: target.id, patch: { plannedStartAt: startAt } },
-										{ onSuccess: () => setSaved(true) },
-									)
-								}
+								disabled={snooze.saving || whatIf.loading}
+								onClick={snooze.save}
 								className={btnPrimary}
 							>
 								この時刻に回す

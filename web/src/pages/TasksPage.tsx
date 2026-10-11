@@ -1,6 +1,7 @@
 import type { Course, Task } from "core/api/types";
 import { errorText } from "core/domain/errors";
-import { FILTERS, isStatusFilter, matchesFilter, type StatusFilter } from "core/domain/task-status";
+import { courseById, listTasks, parseStatusFilter } from "core/domain/task-list";
+import { FILTERS, type StatusFilter } from "core/domain/task-status";
 import { useNow } from "core/hooks/use-now";
 import { useCourses } from "core/queries/courses";
 import { useTasks, useUpdateTask } from "core/queries/tasks";
@@ -22,9 +23,7 @@ function TaskList({
 }) {
 	const now = useNow();
 	const update = useUpdateTask();
-	const rows = tasks.filter((t) => matchesFilter(t, filter)).sort((a, b) => a.dueAt - b.dueAt);
-	// 提出済みは新しい順(直近のものが上)
-	if (filter === "submitted") rows.reverse();
+	const rows = listTasks(tasks, filter);
 	return (
 		<>
 			{update.isError && <ErrorNotice>更新できませんでした: {errorText(update.error)}</ErrorNotice>}
@@ -36,7 +35,7 @@ function TaskList({
 						<TaskRow
 							key={t.id}
 							task={t}
-							course={courses.find((c) => c.id === t.courseId)}
+							course={courseById(courses, t.courseId)}
 							now={now}
 							busy={update.isPending}
 							onSubmit={(task) => update.mutate({ id: task.id, patch: { status: "submitted" } })}
@@ -50,8 +49,7 @@ function TaskList({
 
 export function TasksPage() {
 	const [params, setParams] = useSearchParams();
-	const raw = params.get("s");
-	const filter: StatusFilter = isStatusFilter(raw) ? raw : "open";
+	const filter = parseStatusFilter(params.get("s"));
 	const tasks = useTasks();
 	const courses = useCourses();
 	const [adding, setAdding] = useState(false);

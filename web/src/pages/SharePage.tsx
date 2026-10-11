@@ -1,26 +1,9 @@
+import { sharedToQuickAdd } from "core/forms/quick-add";
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Notice, PageHeader } from "../components/ui";
 import { takeSharedImage } from "../features/quick-add/image";
 import { QuickAdd } from "../features/quick-add/QuickAdd";
-
-// QuickAdd の貼り付け入力の上限(TEXT_MAX)に合わせる
-const SHARE_TEXT_MAX = 8000;
-
-/**
- * 共有された title / text / url を1つのテキストにまとめる。
- * Android の Chrome などは URL を text に入れて送ってくるので、すでに含まれているものは足さない。
- */
-export function combineShared(params: URLSearchParams): string {
-	const title = (params.get("title") ?? "").trim();
-	const text = (params.get("text") ?? "").trim();
-	const url = (params.get("url") ?? "").trim();
-	const lines: string[] = [];
-	if (title && !text.includes(title)) lines.push(title);
-	if (text) lines.push(text);
-	if (url && !text.includes(url)) lines.push(url);
-	return lines.join("\n").slice(0, SHARE_TEXT_MAX);
-}
 
 /**
  * Web Share Target の受け口。貼り付けと同じ確認カードを、解析済みの状態で開く。
@@ -31,7 +14,7 @@ export function SharePage() {
 	const [, navigate] = useLocation();
 	// 共有された内容は最初の描画で固定する(再描画で入力が書き換わらないように)
 	const [params] = useState(() => new URLSearchParams(window.location.search));
-	const shared = combineShared(params);
+	const shared = sharedToQuickAdd({ title: params.get("title"), text: params.get("text"), url: params.get("url") });
 	const wantsImage = params.get("image") === "1";
 	// undefined: 読み込み中、null: 画像がなかった
 	const [image, setImage] = useState<Blob | null | undefined>(wantsImage ? undefined : null);
@@ -51,9 +34,9 @@ export function SharePage() {
 				<QuickAdd
 					onDone={home}
 					onCancel={home}
-					initialText={shared}
-					initialMode={shared ? "text" : "line"}
-					autoSubmit={shared !== ""}
+					initialText={shared.initialText}
+					initialMode={shared.initialMode}
+					autoSubmit={shared.autoSubmit}
 					initialImage={image ?? undefined}
 				/>
 			)}

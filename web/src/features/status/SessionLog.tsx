@@ -1,11 +1,10 @@
 import type { SessionRow } from "core/api/types";
-import { DAY, formatJstDate, formatJstTime, fromDatetimeLocal, startOfJstDay, toDatetimeLocal } from "core/domain/date";
-import { errorText } from "core/domain/errors";
+import { formatJstDate, formatJstTime } from "core/domain/date";
+import { PROGRESS_OPTIONS } from "core/domain/session";
 import { fmtDuration } from "core/domain/work-log";
-import { useNow } from "core/hooks/use-now";
-import { useCreateSession, useDeleteSession, useSessions, useUpdateSession } from "core/queries/sessions";
-import { useTaskOptions } from "core/queries/tasks";
-import { useMemo, useState } from "react";
+import { type SessionForm, useSessionAdd, useSessionEdit, useSessionLog } from "core/forms/session";
+import { useState } from "react";
+import { DatetimeInput } from "../../components/DateTimeInputs";
 import {
 	btnGhost,
 	btnPrimary,
@@ -20,7 +19,6 @@ import {
 
 /** 行の中の小さな文字ボタン */
 const rowBtn = "inline-flex items-center rounded-sm px-2 py-0.5 text-xs active:bg-wash disabled:opacity-40";
-const PROGRESS_OPTIONS = [0, 25, 50, 75, 100] as const;
 
 function ProgressSelect({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
 	return (
@@ -40,33 +38,19 @@ function ProgressSelect({ value, onChange }: { value: number | null; onChange: (
 }
 
 /** 開始と終了の入力。ラベルは左に置いて縦を詰める */
-function TimeRange({
-	start,
-	end,
-	onStart,
-	onEnd,
-}: {
-	start: string;
-	end: string;
-	onStart: (v: string) => void;
-	onEnd: (v: string) => void;
-}) {
+function TimeRange({ form, onChange }: { form: SessionForm; onChange: (patch: Partial<SessionForm>) => void }) {
 	return (
 		<div className="flex flex-col gap-1.5">
 			{(
 				[
-					["開始", start, onStart],
-					["終了", end, onEnd],
+					["開始", form.startAt, (startAt: number | null) => onChange({ startAt })],
+					["終了", form.endAt, (endAt: number | null) => onChange({ endAt })],
 				] as const
-			).map(([label, value, onChange]) => (
+			).map(([label, value, change]) => (
+				// biome-ignore lint/a11y/noLabelWithoutControl: DatetimeInput が input を描く
 				<label key={label} className="flex items-center gap-2 text-xs text-sub">
 					<span className="w-7 shrink-0">{label}</span>
-					<input
-						type="datetime-local"
-						className={inputClass}
-						value={value}
-						onChange={(e) => onChange(e.target.value)}
-					/>
+					<DatetimeInput className={inputClass} value={value} onChange={change} />
 				</label>
 			))}
 		</div>
@@ -74,31 +58,9 @@ function TimeRange({
 }
 
 function SessionItem({ session }: { session: SessionRow }) {
-	const update = useUpdateSession();
-	const remove = useDeleteSession();
-	const [editing, setEditing] = useState(false);
-	const [start, setStart] = useState(toDatetimeLocal(session.startAt));
-	const [end, setEnd] = useState(toDatetimeLocal(session.endAt ?? session.startAt));
-	const [progress, setProgress] = useState<number | null>(session.progress);
-	const error = update.error ?? remove.error;
+	const edit = useSessionEdit(session);
+	const { editing, canEdit } = edit;
 
-	const save = () => {
-		const startAt = fromDatetimeLocal(start);
-		const endAt = fromDatetimeLocal(end);
-		if (startAt === null || endAt === null) return;
-		update.mutate({ id: session.id, patch: { startAt, endAt, progress } }, { onSuccess: () => setEditing(false) });
-	};
-
-	// 編集を始めるたびに、いまの記録の値から入れ直す(やめた編集の値を引きずらない)
-	const startEdit = () => {
-		setStart(toDatetimeLocal(session.startAt));
-		setEnd(toDatetimeLocal(session.endAt ?? session.startAt));
-		setProgress(session.progress);
-		update.reset();
-		setEditing(true);
-	};
-
-	const canEdit = !editing && session.endAt !== null;
 	const hasMeta = session.progress !== null || session.review === "needs_review" || session.edited;
 
 	return (
@@ -119,16 +81,14 @@ function SessionItem({ session }: { session: SessionRow }) {
 					{session.edited && <Tag>編集済み</Tag>}
 					{canEdit && (
 						<div className="ml-auto flex shrink-0 gap-0.5">
-							<button type="button" className={`${rowBtn} text-sub`} onClick={startEdit}>
+							<button type="button" className={`${rowBtn} text-sub`} onClick={edit.startEdit}>
 								編集
 							</button>
 							<button
 								type="button"
 								className={`${rowBtn} text-danger`}
-								disabled={remove.isPending}
-								onClick={() =>
-									window.confirm("この作業記録を削除しますか?") && remove.mutate(session.id)
-								}
+								disabled={edit.removing}
+								onClick={() => window.confirm("この作業記録を削除しますか?") && edit.remove()}
 							>
 								削除
 							</button>
@@ -138,85 +98,55 @@ function SessionItem({ session }: { session: SessionRow }) {
 			)}
 			{editing && (
 				<div className="flex flex-col gap-2 border-l-2 border-ink pl-3">
-					<TimeRange start={start} end={end} onStart={setStart} onEnd={setEnd} />
+					<TimeRange form={edit.form} onChange={edit.change} />
 					<div className="flex gap-1.5">
-						<ProgressSelect value={progress} onChange={setProgress} />
-						<button type="button" className={btnPrimary} disabled={update.isPending} onClick={save}>
+						<ProgressSelect value={edit.form.progress} onChange={(progress) => edit.change({ progress })} />
+						<button type="button" className={btnPrimary} disabled={edit.saving} onClick={edit.save}>
 							保存
 						</button>
-						<button type="button" className={btnSecondary} onClick={() => setEditing(false)}>
+						<button type="button" className={btnSecondary} onClick={edit.cancel}>
 							やめる
 						</button>
 					</div>
 				</div>
 			)}
-			{error && <ErrorNotice>{errorText(error)}</ErrorNotice>}
+			{edit.errorMessage && <ErrorNotice>{edit.errorMessage}</ErrorNotice>}
 		</li>
 	);
 }
 
 function AddForm({ onDone }: { onDone: () => void }) {
-	const tasks = useTaskOptions();
-	const create = useCreateSession();
-	const [taskId, setTaskId] = useState("");
-	const [start, setStart] = useState(() => toDatetimeLocal(Date.now() - 60 * 60_000));
-	const [end, setEnd] = useState(() => toDatetimeLocal(Date.now()));
-	const [progress, setProgress] = useState<number | null>(null);
-	const startAt = fromDatetimeLocal(start);
-	const endAt = fromDatetimeLocal(end);
+	const f = useSessionAdd(onDone);
 
 	return (
 		<div className="flex flex-col gap-2 border-l-2 border-ink pl-3">
-			<select className={inputClass} value={taskId} onChange={(e) => setTaskId(e.target.value)}>
+			<select className={inputClass} value={f.taskId} onChange={(e) => f.setTaskId(e.target.value)}>
 				<option value="">タスクを選ぶ</option>
-				{tasks.data?.map((t) => (
+				{f.tasks?.map((t) => (
 					<option key={t.id} value={t.id}>
 						{t.title}
 					</option>
 				))}
 			</select>
-			<TimeRange start={start} end={end} onStart={setStart} onEnd={setEnd} />
+			<TimeRange form={f.form} onChange={f.change} />
 			<div className="flex gap-1.5">
-				<ProgressSelect value={progress} onChange={setProgress} />
-				<button
-					type="button"
-					className={btnPrimary}
-					disabled={!taskId || startAt === null || endAt === null || create.isPending}
-					onClick={() =>
-						taskId &&
-						startAt !== null &&
-						endAt !== null &&
-						create.mutate({ taskId, startAt, endAt, progress }, { onSuccess: onDone })
-					}
-				>
+				<ProgressSelect value={f.form.progress} onChange={(progress) => f.change({ progress })} />
+				<button type="button" className={btnPrimary} disabled={!f.canSubmit} onClick={f.submit}>
 					追加
 				</button>
 				<button type="button" className={btnSecondary} onClick={onDone}>
 					やめる
 				</button>
 			</div>
-			{create.error && <ErrorNotice>{errorText(create.error)}</ErrorNotice>}
+			{f.errorMessage && <ErrorNotice>{f.errorMessage}</ErrorNotice>}
 		</div>
 	);
 }
 
 /** 作業記録の一覧(JST の日ごと、新しい順)と、追加・編集・削除 */
 export function SessionLog({ initialDays = 14 }: { initialDays?: number }) {
-	const now = useNow(60_000);
-	const [days, setDays] = useState(initialDays);
+	const { sessions, groups, loadMore } = useSessionLog(initialDays);
 	const [adding, setAdding] = useState(false);
-	const from = startOfJstDay(now) - (days - 1) * DAY;
-	const to = startOfJstDay(now) + DAY;
-	const sessions = useSessions(from, to);
-
-	const groups = useMemo(() => {
-		const byDay = new Map<number, SessionRow[]>();
-		for (const s of sessions.data ?? []) {
-			const day = startOfJstDay(s.startAt);
-			byDay.set(day, [...(byDay.get(day) ?? []), s]);
-		}
-		return [...byDay.entries()].sort((a, b) => b[0] - a[0]);
-	}, [sessions.data]);
 
 	return (
 		<section className="flex flex-col gap-3">
@@ -232,24 +162,19 @@ export function SessionLog({ initialDays = 14 }: { initialDays?: number }) {
 			{sessions.isPending && <p className="text-xs text-faint">読み込み中…</p>}
 			{sessions.isError && <ErrorNotice>作業記録を取得できませんでした</ErrorNotice>}
 			{sessions.data && groups.length === 0 && <Empty>この期間の作業記録はありません</Empty>}
-			{groups.map(([day, items]) => {
-				const total = items.reduce((sum, s) => sum + (s.endAt === null ? 0 : s.endAt - s.startAt), 0);
-				return (
-					<div key={day} className="flex flex-col">
-						<SectionTitle action={<span className="text-xs text-sub">合計 {fmtDuration(total)}</span>}>
-							{formatJstDate(day)}
-						</SectionTitle>
-						<ul className={listClass}>
-							{[...items]
-								.sort((a, b) => b.startAt - a.startAt)
-								.map((s) => (
-									<SessionItem key={s.id} session={s} />
-								))}
-						</ul>
-					</div>
-				);
-			})}
-			<button type="button" className={`${btnGhost} self-center`} onClick={() => setDays(days + 14)}>
+			{groups.map(({ day, items, totalMs }) => (
+				<div key={day} className="flex flex-col">
+					<SectionTitle action={<span className="text-xs text-sub">合計 {fmtDuration(totalMs)}</span>}>
+						{formatJstDate(day)}
+					</SectionTitle>
+					<ul className={listClass}>
+						{items.map((s) => (
+							<SessionItem key={s.id} session={s} />
+						))}
+					</ul>
+				</div>
+			))}
+			<button type="button" className={`${btnGhost} self-center`} onClick={loadMore}>
 				さらに前を見る
 			</button>
 		</section>

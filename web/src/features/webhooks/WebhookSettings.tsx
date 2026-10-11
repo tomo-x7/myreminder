@@ -1,12 +1,13 @@
 import type { Webhook, WebhookEvent, WebhookKind } from "core/api/types";
-import { errorText } from "core/domain/errors";
 import {
-	useCreateWebhook,
-	useDeleteWebhook,
-	useTestWebhook,
-	useUpdateWebhook,
-	useWebhooks,
-} from "core/queries/webhooks";
+	toggleWebhookEvent,
+	useAddWebhookForm,
+	useWebhookEditor,
+	WEBHOOK_EVENTS,
+	WEBHOOK_KIND_LABEL,
+	WEBHOOK_URL_HINT,
+} from "core/forms/webhook";
+import { useWebhooks } from "core/queries/webhooks";
 import { useState } from "react";
 import {
 	btnDanger,
@@ -19,16 +20,6 @@ import {
 	QueryState,
 } from "../../components/ui";
 
-const KIND_LABEL: Record<WebhookKind, string> = { discord: "Discord", slack: "Slack" };
-const URL_HINT: Record<WebhookKind, string> = {
-	discord: "https://discord.com/api/webhooks/…",
-	slack: "https://hooks.slack.com/services/…",
-};
-const EVENTS: { value: WebhookEvent; label: string }[] = [
-	{ value: "submitted", label: "提出済みにしたら報告" },
-	{ value: "daily_summary", label: "その日に課題に使った時間(夜のまとめの時刻)" },
-];
-
 function EventChecks({
 	value,
 	onChange,
@@ -40,16 +31,14 @@ function EventChecks({
 }) {
 	return (
 		<div className="flex flex-col">
-			{EVENTS.map((ev) => (
+			{WEBHOOK_EVENTS.map((ev) => (
 				<label key={ev.value} className="flex items-center gap-2 py-1">
 					<input
 						type="checkbox"
 						className="size-4 shrink-0 accent-ink"
 						disabled={disabled}
 						checked={value.includes(ev.value)}
-						onChange={(e) =>
-							onChange(e.target.checked ? [...value, ev.value] : value.filter((x) => x !== ev.value))
-						}
+						onChange={(e) => onChange(toggleWebhookEvent(value, ev.value, e.target.checked))}
 					/>
 					{ev.label}
 				</label>
@@ -59,39 +48,15 @@ function EventChecks({
 }
 
 function WebhookRow({ webhook }: { webhook: Webhook }) {
-	const update = useUpdateWebhook();
-	const remove = useDeleteWebhook();
-	const test = useTestWebhook();
+	const editor = useWebhookEditor(webhook);
 	const [confirming, setConfirming] = useState(false);
 	const [replacing, setReplacing] = useState(false);
-	const [newUrl, setNewUrl] = useState("");
-	const busy = update.isPending || remove.isPending || test.isPending;
-	const error = update.error ?? remove.error ?? test.error;
-	const testError = test.data && !test.data.ok ? test.data.error : null;
-
-	const save = (patch: { events?: WebhookEvent[]; enabled?: boolean }) => update.mutate({ id: webhook.id, patch });
-
-	function replaceUrl() {
-		const url = newUrl.trim();
-		if (!url) return;
-		update.mutate(
-			{ id: webhook.id, patch: { url } },
-			{
-				onSuccess: () => {
-					// URL は秘密情報なので、保存したら入力欄にも mutation の記録にも残さない
-					setNewUrl("");
-					setReplacing(false);
-					update.reset();
-					test.reset();
-				},
-			},
-		);
-	}
+	const { busy, testResult } = editor;
 
 	return (
 		<li className="flex flex-col gap-2 py-2">
 			<div className="flex items-center gap-2">
-				<p className="shrink-0 font-semibold">{KIND_LABEL[webhook.kind]}</p>
+				<p className="shrink-0 font-semibold">{WEBHOOK_KIND_LABEL[webhook.kind]}</p>
 				<p className="min-w-0 flex-1 truncate font-mono text-xs text-sub">{webhook.maskedUrl}</p>
 				<label className="flex shrink-0 items-center gap-1.5 text-xs text-sub">
 					<input
@@ -99,19 +64,19 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 						className="size-4 accent-ink"
 						checked={webhook.enabled}
 						disabled={busy}
-						onChange={(e) => save({ enabled: e.target.checked })}
+						onChange={(e) => editor.setEnabled(e.target.checked)}
 					/>
 					{webhook.enabled ? "オン" : "オフ"}
 				</label>
 			</div>
 
-			<EventChecks value={webhook.events} disabled={busy} onChange={(events) => save({ events })} />
+			<EventChecks value={webhook.events} disabled={busy} onChange={editor.setEvents} />
 
 			{webhook.lastError && <Notice tone="danger">前回の送信に失敗: {webhook.lastError}</Notice>}
 
 			<div className="flex flex-wrap gap-1.5">
-				<button type="button" className={btnSecondary} disabled={busy} onClick={() => test.mutate(webhook.id)}>
-					{test.isPending ? "送信中…" : "テスト送信"}
+				<button type="button" className={btnSecondary} disabled={busy} onClick={editor.runTest}>
+					{editor.testing ? "送信中…" : "テスト送信"}
 				</button>
 				<button
 					type="button"
@@ -119,8 +84,7 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 					disabled={busy}
 					onClick={() => {
 						setReplacing((r) => !r);
-						setNewUrl("");
-						update.reset();
+						editor.resetReplace();
 					}}
 				>
 					URL を差し替える
@@ -131,13 +95,13 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 					</button>
 				)}
 			</div>
-			{test.data?.ok && (
+			{testResult?.ok && (
 				<Notice>
-					<output>送信しました。{KIND_LABEL[webhook.kind]} を確認してください</output>
+					<output>送信しました。{WEBHOOK_KIND_LABEL[webhook.kind]} を確認してください</output>
 				</Notice>
 			)}
-			{test.data && !test.data.ok && (
-				<ErrorNotice>送信に失敗しました{testError ? `: ${testError}` : ""}</ErrorNotice>
+			{testResult && !testResult.ok && (
+				<ErrorNotice>送信に失敗しました{testResult.error ? `: ${testResult.error}` : ""}</ErrorNotice>
 			)}
 
 			{replacing && (
@@ -145,43 +109,38 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 					className="flex flex-col gap-2"
 					onSubmit={(e) => {
 						e.preventDefault();
-						replaceUrl();
+						editor.replaceUrl(() => setReplacing(false));
 					}}
 				>
-					<Field label="新しい URL" hint={`形: ${URL_HINT[webhook.kind]}`}>
+					<Field label="新しい URL" hint={`形: ${WEBHOOK_URL_HINT[webhook.kind]}`}>
 						<input
 							type="url"
 							autoComplete="off"
 							autoCapitalize="off"
 							spellCheck={false}
-							value={newUrl}
+							value={editor.newUrl}
 							maxLength={500}
-							onChange={(e) => setNewUrl(e.target.value)}
-							placeholder={URL_HINT[webhook.kind]}
+							onChange={(e) => editor.setNewUrl(e.target.value)}
+							placeholder={WEBHOOK_URL_HINT[webhook.kind]}
 							className={inputClass}
 						/>
 					</Field>
-					<button type="submit" className={btnSecondary} disabled={busy || !newUrl.trim()}>
-						{update.isPending ? "保存中…" : "差し替える"}
+					<button type="submit" className={btnSecondary} disabled={busy || !editor.hasNewUrl}>
+						{editor.updating ? "保存中…" : "差し替える"}
 					</button>
 				</form>
 			)}
 
-			{error && <ErrorNotice>{errorText(error)}</ErrorNotice>}
+			{editor.error && <ErrorNotice>{editor.error}</ErrorNotice>}
 
 			{confirming && (
 				<div className="flex flex-col gap-2">
-					<p>この {KIND_LABEL[webhook.kind]} への報告を削除します。URL も消えます。</p>
+					<p>この {WEBHOOK_KIND_LABEL[webhook.kind]} への報告を削除します。URL も消えます。</p>
 					<div className="grid grid-cols-2 gap-2">
 						<button type="button" className={btnSecondary} onClick={() => setConfirming(false)}>
 							キャンセル
 						</button>
-						<button
-							type="button"
-							className={btnDanger}
-							disabled={busy}
-							onClick={() => remove.mutate(webhook.id)}
-						>
+						<button type="button" className={btnDanger} disabled={busy} onClick={editor.remove}>
 							削除する
 						</button>
 					</div>
@@ -192,43 +151,22 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 }
 
 function AddWebhookForm() {
-	const create = useCreateWebhook();
-	const [kind, setKind] = useState<WebhookKind>("discord");
-	const [url, setUrl] = useState("");
-	const [events, setEvents] = useState<WebhookEvent[]>(EVENTS.map((e) => e.value));
-
-	function submit() {
-		const trimmed = url.trim();
-		if (!trimmed) return;
-		create.mutate(
-			{ kind, url: trimmed, events },
-			{
-				onSuccess: () => {
-					// URL は秘密情報なので、保存したら入力欄にも mutation の記録にも残さない
-					setUrl("");
-					create.reset();
-				},
-			},
-		);
-	}
+	const add = useAddWebhookForm();
 
 	return (
 		<form
 			className="mt-1 flex flex-col gap-2"
 			onSubmit={(e) => {
 				e.preventDefault();
-				submit();
+				add.submit();
 			}}
 		>
 			<p className="text-xs font-semibold text-sub">報告先を追加</p>
 			<div className="grid grid-cols-[6.5rem_1fr] gap-2">
 				<Field label="種類">
 					<select
-						value={kind}
-						onChange={(e) => {
-							setKind(e.target.value as WebhookKind);
-							create.reset();
-						}}
+						value={add.kind}
+						onChange={(e) => add.setKind(e.target.value as WebhookKind)}
 						className={inputClass}
 					>
 						<option value="discord">Discord</option>
@@ -241,19 +179,19 @@ function AddWebhookForm() {
 						autoComplete="off"
 						autoCapitalize="off"
 						spellCheck={false}
-						value={url}
+						value={add.url}
 						maxLength={500}
-						onChange={(e) => setUrl(e.target.value)}
-						placeholder={URL_HINT[kind]}
+						onChange={(e) => add.setUrl(e.target.value)}
+						placeholder={WEBHOOK_URL_HINT[add.kind]}
 						className={inputClass}
 					/>
 				</Field>
 			</div>
-			<p className="text-xs text-faint">形: {URL_HINT[kind]}</p>
-			<EventChecks value={events} onChange={setEvents} />
-			{create.error && <ErrorNotice>{errorText(create.error)}</ErrorNotice>}
-			<button type="submit" disabled={create.isPending || !url.trim()} className={btnSecondary}>
-				{create.isPending ? "保存中…" : "追加"}
+			<p className="text-xs text-faint">形: {WEBHOOK_URL_HINT[add.kind]}</p>
+			<EventChecks value={add.events} onChange={add.setEvents} />
+			{add.error && <ErrorNotice>{add.error}</ErrorNotice>}
+			<button type="submit" disabled={add.pending || !add.hasUrl} className={btnSecondary}>
+				{add.pending ? "保存中…" : "追加"}
 			</button>
 		</form>
 	);

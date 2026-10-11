@@ -1,8 +1,8 @@
 import type { BusyBlock } from "core/api/types";
-import { errorText } from "core/domain/errors";
-import { isOneOff, isRecurring } from "core/domain/timetable";
+import { splitBusyBlocks } from "core/domain/timetable-view";
+import { useBlockEditor } from "core/forms/busy-block";
 import { useNow } from "core/hooks/use-now";
-import { useBusyBlocks, useCreateBusyBlock, useDeleteBusyBlock, useUpdateBusyBlock } from "core/queries/busy-blocks";
+import { useBusyBlocks } from "core/queries/busy-blocks";
 import { useCourses } from "core/queries/courses";
 import { useSettings } from "core/queries/settings";
 import { useState } from "react";
@@ -20,12 +20,8 @@ type Editing = { kind: "new"; weekday?: number } | { kind: "edit"; block: BusyBl
 function BlockSheet({ editing, onClose }: { editing: Editing; onClose: () => void }) {
 	const settings = useSettings();
 	const courses = useCourses();
-	const create = useCreateBusyBlock();
-	const update = useUpdateBusyBlock();
-	const remove = useDeleteBusyBlock();
 	const block = editing.kind === "edit" ? editing.block : undefined;
-	const busy = create.isPending || update.isPending || remove.isPending;
-	const error = create.error ?? update.error ?? remove.error;
+	const editor = useBlockEditor(block, onClose);
 
 	return (
 		<Sheet title={block ? "予定を編集" : "予定を追加"} onClose={onClose}>
@@ -34,14 +30,10 @@ function BlockSheet({ editing, onClose }: { editing: Editing; onClose: () => voi
 				defaultWeekday={editing.kind === "new" ? editing.weekday : undefined}
 				periods={settings.data?.timetablePeriods ?? []}
 				courses={courses.data ?? []}
-				saving={busy}
-				error={error ? errorText(error) : null}
-				onSave={(input) =>
-					block
-						? update.mutate({ id: block.id, patch: input }, { onSuccess: onClose })
-						: create.mutate(input, { onSuccess: onClose })
-				}
-				onDelete={block ? () => remove.mutate(block.id, { onSuccess: onClose }) : undefined}
+				saving={editor.saving}
+				error={editor.error}
+				onSave={editor.save}
+				onDelete={editor.remove}
 			/>
 		</Sheet>
 	);
@@ -73,27 +65,30 @@ export function TimetablePage() {
 				</Notice>
 			)}
 			<QueryState query={blocks}>
-				{(list) => (
-					<>
-						<section className="flex flex-col">
-							<SectionTitle>毎週の予定</SectionTitle>
-							<WeekList
-								blocks={list.filter(isRecurring)}
-								periods={periods}
-								onEdit={(block) => setEditing({ kind: "edit", block })}
-								onAdd={(weekday) => setEditing({ kind: "new", weekday })}
-							/>
-						</section>
-						<section className="flex flex-col">
-							<SectionTitle>単発の予定</SectionTitle>
-							<OneOffList
-								blocks={list.filter(isOneOff)}
-								now={now}
-								onEdit={(block) => setEditing({ kind: "edit", block })}
-							/>
-						</section>
-					</>
-				)}
+				{(list) => {
+					const { recurring, oneOff } = splitBusyBlocks(list);
+					return (
+						<>
+							<section className="flex flex-col">
+								<SectionTitle>毎週の予定</SectionTitle>
+								<WeekList
+									blocks={recurring}
+									periods={periods}
+									onEdit={(block) => setEditing({ kind: "edit", block })}
+									onAdd={(weekday) => setEditing({ kind: "new", weekday })}
+								/>
+							</section>
+							<section className="flex flex-col">
+								<SectionTitle>単発の予定</SectionTitle>
+								<OneOffList
+									blocks={oneOff}
+									now={now}
+									onEdit={(block) => setEditing({ kind: "edit", block })}
+								/>
+							</section>
+						</>
+					);
+				}}
 			</QueryState>
 			<CourseManager />
 			{editing && <BlockSheet editing={editing} onClose={() => setEditing(null)} />}

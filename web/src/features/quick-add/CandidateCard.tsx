@@ -1,7 +1,17 @@
 import type { StartSuggestion } from "core/api/types";
-import { formatJstDateTime, fromDatetimeLocal } from "core/domain/date";
-import { type CourseOption, type DraftProblems, FIRST_STEP_MAX, resolveCourseId, TITLE_MAX } from "core/domain/draft";
+import { formatJstDateTime } from "core/domain/date";
+import {
+	type CourseOption,
+	type DraftPatch,
+	type DraftProblems,
+	FIRST_STEP_MAX,
+	resolveCourseId,
+	selectableStarts,
+	TITLE_MAX,
+	toggleStart,
+} from "core/domain/draft";
 import { CATEGORY_OPTIONS, type Category, type Draft } from "core/domain/draft-types";
+import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
 import { btnGhost, chipClass, Field, inputClass, Notice } from "../../components/ui";
 
@@ -14,13 +24,12 @@ type Props = {
 	startSuggestions: readonly StartSuggestion[];
 	now: number;
 	disabled?: boolean;
-	onChange: (patch: Partial<Draft>) => void;
+	onChange: (patch: DraftPatch) => void;
 	onRemove?: () => void;
 };
 
 /** 締切を曜日+相対つきで大きく見せる。日付の取り違えを防ぐ要(plan.md §3.2) */
-function DuePreview({ dueLocal, now, error }: { dueLocal: string; now: number; error?: string }) {
-	const dueAt = fromDatetimeLocal(dueLocal);
+function DuePreview({ dueAt, now, error }: { dueAt: number | null; now: number; error?: string }) {
 	if (dueAt === null) {
 		return (
 			<p className={`text-base font-semibold ${error ? "text-danger" : "text-faint"}`}>締切を入力してください</p>
@@ -40,10 +49,8 @@ export function CandidateCard({
 	onChange,
 	onRemove,
 }: Props) {
-	const dueAt = fromDatetimeLocal(draft.dueLocal);
-	const courseId = resolveCourseId(draft, courses);
-	const courseKnown = courseId !== null;
-	const chips = startSuggestions.filter((s) => s.at > now && (dueAt === null || s.at < dueAt));
+	const courseKnown = resolveCourseId(draft, courses) !== null;
+	const chips = selectableStarts(startSuggestions, now, draft.dueAt);
 	const listId = `courses-${draft.key}`;
 
 	return (
@@ -52,7 +59,7 @@ export function CandidateCard({
 		>
 			<header className="flex items-start justify-between gap-2">
 				<div className="flex flex-col gap-0.5">
-					<DuePreview dueLocal={draft.dueLocal} now={now} error={showProblems ? problems.due : undefined} />
+					<DuePreview dueAt={draft.dueAt} now={now} error={showProblems ? problems.due : undefined} />
 					{draft.dueText && <p className="text-xs text-sub">AI の解釈: 「{draft.dueText}」</p>}
 				</div>
 				{onRemove && (
@@ -81,17 +88,10 @@ export function CandidateCard({
 
 			<div className="grid grid-cols-[1fr_6rem] gap-2">
 				<Field label="締切(日本時間)" error={showProblems ? problems.due : undefined}>
-					<input
-						type="datetime-local"
-						value={draft.dueLocal}
+					<DatetimeInput
+						value={draft.dueAt}
 						disabled={disabled}
-						onChange={(e) => {
-							const due = fromDatetimeLocal(e.target.value);
-							// 締切を着手の合図より前にしたら、合図は外す(締切の後に鳴らさない)
-							const dropStart =
-								due !== null && draft.plannedStartAt !== null && due <= draft.plannedStartAt;
-							onChange({ dueLocal: e.target.value, ...(dropStart && { plannedStartAt: null }) });
-						}}
+						onChange={(dueAt) => onChange({ dueAt })}
 						className={inputClass}
 					/>
 				</Field>
@@ -102,7 +102,7 @@ export function CandidateCard({
 						min={1}
 						value={draft.estimateMin}
 						disabled={disabled}
-						onChange={(e) => onChange({ estimateMin: e.target.value, estimateTouched: true })}
+						onChange={(e) => onChange({ estimateMin: e.target.value })}
 						className={inputClass}
 					/>
 				</Field>
@@ -186,7 +186,9 @@ export function CandidateCard({
 									type="button"
 									aria-pressed={selected}
 									disabled={disabled}
-									onClick={() => onChange({ plannedStartAt: selected ? null : s.at })}
+									onClick={() =>
+										onChange({ plannedStartAt: toggleStart(draft.plannedStartAt, s.at) })
+									}
 									className={`${chipClass(selected)} disabled:opacity-40`}
 								>
 									{s.label}

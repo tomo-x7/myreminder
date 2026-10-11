@@ -1,8 +1,9 @@
 import type { Course, Task, TaskPatch } from "core/api/types";
-import { fromDatetimeLocal, toDatetimeLocal } from "core/domain/date";
+import { FIRST_STEP_MAX, TITLE_MAX } from "core/domain/draft";
 import { CATEGORY_OPTIONS } from "core/domain/draft-types";
 import { STATUS_LABEL, STATUS_ORDER, type TaskStatus } from "core/domain/task-status";
-import { useState } from "react";
+import { NOTE_MAX, useTaskForm } from "core/forms/task";
+import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, ErrorNotice, Field, inputClass, Notice } from "../../components/ui";
 
@@ -15,94 +16,19 @@ type Props = {
 	onSave: (patch: TaskPatch) => void;
 };
 
-type Form = {
-	title: string;
-	courseId: string;
-	category: Task["category"];
-	dueLocal: string;
-	releaseLocal: string;
-	plannedLocal: string;
-	estimateMin: string;
-	minBlockMin: string;
-	firstStep: string;
-	note: string;
-	status: TaskStatus;
-};
-
-const optLocal = (ms: number | null) => (ms === null ? "" : toDatetimeLocal(ms));
-
-const toForm = (t: Task): Form => ({
-	title: t.title,
-	courseId: t.courseId ?? "",
-	category: t.category,
-	dueLocal: toDatetimeLocal(t.dueAt),
-	releaseLocal: optLocal(t.releaseAt),
-	plannedLocal: optLocal(t.plannedStartAt),
-	estimateMin: String(t.estimateMin),
-	minBlockMin: String(t.minBlockMin),
-	firstStep: t.firstStep ?? "",
-	note: t.note ?? "",
-	status: t.status,
-});
-
-const isPositiveInt = (s: string) => Number.isInteger(Number(s)) && Number(s) >= 1;
-
-/** 入力 → 更新内容。不正な欄の名前を errors に返す */
-function toPatch(f: Form, task: Task): { patch: TaskPatch } | { errors: Partial<Record<keyof Form, string>> } {
-	const errors: Partial<Record<keyof Form, string>> = {};
-	const dueAt = fromDatetimeLocal(f.dueLocal);
-	if (!f.title.trim()) errors.title = "タイトルを入力してください";
-	if (dueAt === null) errors.dueLocal = "締切を入力してください";
-	if (!isPositiveInt(f.estimateMin)) errors.estimateMin = "1分以上の整数で入力してください";
-	if (!isPositiveInt(f.minBlockMin)) errors.minBlockMin = "1分以上の整数で入力してください";
-	if (Object.keys(errors).length > 0 || dueAt === null) return { errors };
-
-	const estimateMin = Number(f.estimateMin);
-	return {
-		patch: {
-			title: f.title.trim(),
-			courseId: f.courseId || null,
-			category: f.category,
-			dueAt,
-			releaseAt: fromDatetimeLocal(f.releaseLocal),
-			plannedStartAt: fromDatetimeLocal(f.plannedLocal),
-			estimateMin,
-			// 本人が見積もりを直したら手入力扱いにする
-			...(estimateMin !== task.estimateMin ? { estimateSource: "manual" as const } : {}),
-			minBlockMin: Number(f.minBlockMin),
-			firstStep: f.firstStep.trim() || null,
-			note: f.note.trim() || null,
-			status: f.status,
-		},
-	};
-}
-
 /** タスクの全項目の編集フォーム */
 export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
-	const [form, setForm] = useState<Form>(() => toForm(task));
-	const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
-	const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
-	const dueAt = fromDatetimeLocal(form.dueLocal);
-
-	function submit() {
-		const r = toPatch(form, task);
-		if ("errors" in r) {
-			setErrors(r.errors);
-			return;
-		}
-		setErrors({});
-		onSave(r.patch);
-	}
+	const { form, set, problems, notice, submit } = useTaskForm(task);
 
 	return (
 		<form
 			className="flex flex-col gap-3"
 			onSubmit={(e) => {
 				e.preventDefault();
-				submit();
+				submit(onSave);
 			}}
 		>
-			{dueAt !== null && <DueLabel dueAt={dueAt} now={now} size="lg" />}
+			{form.dueAt !== null && <DueLabel dueAt={form.dueAt} now={now} size="lg" />}
 
 			<Field label="状態">
 				<select
@@ -117,34 +43,27 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 					))}
 				</select>
 			</Field>
-			{form.status === "done" && (
-				<Notice tone="warn">完了(未提出)です。提出したら「提出済み」にしてください</Notice>
-			)}
+			{notice && <Notice tone="warn">{notice}</Notice>}
 
-			<Field label="タイトル" error={errors.title}>
+			<Field label="タイトル" error={problems.title}>
 				<input
 					type="text"
 					value={form.title}
-					maxLength={200}
+					maxLength={TITLE_MAX}
 					onChange={(e) => set("title", e.target.value)}
 					className={inputClass}
 				/>
 			</Field>
 
-			<Field label="締切(日本時間)" error={errors.dueLocal}>
-				<input
-					type="datetime-local"
-					value={form.dueLocal}
-					onChange={(e) => set("dueLocal", e.target.value)}
-					className={inputClass}
-				/>
+			<Field label="締切(日本時間)" error={problems.dueAt}>
+				<DatetimeInput value={form.dueAt} onChange={(v) => set("dueAt", v)} className={inputClass} />
 			</Field>
 
 			<div className="grid grid-cols-2 gap-2">
 				<Field label="科目">
 					<select
-						value={form.courseId}
-						onChange={(e) => set("courseId", e.target.value)}
+						value={form.courseId ?? ""}
+						onChange={(e) => set("courseId", e.target.value || null)}
 						className={inputClass}
 					>
 						<option value="">なし</option>
@@ -173,7 +92,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 			<div className="grid grid-cols-2 gap-2">
 				<Field
 					label="見積もり(分)"
-					error={errors.estimateMin}
+					error={problems.estimateMin}
 					hint={task.estimateSource === "ai" ? "AI の見積もり" : undefined}
 				>
 					<input
@@ -185,7 +104,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 						className={inputClass}
 					/>
 				</Field>
-				<Field label="最小の作業単位(分)" error={errors.minBlockMin}>
+				<Field label="最小の作業単位(分)" error={problems.minBlockMin}>
 					<input
 						type="number"
 						inputMode="numeric"
@@ -201,7 +120,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				<input
 					type="text"
 					value={form.firstStep}
-					maxLength={200}
+					maxLength={FIRST_STEP_MAX}
 					onChange={(e) => set("firstStep", e.target.value)}
 					placeholder="例: テンプレを開いて見出しだけ書く"
 					className={inputClass}
@@ -210,19 +129,17 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 
 			<div className="grid grid-cols-2 gap-2">
 				<Field label="着手する時刻(任意)" hint="決めた時刻に合図します">
-					<input
-						type="datetime-local"
-						value={form.plannedLocal}
-						onChange={(e) => set("plannedLocal", e.target.value)}
+					<DatetimeInput
+						value={form.plannedStartAt}
+						onChange={(v) => set("plannedStartAt", v)}
 						className={inputClass}
 					/>
 				</Field>
 
 				<Field label="公開日時(任意)" hint="これより前は着手できない課題のとき">
-					<input
-						type="datetime-local"
-						value={form.releaseLocal}
-						onChange={(e) => set("releaseLocal", e.target.value)}
+					<DatetimeInput
+						value={form.releaseAt}
+						onChange={(v) => set("releaseAt", v)}
 						className={inputClass}
 					/>
 				</Field>
@@ -232,7 +149,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				<textarea
 					rows={3}
 					value={form.note}
-					maxLength={2000}
+					maxLength={NOTE_MAX}
 					onChange={(e) => set("note", e.target.value)}
 					className={inputClass}
 				/>

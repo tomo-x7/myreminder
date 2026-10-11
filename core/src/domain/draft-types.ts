@@ -19,8 +19,8 @@ export type Draft = {
 	/** AI が結びつけた科目 id と、そのときの名前。名前を変えたら使わない */
 	aiCourse: { id: string; name: string } | null;
 	category: Category;
-	/** datetime-local の値(JST)。空なら未入力 */
-	dueLocal: string;
+	/** 締切(epoch ms)。未入力なら null。入力欄の文字列との変換は画面の層でする */
+	dueAt: number | null;
 	estimateMin: string;
 	/** 本人が見積もりを直したら "manual" で保存する */
 	estimateTouched: boolean;

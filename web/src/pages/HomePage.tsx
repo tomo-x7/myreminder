@@ -1,6 +1,6 @@
 import type { Course, Plan } from "core/api/types";
-import { formatJstDate, formatJstTime, jstParts } from "core/domain/date";
-import { bottleneckText, pickNext } from "core/domain/schedule";
+import { formatJstDate, formatJstTime } from "core/domain/date";
+import { homeView } from "core/domain/home";
 import { useNow } from "core/hooks/use-now";
 import { useCourses } from "core/queries/courses";
 import { useSchedule } from "core/queries/schedule";
@@ -53,20 +53,20 @@ function HomeBody({ plan, courses }: { plan: Plan; courses: readonly Course[] })
 	const now = useNow();
 	const tasks = useTasks();
 	const inbox = useInboxTotal();
-	const next = pickNext(plan.tasks);
-	const awaitingSubmit = (tasks.data ?? []).filter((t) => t.status === "done").length;
-	const others = plan.tasks.length - (next ? 1 : 0);
-	const short = plan.bottleneck !== null && plan.bottleneck.slackUsual < 0;
-	// 月曜は新しい週のはじまりなので、先週のふりかえりを目立たせる
-	const monday = jstParts(now).weekday === 1;
+	const { next, nextCourse, nothingToDo, awaitingSubmit, others, bottleneck, monday } = homeView(
+		plan,
+		tasks.data ?? [],
+		courses,
+		now,
+	);
 
 	return (
 		<>
 			{next ? (
-				<NextCard task={next} course={courses.find((c) => c.id === next.courseId)} now={now} />
+				<NextCard task={next} course={nextCourse} now={now} />
 			) : (
 				// 期限切れだけが残っているときは「やることはない」と言わない(下の期限切れの欄が主役)
-				plan.overdue.length === 0 && (
+				nothingToDo && (
 					<p className="border-l-2 border-line pl-3 text-sub">
 						やることはありません。課題が出たら「＋ 追加」から登録する
 					</p>
@@ -81,9 +81,9 @@ function HomeBody({ plan, courses }: { plan: Plan; courses: readonly Course[] })
 						確認待ち {inbox}件
 					</Row>
 				)}
-				{plan.bottleneck && (
+				{bottleneck && (
 					<Row label="山場">
-						<span className={short ? "text-danger" : ""}>{bottleneckText(plan.bottleneck, now)}</span>
+						<span className={bottleneck.short ? "text-danger" : ""}>{bottleneck.text}</span>
 					</Row>
 				)}
 				{awaitingSubmit > 0 && (

@@ -1,6 +1,6 @@
 import type { Course } from "core/api/types";
-import { errorText } from "core/domain/errors";
-import { useCourses, useCreateCourse, useDeleteCourse, useUpdateCourse } from "core/queries/courses";
+import { aliasesText, useCourseForm } from "core/forms/course";
+import { useCourses } from "core/queries/courses";
 import { useState } from "react";
 import { Sheet } from "../../components/Sheet";
 import {
@@ -14,29 +14,9 @@ import {
 	SectionTitle,
 } from "../../components/ui";
 
-/** `a, b、c` → ["a","b","c"] */
-const parseAliases = (s: string) =>
-	s
-		.split(/[,、，\n]/)
-		.map((a) => a.trim())
-		.filter(Boolean);
-
 function CourseForm({ course, onDone }: { course?: Course; onDone: () => void }) {
-	const create = useCreateCourse();
-	const update = useUpdateCourse();
-	const remove = useDeleteCourse();
-	const [name, setName] = useState(course?.name ?? "");
-	const [aliases, setAliases] = useState(course?.aliases.join(", ") ?? "");
+	const { form, set, canSave, saving, error, save, remove } = useCourseForm(course, onDone);
 	const [confirming, setConfirming] = useState(false);
-	const saving = create.isPending || update.isPending || remove.isPending;
-	const error = create.error ?? update.error ?? remove.error;
-
-	function save() {
-		if (!name.trim()) return;
-		const json = { name: name.trim(), aliases: parseAliases(aliases) };
-		if (course) update.mutate({ id: course.id, patch: json }, { onSuccess: onDone });
-		else create.mutate(json, { onSuccess: onDone });
-	}
 
 	return (
 		<form
@@ -49,9 +29,9 @@ function CourseForm({ course, onDone }: { course?: Course; onDone: () => void })
 			<Field label="科目名">
 				<input
 					type="text"
-					value={name}
+					value={form.name}
 					maxLength={100}
-					onChange={(e) => setName(e.target.value)}
+					onChange={(e) => set("name", e.target.value)}
 					className={inputClass}
 				/>
 			</Field>
@@ -61,14 +41,14 @@ function CourseForm({ course, onDone }: { course?: Course; onDone: () => void })
 			>
 				<input
 					type="text"
-					value={aliases}
-					onChange={(e) => setAliases(e.target.value)}
+					value={form.aliases}
+					onChange={(e) => set("aliases", e.target.value)}
 					className={inputClass}
 				/>
 			</Field>
-			{error && <ErrorNotice>保存できませんでした: {errorText(error)}</ErrorNotice>}
+			{error && <ErrorNotice>保存できませんでした: {error}</ErrorNotice>}
 			<div className="flex gap-2">
-				<button type="submit" disabled={saving || !name.trim()} className={`${btnPrimary} flex-1`}>
+				<button type="submit" disabled={saving || !canSave} className={`${btnPrimary} flex-1`}>
 					{saving ? "保存中…" : "保存"}
 				</button>
 				{course && !confirming && (
@@ -84,12 +64,7 @@ function CourseForm({ course, onDone }: { course?: Course; onDone: () => void })
 						<button type="button" className={btnSecondary} onClick={() => setConfirming(false)}>
 							キャンセル
 						</button>
-						<button
-							type="button"
-							className={btnDanger}
-							disabled={saving}
-							onClick={() => remove.mutate(course.id, { onSuccess: onDone })}
-						>
+						<button type="button" className={btnDanger} disabled={saving} onClick={remove}>
 							削除する
 						</button>
 					</div>
@@ -131,9 +106,7 @@ export function CourseManager() {
 							className="flex w-full items-baseline gap-2 py-2 text-left active:bg-wash"
 						>
 							<span className="shrink-0 font-medium">{c.name}</span>
-							<span className="min-w-0 flex-1 truncate text-xs text-sub">
-								{c.aliases.length > 0 && `別名: ${c.aliases.join("、")}`}
-							</span>
+							<span className="min-w-0 flex-1 truncate text-xs text-sub">{aliasesText(c)}</span>
 							<span aria-hidden="true" className="text-faint">
 								›
 							</span>
