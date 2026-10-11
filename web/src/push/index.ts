@@ -1,7 +1,12 @@
 // Web Push の有効化。新しい firebase SDK は getToken ではなく register() + onRegistered() で
 // Firebase Installation ID(FID)を受け取る方式。FID は Worker に登録し、HTTP v1 の `fid` で送る。
 // Google Cloud 側で FCM Registration API の有効化が必要(docs/setup.md 2-2)
-import { deletePushToken, type PushResult, sendTestPush as sendTestPushRequest, uploadPushToken } from "core/queries/push";
+import {
+	deletePushToken,
+	type PushResult,
+	sendTestPush as sendTestPushRequest,
+	uploadPushToken,
+} from "core/queries/push";
 import { type FirebaseApp, initializeApp } from "firebase/app";
 import {
 	getMessaging,
@@ -51,7 +56,7 @@ let registerWaiter: ((fid: string) => void) | undefined;
 
 const label = () => (/Android/i.test(navigator.userAgent) ? "Android" : navigator.platform || "browser");
 
-const uploadFid = (fid: string) => uploadPushToken(api, { token: fid, label: label() });
+const uploadFid = (fid: string) => uploadPushToken(api, { token: fid, label: label(), platform: "web" });
 
 /** 初回だけ SDK を初期化し、登録・解除・前面受信のハンドラを付ける */
 function setup(): Messaging {

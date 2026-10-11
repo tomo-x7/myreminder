@@ -1,10 +1,10 @@
-import { useState } from "react";
-import { btnSecondary, chipClass, ErrorNotice, inputClass } from "../../components/ui";
+import type { SessionRow } from "core/api/types";
 import { formatJstDateTime, formatJstTime, fromDatetimeLocal, toDatetimeLocal } from "core/domain/date";
 import { errorText } from "core/domain/errors";
 import { fmtDuration } from "core/domain/work-log";
-import { type SessionRow } from "core/api/types";
 import { useDeleteSession, useReviewSessions, useUpdateSession } from "core/queries/sessions";
+import { useState } from "react";
+import { btnSecondary, chipClass, ErrorNotice, inputClass } from "../../components/ui";
 
 const MIN = 60_000;
 const PROGRESS_STEPS = [25, 50, 75, 100] as const;

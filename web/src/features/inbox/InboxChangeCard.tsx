@@ -1,10 +1,10 @@
+import type { InboxChange } from "core/api/types";
+import { formatDue } from "core/domain/date";
 import { errorText } from "core/domain/errors";
+import { SOURCE_LABEL } from "core/domain/inbox-draft";
+import { useAcceptChange, useDismissChange } from "core/queries/inbox";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, btnSecondary, ErrorNotice, linkClass } from "../../components/ui";
-import { formatDue } from "core/domain/date";
-import { SOURCE_LABEL } from "core/domain/inbox-draft";
-import { type InboxChange } from "core/api/types";
-import { useAcceptChange, useDismissChange } from "core/queries/inbox";
 
 /** 紐付け済みのタスクへの、取り込み元の変更の提案。[反映] でタスクを直し、[そのまま] で提案だけ消す */
 export function InboxChangeCard({ item, now }: { item: InboxChange; now: number }) {

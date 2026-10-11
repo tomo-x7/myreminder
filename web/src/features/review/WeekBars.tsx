@@ -1,6 +1,6 @@
-import { formatHours } from "core/domain/schedule";
+import type { ReviewDay } from "core/api/types";
 import { dateKeyParts } from "core/domain/review";
-import { type ReviewDay } from "core/api/types";
+import { formatHours } from "core/domain/schedule";
 
 /** 7日の作業時間の棒。活動日(起床から次の起床まで)ごと。高さは週の中の最大に合わせる(最小 1 時間ぶんの高さ) */
 export function WeekBars({ days }: { days: readonly ReviewDay[] }) {

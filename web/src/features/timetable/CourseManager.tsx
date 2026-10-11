@@ -1,4 +1,6 @@
+import type { Course } from "core/api/types";
 import { errorText } from "core/domain/errors";
+import { useCourses, useCreateCourse, useDeleteCourse, useUpdateCourse } from "core/queries/courses";
 import { useState } from "react";
 import { Sheet } from "../../components/Sheet";
 import {
@@ -11,8 +13,6 @@ import {
 	listClass,
 	SectionTitle,
 } from "../../components/ui";
-import { type Course } from "core/api/types";
-import { useCourses, useCreateCourse, useDeleteCourse, useUpdateCourse } from "core/queries/courses";
 
 /** `a, b、c` → ["a","b","c"] */
 const parseAliases = (s: string) =>

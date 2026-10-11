@@ -1,3 +1,12 @@
+import type { Webhook, WebhookEvent, WebhookKind } from "core/api/types";
+import { errorText } from "core/domain/errors";
+import {
+	useCreateWebhook,
+	useDeleteWebhook,
+	useTestWebhook,
+	useUpdateWebhook,
+	useWebhooks,
+} from "core/queries/webhooks";
 import { useState } from "react";
 import {
 	btnDanger,
@@ -9,9 +18,6 @@ import {
 	Notice,
 	QueryState,
 } from "../../components/ui";
-import type { Webhook, WebhookEvent, WebhookKind } from "core/api/types";
-import { errorText } from "core/domain/errors";
-import { useCreateWebhook, useDeleteWebhook, useTestWebhook, useUpdateWebhook, useWebhooks } from "core/queries/webhooks";
 
 const KIND_LABEL: Record<WebhookKind, string> = { discord: "Discord", slack: "Slack" };
 const URL_HINT: Record<WebhookKind, string> = {

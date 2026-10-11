@@ -1,3 +1,9 @@
+import type { SlackItem } from "core/api/types";
+import { errorText } from "core/domain/errors";
+import { formatShort } from "core/domain/schedule";
+import { useNow } from "core/hooks/use-now";
+import { useSlackList } from "core/queries/schedule";
+import { useStartWorking, useStatus } from "core/queries/status";
 import { useState } from "react";
 import { Link } from "wouter";
 import { DueLabel } from "../components/DueLabel";
@@ -11,12 +17,6 @@ import {
 	PageHeader,
 	QueryState,
 } from "../components/ui";
-import { formatShort } from "core/domain/schedule";
-import { type SlackItem } from "core/api/types";
-import { useSlackList } from "core/queries/schedule";
-import { errorText } from "core/domain/errors";
-import { useStartWorking, useStatus } from "core/queries/status";
-import { useNow } from "core/hooks/use-now";
 
 const SPARE_CHOICES = [30, 60, 90] as const;
 

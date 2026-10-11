@@ -27,7 +27,7 @@ function codeFromStatus(status: number): string {
 	if (status === 413) return "too_large";
 	if (status === 415) return "unsupported_media_type";
 	if (status >= 500) return "internal";
-	return `http_${status}`;
+	return "http_error";
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
@@ -37,9 +37,7 @@ const strings = (v: unknown): string[] | undefined =>
 /** valibot の `{ success: false, error: [{ message, path? }] }`(旧い形)の issue を "項目: 理由" にする */
 function legacyIssue(v: unknown): string | null {
 	if (!isRecord(v) || typeof v.message !== "string") return null;
-	const path = Array.isArray(v.path)
-		? v.path.map((p) => (isRecord(p) ? String(p.key) : String(p))).join(".")
-		: "";
+	const path = Array.isArray(v.path) ? v.path.map((p) => (isRecord(p) ? String(p.key) : String(p))).join(".") : "";
 	return `${path}: ${v.message}`;
 }
 

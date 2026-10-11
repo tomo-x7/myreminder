@@ -1,5 +1,5 @@
-import { Link } from "wouter";
 import { useInboxCount } from "core/queries/inbox";
+import { Link } from "wouter";
 
 /** 受信箱の確認待ちの件数。0件(と読み込み中・失敗)のときは null */
 export function useInboxTotal(): number | null {

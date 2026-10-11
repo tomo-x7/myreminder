@@ -1,15 +1,15 @@
+import type { Course, Task } from "core/api/types";
 import { errorText } from "core/domain/errors";
+import { FILTERS, isStatusFilter, matchesFilter, type StatusFilter } from "core/domain/task-status";
+import { useNow } from "core/hooks/use-now";
+import { useCourses } from "core/queries/courses";
+import { useTasks, useUpdateTask } from "core/queries/tasks";
 import { useState } from "react";
 import { useSearchParams } from "wouter";
 import { btnPrimary, chipClass, Empty, ErrorNotice, listClass, PageHeader, QueryState } from "../components/ui";
 import { InboxBanner } from "../features/inbox";
-import { FILTERS, isStatusFilter, matchesFilter, type StatusFilter } from "core/domain/task-status";
-import { type Course, type Task } from "core/api/types";
-import { useCourses } from "core/queries/courses";
-import { useTasks, useUpdateTask } from "core/queries/tasks";
 import { AddTaskSheet } from "../features/tasks/AddTaskSheet";
 import { TaskRow } from "../features/tasks/TaskRow";
-import { useNow } from "core/hooks/use-now";
 
 function TaskList({
 	tasks,

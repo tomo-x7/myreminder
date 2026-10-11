@@ -4,24 +4,25 @@ import { ApiError } from "../api/errors";
 const URL_FORMAT_ERROR = "URL の形が違います(Discord / Slack の webhook URL を貼ってください)";
 const ALREADY_DONE = "すでに処理されています(最新の状態に更新しました)";
 
+// 網羅するコードは ai-docs/specs/client.md「エラー」の表。unauthorized だけはクライアントが作る(Access の失敗は本文が JSON とは限らない)
 const ERROR_TEXT: Record<string, string> = {
 	// 共通
 	invalid_input: "入力内容が正しくありません",
 	internal: "サーバーでエラーが起きました",
+	http_error: "リクエストを処理できませんでした",
 	not_found: "見つかりません(削除済みかもしれません)",
 	too_large: "大きすぎます(画像は 1.5MB まで)",
 	unsupported_media_type: "対応していない形式です(JPEG・PNG・WebP の画像だけ)",
 	unauthorized: "認証に失敗しました。ログインし直してください",
 	// タスク・科目・予定・計画
 	invalid_course: "科目が見つかりません",
+	invalid_task: "タスクが見つかりません",
 	invalid_busy_block: "予定の内容が正しくありません",
 	invalid_week: "週の指定が正しくありません",
 	// 状態・作業記録
 	overlap: "ほかの作業記録と時間が重なっています",
 	invalid_range: "終了は開始より後にしてください",
 	invalid_end_at: "終わった時刻は、開始から今までの間にしてください",
-	invalid_task: "タスクが見つかりません",
-	task_not_found: "タスクが見つかりません",
 	not_working: "作業中ではありません",
 	working: "作業中です。先に作業を終えてください",
 	task_closed: "提出済み・取り下げのタスクでは作業を始められません",

@@ -4,8 +4,11 @@ import type { Api } from "../api/client";
 
 export type PushResult = { ok: true } | { ok: false; message: string };
 
-/** 端末(web は FID)をサーバーに登録する。アプリを開くたびに呼ばれ、サーバー側で last_seen_at が更新される。失敗したら throw する */
-export async function uploadPushToken(api: Api, input: { token: string; label?: string }): Promise<void> {
+/** 端末(web は FID、Android は FCM の登録トークン)をサーバーに登録する。アプリを開くたびに呼ばれ、サーバー側で last_seen_at が更新される。失敗したら throw する */
+export async function uploadPushToken(
+	api: Api,
+	input: { token: string; label?: string; platform: "web" | "android" },
+): Promise<void> {
 	const res = await api.api.push.tokens.$post({ json: input }).catch(() => null);
 	if (!res) throw new Error("サーバーへの登録に失敗しました(通信エラー)");
 	if (!res.ok) throw new Error(`サーバーへの登録に失敗しました (${res.status})`);

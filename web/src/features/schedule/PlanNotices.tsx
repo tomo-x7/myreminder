@@ -1,6 +1,6 @@
-import { Link } from "wouter";
+import type { Plan } from "core/api/types";
 import { formatDue } from "core/domain/date";
-import { type Plan } from "core/api/types";
+import { Link } from "wouter";
 
 /** 期限切れと、本気でも間に合わない場合の候補 */
 export function PlanAlerts({ plan, now }: { plan: Plan; now: number }) {

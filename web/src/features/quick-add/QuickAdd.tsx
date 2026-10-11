@@ -1,13 +1,5 @@
 import type { StartSuggestion } from "core/api/types";
-import {
-	candidateToDraft,
-	draftTitle,
-	draftToInput,
-	emptyDraft,
-	hasProblems,
-	type ParseMode,
-	validateDraft,
-} from "core/domain/draft";
+import { draftTitle, draftToInput, emptyDraft, hasProblems, type ParseMode, validateDraft } from "core/domain/draft";
 import type { Draft } from "core/domain/draft-types";
 import { errorText } from "core/domain/errors";
 import { useNow } from "core/hooks/use-now";

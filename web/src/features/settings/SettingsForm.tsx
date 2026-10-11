@@ -1,7 +1,7 @@
+import type { Settings, SettingsPatch } from "core/api/types";
+import { minuteToTimeInput, timeInputToMinute } from "core/domain/time-input";
 import { Fragment, useState } from "react";
 import { btnGhost, btnPrimary, ErrorNotice, Field, inputClass, Notice, SectionTitle } from "../../components/ui";
-import { type Settings, type SettingsPatch } from "core/api/types";
-import { minuteToTimeInput, timeInputToMinute } from "core/domain/time-input";
 
 type Props = {
 	settings: Settings;

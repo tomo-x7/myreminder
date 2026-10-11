@@ -1,7 +1,15 @@
-import { btnGhost, listClass, Tag } from "../../components/ui";
-import { type BusyBlock } from "core/api/types";
-import { formatSpan, KIND_LABEL, type Period, periodOf, type RecurringBlock, WEEKDAY_LABEL, WEEKDAY_ORDER } from "core/domain/timetable";
+import type { BusyBlock } from "core/api/types";
 import { formatMinuteOfDay } from "core/domain/time-input";
+import {
+	formatSpan,
+	KIND_LABEL,
+	type Period,
+	periodOf,
+	type RecurringBlock,
+	WEEKDAY_LABEL,
+	WEEKDAY_ORDER,
+} from "core/domain/timetable";
+import { btnGhost, listClass, Tag } from "../../components/ui";
 
 type Props = {
 	blocks: readonly RecurringBlock[];

@@ -1,14 +1,14 @@
+import type { Course, InboxCandidate, InboxItem, StartSuggestion, Task } from "core/api/types";
+import { formatDue, formatJstDateTime } from "core/domain/date";
+import { draftToInput, hasProblems, validateDraft } from "core/domain/draft";
+import type { Draft } from "core/domain/draft-types";
 import { errorText } from "core/domain/errors";
+import { itemToDraft, SOURCE_LABEL } from "core/domain/inbox-draft";
+import { useAcceptItem, useIgnoreItem, useLinkItem } from "core/queries/inbox";
 import { useState } from "react";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, btnSecondary, ErrorNotice, Field, inputClass, linkClass, listClass } from "../../components/ui";
-import { formatDue, formatJstDateTime } from "core/domain/date";
-import { type Course, type Task, type InboxCandidate, type InboxItem } from "core/api/types";
-import { itemToDraft, SOURCE_LABEL } from "core/domain/inbox-draft";
-import { useAcceptItem, useIgnoreItem, useLinkItem } from "core/queries/inbox";
 import { CandidateCard } from "../quick-add/CandidateCard";
-import { draftToInput, hasProblems, validateDraft } from "core/domain/draft";
-import type { Draft, StartSuggestion } from "core/domain/draft-types";
 
 type Props = {
 	item: InboxItem;

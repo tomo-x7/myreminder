@@ -1,11 +1,11 @@
 import { errorText } from "core/domain/errors";
+import { useNow } from "core/hooks/use-now";
+import { useCourses } from "core/queries/courses";
+import { useDeleteTask, useTask, useUpdateTask } from "core/queries/tasks";
 import { useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { btnDanger, btnGhost, btnSecondary, ErrorNotice, PageHeader, QueryState } from "../components/ui";
 import { TaskForm } from "../features/tasks/TaskForm";
-import { useCourses } from "core/queries/courses";
-import { useDeleteTask, useTask, useUpdateTask } from "core/queries/tasks";
-import { useNow } from "core/hooks/use-now";
 
 export function TaskDetailPage() {
 	const { id = "" } = useParams<{ id: string }>();
@@ -48,7 +48,9 @@ export function TaskDetailPage() {
 						)}
 
 						<section className="mt-1 flex flex-col gap-2 border-t border-line pt-3">
-							{remove.isError && <ErrorNotice>削除できませんでした: {errorText(remove.error)}</ErrorNotice>}
+							{remove.isError && (
+								<ErrorNotice>削除できませんでした: {errorText(remove.error)}</ErrorNotice>
+							)}
 							{confirming ? (
 								<>
 									<p className="font-medium">「{t.title}」を削除します。元に戻せません。</p>

@@ -40,14 +40,7 @@ export function SharePage() {
 		void takeSharedImage().then(setImage);
 	}, [wantsImage]);
 
-	const save = useCallback(
-		async (inputs: TaskCreate[], onSaved: (index: number) => void) => {
-			await create.mutateAsync({ inputs, onSaved });
-			navigate("/", { replace: true });
-		},
-		[create.mutateAsync, navigate],
-	);
-	const cancel = useCallback(() => navigate("/", { replace: true }), [navigate]);
+	const home = useCallback(() => navigate("/", { replace: true }), [navigate]);
 
 	return (
 		<div className="flex flex-col gap-3">

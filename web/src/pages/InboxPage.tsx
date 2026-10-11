@@ -1,10 +1,10 @@
-import { listClass, PageHeader, QueryState, SectionTitle } from "../components/ui";
-import { useInbox } from "core/queries/inbox";
-import { InboxChangeCard, InboxItemCard } from "../features/inbox";
-import { type Inbox, type Course, type Task } from "core/api/types";
-import { useCourses } from "core/queries/courses";
-import { useTasks } from "core/queries/tasks";
+import type { Course, Inbox, Task } from "core/api/types";
 import { useNow } from "core/hooks/use-now";
+import { useCourses } from "core/queries/courses";
+import { useInbox } from "core/queries/inbox";
+import { useTasks } from "core/queries/tasks";
+import { listClass, PageHeader, QueryState, SectionTitle } from "../components/ui";
+import { InboxChangeCard, InboxItemCard } from "../features/inbox";
 
 function InboxBody({ inbox, courses, tasks }: { inbox: Inbox; courses: readonly Course[]; tasks: readonly Task[] }) {
 	const now = useNow();

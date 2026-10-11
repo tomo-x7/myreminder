@@ -1,10 +1,10 @@
 import { errorText } from "core/domain/errors";
+import { useSettings, useUpdateSettings } from "core/queries/settings";
 import { useState } from "react";
 import { Link } from "wouter";
 import { listClass, PageHeader, QueryState, SectionTitle } from "../components/ui";
 import { SettingsForm } from "../features/settings/SettingsForm";
 import { WebhookSettings } from "../features/webhooks";
-import { useSettings, useUpdateSettings } from "core/queries/settings";
 import { PushToggle } from "../push/PushToggle";
 
 export function SettingsPage() {

@@ -1,3 +1,10 @@
+import type { SetStatusInput } from "core/api/types";
+import { DAY, formatJstTime, startOfJstDay } from "core/domain/date";
+import { errorText } from "core/domain/errors";
+import { fmtClock } from "core/domain/work-log";
+import { useNow } from "core/hooks/use-now";
+import { useSetStatus, useStartWorking, useStatus, useStopWorking } from "core/queries/status";
+import { useTaskOptions } from "core/queries/tasks";
 import { useState } from "react";
 import {
 	btnGhost,
@@ -8,13 +15,6 @@ import {
 	inputClass,
 	StaleNotice,
 } from "../../components/ui";
-import { DAY, formatJstTime, startOfJstDay } from "core/domain/date";
-import { errorText } from "core/domain/errors";
-import { fmtClock } from "core/domain/work-log";
-import { type SetStatusInput } from "core/api/types";
-import { useNow } from "core/hooks/use-now";
-import { useSetStatus, useStartWorking, useStatus, useStopWorking } from "core/queries/status";
-import { useTaskOptions } from "core/queries/tasks";
 
 const MIN = 60_000;
 type Mode = SetStatusInput["mode"];
