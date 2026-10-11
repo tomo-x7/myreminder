@@ -89,7 +89,8 @@ export const tasks = new Hono<Env>()
 			.returning();
 
 		// 更新と同じバッチで原子的に: 締切が変わったら履歴に残す。
-		// 完了・提出済み・却下にしたら、そのタスクの作業を閉じる(作業中のまま残さない。完了・提出済みは進捗 100)
+		// 完了・提出済み・取り下げにしたら、そのタスクの作業を閉じる(作業中のまま残さない)。
+		// 進捗は書かない: 100 を書くと、あとで未着手に戻したとき残りが 0 になって計画から消えるため
 		const extra: BatchItem<"sqlite">[] = [];
 		if (patch.dueAt !== undefined && patch.dueAt !== current.dueAt) {
 			extra.push(
@@ -103,7 +104,7 @@ export const tasks = new Hono<Env>()
 			);
 		}
 		if (patch.status && patch.status !== current.status && CLOSING_STATUSES.includes(patch.status)) {
-			extra.push(...closeWorkOnTask(db, id, now, patch.status === "dismissed" ? null : 100));
+			extra.push(...closeWorkOnTask(db, id, now));
 		}
 		const [[row]] = await db.batch([update, ...extra]);
 		triggerReplan(c);

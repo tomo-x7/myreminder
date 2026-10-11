@@ -6,6 +6,7 @@
 import { toJstParts, WEEKDAYS_JA } from "../ai/jst";
 import { jstDayStart } from "../planner/busy";
 import { DAY, HOUR, type Interval, MINUTE, type Minutes, type Ms, type Risk, type SleepWindow } from "../planner/types";
+import { activityDayKey, activityDayOf } from "../services/planning-helpers";
 import { sleepWindowAt } from "../services/status";
 
 // ---------- 型 ----------
@@ -264,7 +265,7 @@ export function generateNotifications(input: PolicyInput): DesiredNotification[]
 
 	for (const task of input.tasks) cands.push(...taskCandidates(task, input, cal));
 
-	// 本気でも間に合わないとき: 何を諦めるかを1日1回だけ(正直に。偽の締切は作らない)
+	// 本気でも間に合わないとき: 何を諦めるかを活動日(起床から次の起床まで)に1回だけ(正直に。偽の締切は作らない)
 	if (input.dropCandidates.length > 0) {
 		const at = critTime(input, now, now + DAY);
 		const list = input.dropCandidates
@@ -275,7 +276,8 @@ export function generateNotifications(input: PolicyInput): DesiredNotification[]
 		cands.push({
 			rank: RANK.critical,
 			n: {
-				dedupeKey: `drop:${fmtDate(at)}`,
+				// 暦の日付で切ると 0:00 にもう一度鳴るので、送る時刻が属する活動日で切る
+				dedupeKey: `drop:${activityDayKey(activityDayOf(at, input.sleep.endMin))}`,
 				kind: "critical",
 				taskId: null,
 				scheduledAt: at,
@@ -427,8 +429,8 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 
 	if (!plan) return out;
 
-	// 3. リスク別
-	if (plan.risk === "watch") {
+	// 3. リスク別。本人が決めた着手時刻の合図は余裕でも送る(実装意図)。おすすめ着手時刻は注意だけ
+	if (plan.risk === "watch" || plan.risk === "relaxed") {
 		const ps = task.plannedStartAt;
 		const planned = ps !== null && (plan.latestStartUsual === null || ps <= plan.latestStartUsual);
 		let at: Ms | null = null;
@@ -439,7 +441,7 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 				at = cal.snapForward(ps);
 				key = `start:${task.id}:${ps}`;
 			}
-		} else if (plan.recommendedStart !== null) {
+		} else if (plan.risk === "watch" && plan.recommendedStart !== null) {
 			at = cal.snapForward(Math.max(plan.recommendedStart, now));
 			key = `start:${task.id}:rec`;
 		}
@@ -483,6 +485,11 @@ function dangerCandidates(
 	const quota = RISK_MAX_PER_DAY - sentRecently;
 	if (quota <= 0) return [];
 	const recentBodies = new Set(past.map((h) => h.body));
+	// 続き番号は既存の最大+1。履歴の窓から古い分が落ちても、残っているキーとぶつからない
+	const nextIndex = past.reduce((m, h) => {
+		const n = Number((h.dedupeKey as string).slice(prefix.length));
+		return Number.isInteger(n) ? Math.max(m, n + 1) : m;
+	}, 0);
 
 	const limit = due - 3 * HOUR; // これ以降は致命の通知が受け持つ
 	const windowEnd = Math.min(plan.latestStartUsual ?? plan.latestStartHard ?? limit, limit);
@@ -519,7 +526,7 @@ function dangerCandidates(
 			first,
 		};
 		// 使い終えた文面は避ける(直近の文面・この回で使った文面と同じにしない)
-		let idx = (past.length + i) % templates.length;
+		let idx = (nextIndex + i) % templates.length;
 		let msg = templates[idx](ctx);
 		let body = withFirst(msg.body, first);
 		for (let tries = 0; tries < templates.length && (recentBodies.has(body) || used.has(body)); tries++) {
@@ -531,7 +538,7 @@ function dangerCandidates(
 		out.push({
 			rank: RANK.danger,
 			n: {
-				dedupeKey: `${prefix}${past.length + i}`,
+				dedupeKey: `${prefix}${nextIndex + i}`,
 				kind: "risk",
 				taskId: task.id,
 				scheduledAt: at,

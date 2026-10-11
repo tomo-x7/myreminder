@@ -24,7 +24,7 @@ export const status = new Hono<Env>()
 		const now = Date.now();
 		const result = await startWorking(db, c.req.valid("json").taskId, now);
 		if (!result.ok) {
-			// 提出済み・却下のタスクでは始められない
+			// 提出済み・取り下げのタスクでは始められない
 			return result.error === "task_closed"
 				? c.json({ error: result.error }, 409)
 				: c.json({ error: "not_found" as const }, 404);

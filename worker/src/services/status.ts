@@ -134,13 +134,10 @@ const setUserStatus = (db: Db, values: { mode: UserMode; taskId: string | null; 
 		.onConflictDoUpdate({ target: userStatus.id, set: values });
 
 /** 開いている実績の終了を now にする文。開始より前の時刻にならないようにする。taskId があればそのタスクの分だけ */
-const closeOpenSessions = (db: Db, now: Ms, only?: { taskId: string; progress: number | null }) =>
+const closeOpenSessions = (db: Db, now: Ms, only?: { taskId: string }) =>
 	db
 		.update(sessions)
-		.set({
-			endAt: sql`max(${sessions.startAt}, ${now})`,
-			...(only?.progress != null && { progress: only.progress }),
-		})
+		.set({ endAt: sql`max(${sessions.startAt}, ${now})` })
 		.where(
 			and(
 				eq(sessions.kind, "actual"),
@@ -151,12 +148,11 @@ const closeOpenSessions = (db: Db, now: Ms, only?: { taskId: string; progress: n
 
 /**
  * タスクを終えた・取り下げたときに、そのタスクの作業を閉じる文(タスクの更新と同じ batch に入れる)。
- * 開いている記録は now で閉じ、progress があれば進捗も入れる(null は触れない)。
- * ステータスがそのタスクの作業中のままなら通常に戻す
+ * 開いている記録は now で閉じる(進捗は触れない)。ステータスがそのタスクの作業中のままなら通常に戻す
  */
-export const closeWorkOnTask = (db: Db, taskId: string, now: Ms, progress: number | null) =>
+export const closeWorkOnTask = (db: Db, taskId: string, now: Ms) =>
 	[
-		closeOpenSessions(db, now, { taskId, progress }),
+		closeOpenSessions(db, now, { taskId }),
 		db
 			.update(userStatus)
 			.set({ mode: "normal", taskId: null, until: null })
@@ -216,7 +212,7 @@ export type StartWorkingResult =
 
 /**
  * 作業を始める。開いている記録は進捗なしで閉じてから、新しい記録を作る。todo のタスクは doing にする。
- * 提出済み・却下のタスクでは始められない(done は見直しで続けることがあるので許す)
+ * 提出済み・取り下げのタスクでは始められない(done は見直しで続けることがあるので許す)
  */
 export async function startWorking(db: Db, taskId: string, now: Ms): Promise<StartWorkingResult> {
 	const [task] = await db.select({ id: tasks.id, status: tasks.status }).from(tasks).where(eq(tasks.id, taskId));
