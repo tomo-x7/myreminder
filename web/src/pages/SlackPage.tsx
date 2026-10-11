@@ -1,8 +1,8 @@
 import type { SlackItem } from "core/api/types";
 import { SPARE_CHOICES, slackGainText, slackReasonText } from "core/domain/slack";
-import { useSlackView } from "core/forms/slack";
-import { useStartTask } from "core/forms/start-task";
 import { useNow } from "core/hooks/use-now";
+import { useSlackView } from "core/screens/slack";
+import { useStartTask } from "core/screens/start-task";
 import { Link } from "wouter";
 import { DueLabel } from "../components/DueLabel";
 import {

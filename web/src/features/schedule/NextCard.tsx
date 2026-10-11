@@ -1,7 +1,7 @@
 import type { Course, PlanTask } from "core/api/types";
 import { nextMeta, startDeadlineView } from "core/domain/next-card";
 import { RISK_LABEL } from "core/domain/schedule";
-import { useNextActions } from "core/forms/next-card";
+import { useNextActions } from "core/screens/next-card";
 import { useState } from "react";
 import { Link } from "wouter";
 import { DueLabel } from "../../components/DueLabel";
