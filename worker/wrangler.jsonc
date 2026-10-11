@@ -18,8 +18,8 @@
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "myreminder",
-			"database_id": "00000000-0000-0000-0000-000000000000",
+			"database_name": "myreminder-db",
+			"database_id": "a167ac38-2f05-4ec9-8ecf-3b61105d78a8",
 			"migrations_dir": "migrations"
 		}
 	],
