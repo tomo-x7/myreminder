@@ -55,7 +55,7 @@ export function WeekList({ blocks, periods, onEdit, onAdd }: Props) {
 															{period ? `${period.period}限` : ""}
 														</span>
 													)}
-													<span className="inline-block min-w-[5rem]">
+													<span className="inline-block min-w-[5.5rem]">
 														{range(b.startMin, b.endMin)}
 													</span>
 												</span>

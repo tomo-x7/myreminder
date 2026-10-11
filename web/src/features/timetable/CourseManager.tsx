@@ -110,7 +110,7 @@ export function CourseManager() {
 					<button
 						type="button"
 						onClick={() => setEditing("new")}
-						className="rounded-sm px-1 py-0.5 text-xs text-sub active:bg-wash"
+						className="-mb-0.5 rounded-sm px-1 py-0.5 text-xs text-sub active:bg-wash"
 					>
 						＋ 科目を追加
 					</button>
