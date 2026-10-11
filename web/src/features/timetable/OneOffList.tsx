@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { btnGhost, listClass, Tag } from "../../components/ui";
 import type { BusyBlock } from "../../lib/queries";
 import { formatOneOff, KIND_LABEL, type OneOffBlock } from "./blocks";
 
@@ -13,25 +14,25 @@ export function OneOffList({ blocks, now, onEdit }: Props) {
 	const rows = showPast ? sorted : upcoming;
 
 	return (
-		<div className="flex flex-col gap-2">
+		<div className="flex flex-col">
 			{rows.length === 0 ? (
-				<p className="text-sm text-gray-500">単発の予定はありません</p>
+				<p className="border-b border-line py-2 text-xs text-faint">単発の予定はありません</p>
 			) : (
-				<ul className="flex flex-col gap-2">
+				<ul className={listClass}>
 					{rows.map((b) => (
 						<li key={b.id}>
 							<button
 								type="button"
 								onClick={() => onEdit(b)}
-								className={`flex w-full flex-col items-start rounded-lg border border-gray-300 bg-white px-3 py-2 text-left ${
+								className={`flex w-full items-baseline gap-2 py-2 text-left active:bg-wash ${
 									b.endAt < now ? "opacity-60" : ""
 								}`}
 							>
-								<span className="text-base font-semibold tabular-nums text-gray-900">
-									{formatOneOff(b)}
-								</span>
-								<span className="text-sm text-gray-800">
-									{b.label || "(名前なし)"} ・ {KIND_LABEL[b.kind]}
+								<span className="shrink-0 font-medium whitespace-nowrap">{formatOneOff(b)}</span>
+								<span className="min-w-0 flex-1">{b.label || "(名前なし)"}</span>
+								<Tag>{KIND_LABEL[b.kind]}</Tag>
+								<span aria-hidden="true" className="text-faint">
+									›
 								</span>
 							</button>
 						</li>
@@ -39,11 +40,7 @@ export function OneOffList({ blocks, now, onEdit }: Props) {
 				</ul>
 			)}
 			{pastCount > 0 && (
-				<button
-					type="button"
-					onClick={() => setShowPast((v) => !v)}
-					className="self-start px-1 py-1 text-sm font-medium text-blue-700"
-				>
+				<button type="button" onClick={() => setShowPast((v) => !v)} className={`${btnGhost} mt-1 self-start`}>
 					{showPast ? "終わった予定を隠す" : `終わった予定を見る(${pastCount}件)`}
 				</button>
 			)}

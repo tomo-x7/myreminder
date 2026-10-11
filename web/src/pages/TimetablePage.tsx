@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { Sheet } from "../components/Sheet";
-import { btnPrimary, PageHeader, QueryState, SectionTitle } from "../components/ui";
+import { btnPrimary, linkClass, Notice, PageHeader, QueryState, SectionTitle } from "../components/ui";
 import { BlockForm } from "../features/timetable/BlockForm";
 import { isOneOff, isRecurring } from "../features/timetable/blocks";
 import { CourseManager } from "../features/timetable/CourseManager";
@@ -59,31 +59,27 @@ export function TimetablePage() {
 	const periods = settings.data?.timetablePeriods ?? [];
 
 	return (
-		<div className="flex flex-col gap-6">
+		<div className="flex flex-col gap-3">
 			<PageHeader
 				title="時間割"
 				action={
-					<button
-						type="button"
-						onClick={() => setEditing({ kind: "new" })}
-						className={`${btnPrimary} px-4 py-2`}
-					>
+					<button type="button" onClick={() => setEditing({ kind: "new" })} className={btnPrimary}>
 						＋ 追加
 					</button>
 				}
 			/>
 			{periods.length === 0 && (
-				<p className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-900">
-					<Link href="/settings" className="font-bold underline">
+				<Notice>
+					<Link href="/settings" className={linkClass}>
 						設定
 					</Link>
 					で時限の時刻を登録すると、授業を「N限」で選べます
-				</p>
+				</Notice>
 			)}
 			<QueryState query={blocks}>
 				{(list) => (
 					<>
-						<section className="flex flex-col gap-2">
+						<section className="flex flex-col">
 							<SectionTitle>毎週の予定</SectionTitle>
 							<WeekList
 								blocks={list.filter(isRecurring)}
@@ -92,7 +88,7 @@ export function TimetablePage() {
 								onAdd={(weekday) => setEditing({ kind: "new", weekday })}
 							/>
 						</section>
-						<section className="flex flex-col gap-2">
+						<section className="flex flex-col">
 							<SectionTitle>単発の予定</SectionTitle>
 							<OneOffList
 								blocks={list.filter(isOneOff)}

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { DueLabel } from "../../components/DueLabel";
-import { btnPrimary, btnSecondary, ErrorNotice, inputClass } from "../../components/ui";
+import { btnPrimary, btnSecondary, ErrorNotice, Field, inputClass, linkClass, listClass } from "../../components/ui";
 import { formatDue, formatJstDateTime } from "../../lib/date";
 import type { Course, Task } from "../../lib/queries";
 import { CandidateCard } from "../quick-add/CandidateCard";
@@ -64,44 +64,41 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 	const note = item.remoteState ? STATE_NOTE[item.remoteState] : undefined;
 
 	return (
-		<li className="flex flex-col gap-3 rounded-xl border border-gray-300 bg-white p-4">
-			<div className="flex flex-col gap-1">
+		<li className="flex flex-col gap-2 py-2">
+			<div className="flex flex-col gap-0.5">
 				{item.dueAt === null ? (
-					<p className="text-base font-bold text-gray-500">締切なし</p>
+					<p className="text-sm font-semibold text-sub">締切なし</p>
 				) : (
 					<DueLabel dueAt={item.dueAt} now={now} />
 				)}
-				<p className="text-lg font-bold text-gray-900">{item.title}</p>
-				<p className="text-xs text-gray-600">
+				<p className="text-base leading-snug font-semibold">{item.title}</p>
+				<p className="flex flex-wrap items-baseline gap-x-2 text-xs text-sub">
 					{[item.courseName, SOURCE_LABEL[item.source] ?? item.source, note].filter(Boolean).join(" ・ ")}
+					{item.url && (
+						<a href={item.url} target="_blank" rel="noreferrer" className={linkClass}>
+							{item.source === "classroom" ? "Classroom で開く" : "取り込み元で開く"}
+						</a>
+					)}
 				</p>
-				{item.url && (
-					<a
-						href={item.url}
-						target="_blank"
-						rel="noreferrer"
-						className="w-fit text-sm font-medium text-blue-700 underline"
-					>
-						{item.source === "classroom" ? "Classroom で開く" : "取り込み元で開く"}
-					</a>
-				)}
 				{item.description && (
-					<details className="text-sm text-gray-700">
-						<summary className="cursor-pointer py-1 text-gray-600">本文を見る</summary>
-						<p className="whitespace-pre-wrap break-words rounded-md bg-gray-50 p-2">{item.description}</p>
+					<details className="text-xs text-sub">
+						<summary className="cursor-pointer py-0.5">本文を見る</summary>
+						<p className="border-l-2 border-line pl-2 break-words whitespace-pre-wrap">
+							{item.description}
+						</p>
 					</details>
 				)}
 			</div>
 
 			{error && <ErrorNotice>{error.message}</ErrorNotice>}
 
-			<div className="flex gap-2">
+			<div className="flex gap-1.5">
 				<button
 					type="button"
 					disabled={busy}
 					onClick={startAdd}
 					aria-pressed={panel === "add"}
-					className={`${hasCandidates ? btnSecondary : btnPrimary} flex-1 px-2`}
+					className={`${!hasCandidates && panel !== "add" ? btnPrimary : btnSecondary} flex-1`}
 				>
 					追加
 				</button>
@@ -110,7 +107,7 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 					disabled={busy}
 					onClick={() => setPanel("link")}
 					aria-pressed={panel === "link"}
-					className={`${hasCandidates ? btnPrimary : btnSecondary} flex-1 px-2`}
+					className={`${hasCandidates ? btnPrimary : btnSecondary} flex-1`}
 				>
 					紐付け
 				</button>
@@ -118,71 +115,74 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 					type="button"
 					disabled={busy}
 					onClick={() => ignore.mutate(item.id)}
-					className={`${btnSecondary} flex-1 px-2`}
+					className={`${btnSecondary} flex-1`}
 				>
 					無視
 				</button>
 			</div>
 
 			{panel === "link" && (
-				<div className="flex flex-col gap-2">
+				<div className="flex flex-col gap-2 border-l-2 border-ink pl-2">
 					{hasCandidates && (
-						<>
-							<p className="text-sm font-semibold text-gray-800">同じ課題かもしれないタスク</p>
-							<ul className="flex flex-col gap-2">
+						<div className="flex flex-col">
+							<p className="text-xs font-semibold text-sub">同じ課題かもしれないタスク</p>
+							<ul className={listClass}>
 								{item.candidates.map((c) => (
-									<li
-										key={c.taskId}
-										className="flex flex-col gap-1 rounded-lg border border-blue-300 bg-blue-50 p-3"
-									>
-										<span className="text-base font-semibold text-gray-900">{c.title}</span>
-										<span className="text-sm text-gray-700">
-											{formatDue(c.dueAt, now)}
-											{c.status === "submitted" ? " ・ 提出済み" : ""}
+									<li key={c.taskId} className="flex flex-col gap-0.5 py-1.5">
+										<div className="flex items-center justify-between gap-2">
+											<span className="min-w-0 font-semibold">{c.title}</span>
+											<button
+												type="button"
+												disabled={busy}
+												onClick={() => link.mutate({ id: item.id, taskId: c.taskId })}
+												className={`${btnSecondary} shrink-0`}
+											>
+												このタスクに紐付ける
+											</button>
+										</div>
+										<span className="text-xs text-sub">
+											{[
+												formatDue(c.dueAt, now),
+												c.status === "submitted" ? "提出済み" : null,
+												c.courseName,
+												REASON_LABEL[c.reason],
+											]
+												.filter(Boolean)
+												.join(" ・ ")}
 										</span>
-										<span className="text-xs text-gray-600">
-											{[c.courseName, REASON_LABEL[c.reason]].filter(Boolean).join(" ・ ")}
-										</span>
-										<button
-											type="button"
-											disabled={busy}
-											onClick={() => link.mutate({ id: item.id, taskId: c.taskId })}
-											className={`${btnPrimary} mt-1 py-2`}
-										>
-											このタスクに紐付ける
-										</button>
 									</li>
 								))}
 							</ul>
-						</>
+						</div>
 					)}
-					<label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-						{hasCandidates ? "ほかのタスクに紐付ける" : "紐付けるタスク"}
-						<select
-							value={otherTaskId}
-							disabled={busy}
-							onChange={(e) => setOtherTaskId(e.target.value)}
-							className={inputClass}
+					<div className="flex items-end gap-1.5">
+						<div className="min-w-0 flex-1">
+							<Field label={hasCandidates ? "ほかのタスクに紐付ける" : "紐付けるタスク"}>
+								<select
+									value={otherTaskId}
+									disabled={busy}
+									onChange={(e) => setOtherTaskId(e.target.value)}
+									className={inputClass}
+								>
+									<option value="">選んでください</option>
+									{others.map((t) => (
+										<option key={t.id} value={t.id}>
+											{formatJstDateTime(t.dueAt)} {t.title}
+										</option>
+									))}
+								</select>
+							</Field>
+						</div>
+						<button
+							type="button"
+							disabled={busy || otherTaskId === ""}
+							onClick={() => link.mutate({ id: item.id, taskId: otherTaskId })}
+							className={`${btnSecondary} shrink-0`}
 						>
-							<option value="">選んでください</option>
-							{others.map((t) => (
-								<option key={t.id} value={t.id}>
-									{formatJstDateTime(t.dueAt)} {t.title}
-								</option>
-							))}
-						</select>
-					</label>
-					<button
-						type="button"
-						disabled={busy || otherTaskId === ""}
-						onClick={() => link.mutate({ id: item.id, taskId: otherTaskId })}
-						className={btnSecondary}
-					>
-						選んだタスクに紐付ける
-					</button>
-					<p className="text-xs text-gray-500">
-						タスクの中身は変わりません。以後、取り込み元の変化が伝わります
-					</p>
+							選んだタスクに紐付ける
+						</button>
+					</div>
+					<p className="text-xs text-faint">タスクの中身は変わりません。以後、取り込み元の変化が伝わります</p>
 				</div>
 			)}
 

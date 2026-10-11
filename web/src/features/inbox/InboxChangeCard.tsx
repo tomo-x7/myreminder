@@ -1,5 +1,5 @@
 import { DueLabel } from "../../components/DueLabel";
-import { btnPrimary, btnSecondary, ErrorNotice } from "../../components/ui";
+import { btnPrimary, btnSecondary, ErrorNotice, linkClass } from "../../components/ui";
 import { formatDue } from "../../lib/date";
 import { SOURCE_LABEL } from "./draft";
 import { type InboxChange, useAcceptChange, useDismissChange } from "./hooks";
@@ -13,47 +13,42 @@ export function InboxChangeCard({ item, now }: { item: InboxChange; now: number 
 	const { dueAt, title } = item.change;
 
 	return (
-		<li className="flex flex-col gap-3 rounded-xl border border-amber-400 bg-amber-50 p-4">
-			<div className="flex flex-col gap-1">
-				<p className="text-lg font-bold text-gray-900">{item.taskTitle}</p>
-				<p className="text-xs text-gray-600">
+		<li className="flex flex-col gap-2 py-2">
+			<div className="flex flex-col gap-0.5">
+				<p className="text-base font-semibold">{item.taskTitle}</p>
+				<p className="flex flex-wrap items-baseline gap-x-2 text-xs text-sub">
 					{[item.courseName, SOURCE_LABEL[item.source] ?? item.source].filter(Boolean).join(" ・ ")}
+					{item.url && (
+						<a href={item.url} target="_blank" rel="noreferrer" className={linkClass}>
+							{item.source === "classroom" ? "Classroom で開く" : "取り込み元で開く"}
+						</a>
+					)}
 				</p>
-				{item.url && (
-					<a
-						href={item.url}
-						target="_blank"
-						rel="noreferrer"
-						className="w-fit text-sm font-medium text-blue-700 underline"
-					>
-						{item.source === "classroom" ? "Classroom で開く" : "取り込み元で開く"}
-					</a>
-				)}
 			</div>
 
-			<dl className="flex flex-col gap-2 text-sm">
+			<dl className="flex flex-col gap-1.5">
 				{dueAt && (
-					<div className="flex flex-col gap-0.5">
-						<dt className="font-semibold text-amber-900">締切が変わっています</dt>
-						<dd className="text-gray-700">いま: {formatDue(item.taskDueAt, now)}</dd>
-						<dd className="flex flex-col gap-0.5 text-gray-900">
-							<span>取り込み元:</span>
+					<div className="flex flex-col border-l-2 border-warn pl-2">
+						<dt className="text-xs font-semibold text-warn">締切が変わっています</dt>
+						<dd className="text-xs text-sub">いま: {formatDue(item.taskDueAt, now)}</dd>
+						<dd className="flex flex-wrap items-baseline gap-x-1.5">
+							<span className="text-xs text-sub">取り込み元:</span>
 							<DueLabel dueAt={dueAt.to} now={now} />
 						</dd>
 					</div>
 				)}
 				{title && (
-					<div className="flex flex-col gap-0.5">
-						<dt className="font-semibold text-amber-900">タイトルが変わっています</dt>
-						<dd className="text-gray-700">いま: {item.taskTitle}</dd>
-						<dd className="font-semibold text-gray-900">取り込み元: {title.to}</dd>
+					<div className="flex flex-col border-l-2 border-warn pl-2">
+						<dt className="text-xs font-semibold text-warn">タイトルが変わっています</dt>
+						<dd className="text-xs text-sub">いま: {item.taskTitle}</dd>
+						<dd className="font-semibold">取り込み元: {title.to}</dd>
 					</div>
 				)}
 			</dl>
 
 			{error && <ErrorNotice>{error.message}</ErrorNotice>}
 
-			<div className="flex gap-2">
+			<div className="flex gap-1.5">
 				<button
 					type="button"
 					disabled={busy}

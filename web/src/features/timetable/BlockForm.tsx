@@ -1,5 +1,5 @@
 import { useId, useState } from "react";
-import { btnDanger, btnPrimary, btnSecondary, ErrorNotice, Field, inputClass } from "../../components/ui";
+import { btnDanger, btnPrimary, btnSecondary, chipClass, ErrorNotice, Field, inputClass } from "../../components/ui";
 import { fromDatetimeLocal, toDatetimeLocal } from "../../lib/date";
 import type { BusyBlock, BusyBlockInput, Course } from "../../lib/queries";
 import { fromDateInput, minuteToTimeInput, timeInputToMinute, toDateInput } from "../../lib/time-input";
@@ -146,13 +146,13 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 
 	return (
 		<form
-			className="flex flex-col gap-4"
+			className="flex flex-col gap-3"
 			onSubmit={(e) => {
 				e.preventDefault();
 				submit();
 			}}
 		>
-			<div className="flex gap-2" role="tablist" aria-label="種類">
+			<div className="flex gap-1.5" role="tablist" aria-label="種類">
 				{(
 					[
 						["recurring", "毎週(時間割・バイト)"],
@@ -168,46 +168,46 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 							set("shape", s);
 							if (s === "oneoff" && form.kind === "class") set("kind", "event");
 						}}
-						className={`rounded-full px-3 py-1.5 text-sm ${
-							form.shape === s ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700"
-						}`}
+						className={chipClass(form.shape === s)}
 					>
 						{label}
 					</button>
 				))}
 			</div>
 
-			<Field label="区分">
-				<select
-					value={form.kind}
-					onChange={(e) => set("kind", e.target.value as BusyKind)}
-					className={inputClass}
-				>
-					{KIND_ORDER.map((k) => (
-						<option key={k} value={k}>
-							{KIND_LABEL[k]}
-						</option>
-					))}
-				</select>
-			</Field>
-
-			<Field label={form.kind === "class" ? "科目名" : "名前"}>
-				<input
-					type="text"
-					list={listId}
-					value={form.label}
-					maxLength={100}
-					onChange={(e) => set("label", e.target.value)}
-					className={inputClass}
-				/>
-				{form.kind === "class" && (
-					<datalist id={listId}>
-						{courses.map((c) => (
-							<option key={c.id} value={c.name} />
+			<div className="grid grid-cols-[6.5rem_1fr] gap-2">
+				<Field label="区分">
+					<select
+						value={form.kind}
+						onChange={(e) => set("kind", e.target.value as BusyKind)}
+						className={inputClass}
+					>
+						{KIND_ORDER.map((k) => (
+							<option key={k} value={k}>
+								{KIND_LABEL[k]}
+							</option>
 						))}
-					</datalist>
-				)}
-			</Field>
+					</select>
+				</Field>
+
+				<Field label={form.kind === "class" ? "科目名" : "名前"}>
+					<input
+						type="text"
+						list={listId}
+						value={form.label}
+						maxLength={100}
+						onChange={(e) => set("label", e.target.value)}
+						className={inputClass}
+					/>
+					{form.kind === "class" && (
+						<datalist id={listId}>
+							{courses.map((c) => (
+								<option key={c.id} value={c.name} />
+							))}
+						</datalist>
+					)}
+				</Field>
+			</div>
 
 			{recurring ? (
 				<>
@@ -219,11 +219,7 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 									type="button"
 									aria-pressed={form.weekday === String(w)}
 									onClick={() => set("weekday", String(w))}
-									className={`flex-1 rounded-md py-2.5 text-base font-medium ${
-										form.weekday === String(w)
-											? "bg-blue-600 text-white"
-											: "bg-white text-gray-800 ring-1 ring-gray-300"
-									}`}
+									className={`${chipClass(form.weekday === String(w))} flex-1 text-center`}
 								>
 									{WEEKDAY_LABEL[w]}
 								</button>
@@ -233,11 +229,11 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 
 					{form.kind === "class" && (
 						<fieldset className="flex flex-col gap-1">
-							<legend className="mb-1 text-sm font-medium text-gray-700">時限から選ぶ</legend>
+							<legend className="mb-1 text-xs text-sub">時限から選ぶ</legend>
 							{periods.length === 0 ? (
-								<p className="text-xs text-gray-500">設定で時限の時刻を登録すると、ここから選べます</p>
+								<p className="text-xs text-faint">設定で時限の時刻を登録すると、ここから選べます</p>
 							) : (
-								<div className="flex flex-wrap gap-2">
+								<div className="flex flex-wrap gap-1.5">
 									{periods.map((p) => {
 										const selected = startMin === p.startMin && endMin === p.endMin;
 										return (
@@ -249,11 +245,7 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 													set("start", minuteToTimeInput(p.startMin));
 													set("end", minuteToTimeInput(Math.min(p.endMin, 1439)));
 												}}
-												className={`rounded-full border px-4 py-2 text-sm ${
-													selected
-														? "border-blue-600 bg-blue-600 text-white"
-														: "border-gray-300 bg-white text-gray-800"
-												}`}
+												className={chipClass(selected)}
 											>
 												{p.period}限
 											</button>
@@ -264,7 +256,7 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 						</fieldset>
 					)}
 
-					<div className="grid grid-cols-2 gap-3">
+					<div className="grid grid-cols-2 gap-2">
 						<Field label="開始">
 							<input
 								type="time"
@@ -283,7 +275,7 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 						</Field>
 					</div>
 
-					<div className="grid grid-cols-2 gap-3">
+					<div className="grid grid-cols-2 gap-2">
 						<Field label="期間の開始(任意)" hint="学期の始まり">
 							<input
 								type="date"
@@ -331,29 +323,27 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 			)}
 
 			{(localError || error) && <ErrorNotice>{localError ?? `保存できませんでした: ${error}`}</ErrorNotice>}
-			<button type="submit" disabled={saving} className={btnPrimary}>
-				{saving ? "保存中…" : "保存"}
-			</button>
-
-			{onDelete &&
-				(confirming ? (
-					<div className="grid grid-cols-2 gap-2">
-						<button type="button" className={btnSecondary} onClick={() => setConfirming(false)}>
-							キャンセル
-						</button>
-						<button type="button" className={btnDanger} disabled={saving} onClick={onDelete}>
-							削除する
-						</button>
-					</div>
-				) : (
-					<button
-						type="button"
-						className="self-start px-1 py-2 text-sm font-medium text-red-600"
-						onClick={() => setConfirming(true)}
-					>
+			<div className="flex gap-2">
+				<button type="submit" disabled={saving} className={`${btnPrimary} flex-1`}>
+					{saving ? "保存中…" : "保存"}
+				</button>
+				{onDelete && !confirming && (
+					<button type="button" className={btnDanger} onClick={() => setConfirming(true)}>
 						この予定を削除
 					</button>
-				))}
+				)}
+			</div>
+
+			{onDelete && confirming && (
+				<div className="grid grid-cols-2 gap-2">
+					<button type="button" className={btnSecondary} onClick={() => setConfirming(false)}>
+						キャンセル
+					</button>
+					<button type="button" className={btnDanger} disabled={saving} onClick={onDelete}>
+						削除する
+					</button>
+				</div>
+			)}
 		</form>
 	);
 }

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { btnPrimary, ErrorNotice, Field, inputClass, SectionTitle } from "../../components/ui";
+import { Fragment, useState } from "react";
+import { btnGhost, btnPrimary, ErrorNotice, Field, inputClass, Notice, SectionTitle } from "../../components/ui";
 import type { Settings, SettingsPatch } from "../../lib/queries";
 import { minuteToTimeInput, timeInputToMinute } from "../../lib/time-input";
 
@@ -89,8 +89,24 @@ function toPatch(f: Form): { patch: SettingsPatch } | { error: string } {
 	};
 }
 
-const Card = ({ children }: { children: React.ReactNode }) => (
-	<section className="flex flex-col gap-3 rounded-lg border border-gray-300 bg-white p-4">{children}</section>
+/** 見出し+中身のまとまり。面は作らず、見出しの罫線で区切る */
+const Group = ({ title, children }: { title: string; children: React.ReactNode }) => (
+	<section className="flex flex-col gap-2">
+		<SectionTitle>{title}</SectionTitle>
+		{children}
+	</section>
+);
+
+/** 左に説明、右に短い入力の1行 */
+const ValueRow = ({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) => (
+	// biome-ignore lint/a11y/noLabelWithoutControl: children に input を渡して包む
+	<label className="flex items-center justify-between gap-3">
+		<span className="flex min-w-0 flex-col">
+			{label}
+			{hint && <span className="text-xs text-faint">{hint}</span>}
+		</span>
+		<span className="w-20 shrink-0">{children}</span>
+	</label>
 );
 
 /** 睡眠・ダイジェスト・普段のキャパ・通知の上限・時限の編集。まとめて保存する */
@@ -132,15 +148,14 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 
 	return (
 		<form
-			className="flex flex-col gap-4"
+			className="flex flex-col gap-3"
 			onSubmit={(e) => {
 				e.preventDefault();
 				submit();
 			}}
 		>
-			<Card>
-				<SectionTitle>睡眠</SectionTitle>
-				<div className="grid grid-cols-2 gap-3">
+			<Group title="睡眠">
+				<div className="grid grid-cols-2 gap-2">
 					<Field label="寝る時刻">
 						<input
 							type="time"
@@ -158,14 +173,13 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 						/>
 					</Field>
 				</div>
-				<p className="text-xs text-gray-500">
+				<p className="text-xs text-faint">
 					{crossesMidnight ? "日をまたぐ睡眠です。" : ""}この時間は作業時間に入れません(徹夜を防ぎます)
 				</p>
-			</Card>
+			</Group>
 
-			<Card>
-				<SectionTitle>通知</SectionTitle>
-				<div className="grid grid-cols-2 gap-3">
+			<Group title="通知">
+				<div className="grid grid-cols-2 gap-2">
 					<Field label="朝のまとめ">
 						<input
 							type="time"
@@ -183,7 +197,7 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 						/>
 					</Field>
 				</div>
-				<Field label="1日の通知の上限(件)" hint="致命的なもの以外の個別通知の上限">
+				<ValueRow label="1日の通知の上限(件)" hint="致命的なもの以外の個別通知の上限">
 					<input
 						type="number"
 						inputMode="numeric"
@@ -191,28 +205,25 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 						max={100}
 						value={form.dailyLimit}
 						onChange={(e) => set("dailyLimit", e.target.value)}
-						className={inputClass}
+						className={`${inputClass} text-right`}
 					/>
-				</Field>
-				<label className="flex items-start gap-3 text-base text-gray-900">
+				</ValueRow>
+				<label className="flex items-start gap-2">
 					<input
 						type="checkbox"
 						checked={form.criticalDuringSleep}
 						onChange={(e) => set("criticalDuringSleep", e.target.checked)}
-						className="mt-1 h-5 w-5 shrink-0"
+						className="mt-0.5 size-4 shrink-0 accent-ink"
 					/>
-					<span>
+					<span className="flex flex-col">
 						寝ている間も致命的な通知を送る
-						<span className="block text-xs text-gray-500">
-							オフなら起きた時刻に送る(締切に近すぎるときは寝る前)
-						</span>
+						<span className="text-xs text-faint">オフなら起きた時刻に送る(締切に近すぎるときは寝る前)</span>
 					</span>
 				</label>
-			</Card>
+			</Group>
 
-			<Card>
-				<SectionTitle>普段の作業時間(1日)</SectionTitle>
-				<div className="grid grid-cols-2 gap-3">
+			<Group title="普段の作業時間(1日)">
+				<div className="grid grid-cols-2 gap-2">
 					<Field label="平日(時間)">
 						<input
 							type="number"
@@ -238,70 +249,72 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 						/>
 					</Field>
 				</div>
-				<p className="text-xs text-gray-500">実績がたまるまでの初期値です</p>
-			</Card>
+				<p className="text-xs text-faint">実績がたまるまでの初期値です</p>
+			</Group>
 
-			<Card>
-				<SectionTitle>時限の時刻</SectionTitle>
+			<Group title="時限の時刻">
 				{form.periods.length === 0 && (
-					<p className="text-sm text-gray-500">未登録です。時間割で「N限」から選べるようになります</p>
+					<p className="text-xs text-faint">未登録です。時間割で「N限」から選べるようになります</p>
 				)}
-				{form.periods.map((p) => (
-					<div key={p.key} className="flex items-end gap-2">
-						<Field label="時限">
-							<input
-								type="number"
-								inputMode="numeric"
-								min={1}
-								max={20}
-								value={p.period}
-								onChange={(e) => setPeriod(p.key, { period: e.target.value })}
-								className={`${inputClass} w-16`}
-							/>
-						</Field>
-						<Field label="開始">
-							<input
-								type="time"
-								value={p.start}
-								onChange={(e) => setPeriod(p.key, { start: e.target.value })}
-								className={inputClass}
-							/>
-						</Field>
-						<Field label="終了">
-							<input
-								type="time"
-								value={p.end}
-								onChange={(e) => setPeriod(p.key, { end: e.target.value })}
-								className={inputClass}
-							/>
-						</Field>
-						<button
-							type="button"
-							aria-label={`${p.period}限を削除`}
-							onClick={() =>
-								set(
-									"periods",
-									form.periods.filter((x) => x.key !== p.key),
-								)
-							}
-							className="mb-1 px-2 py-2 text-lg text-gray-500"
-						>
-							✕
-						</button>
+				{form.periods.length > 0 && (
+					<div className="grid grid-cols-[3.5rem_1fr_1fr_2rem] items-center gap-x-2 gap-y-1.5">
+						<span className="text-xs text-sub">時限</span>
+						<span className="text-xs text-sub">開始</span>
+						<span className="text-xs text-sub">終了</span>
+						<span aria-hidden="true" />
+						{form.periods.map((p) => (
+							<Fragment key={p.key}>
+								<input
+									type="number"
+									inputMode="numeric"
+									min={1}
+									max={20}
+									aria-label="時限"
+									value={p.period}
+									onChange={(e) => setPeriod(p.key, { period: e.target.value })}
+									className={inputClass}
+								/>
+								<input
+									type="time"
+									aria-label="開始"
+									value={p.start}
+									onChange={(e) => setPeriod(p.key, { start: e.target.value })}
+									className={inputClass}
+								/>
+								<input
+									type="time"
+									aria-label="終了"
+									value={p.end}
+									onChange={(e) => setPeriod(p.key, { end: e.target.value })}
+									className={inputClass}
+								/>
+								<button
+									type="button"
+									aria-label={`${p.period}限を削除`}
+									onClick={() =>
+										set(
+											"periods",
+											form.periods.filter((x) => x.key !== p.key),
+										)
+									}
+									className="rounded-sm py-1 text-sm text-sub active:bg-wash"
+								>
+									✕
+								</button>
+							</Fragment>
+						))}
 					</div>
-				))}
-				<button
-					type="button"
-					onClick={addPeriod}
-					className="self-start px-1 py-1 text-sm font-bold text-blue-700"
-				>
+				)}
+				<button type="button" onClick={addPeriod} className={`${btnGhost} self-start`}>
 					＋ 時限を追加
 				</button>
-			</Card>
+			</Group>
 
 			{(localError || error) && <ErrorNotice>{localError ?? `保存できませんでした: ${error}`}</ErrorNotice>}
 			{saved && !saving && (
-				<output className="block rounded-md bg-green-100 px-3 py-2 text-sm text-green-800">保存しました</output>
+				<Notice>
+					<output>保存しました</output>
+				</Notice>
 			)}
 			<button type="submit" disabled={saving} className={btnPrimary}>
 				{saving ? "保存中…" : "設定を保存"}

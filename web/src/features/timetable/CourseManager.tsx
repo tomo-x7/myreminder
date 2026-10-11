@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { Sheet } from "../../components/Sheet";
-import { btnDanger, btnPrimary, btnSecondary, ErrorNotice, Field, inputClass, SectionTitle } from "../../components/ui";
+import {
+	btnDanger,
+	btnPrimary,
+	btnSecondary,
+	ErrorNotice,
+	Field,
+	inputClass,
+	listClass,
+	SectionTitle,
+} from "../../components/ui";
 import { type Course, useCourses, useCreateCourse, useDeleteCourse, useUpdateCourse } from "../../lib/queries";
 
 /** `a, b、c` → ["a","b","c"] */
@@ -29,7 +38,7 @@ function CourseForm({ course, onDone }: { course?: Course; onDone: () => void })
 
 	return (
 		<form
-			className="flex flex-col gap-4"
+			className="flex flex-col gap-3"
 			onSubmit={(e) => {
 				e.preventDefault();
 				save();
@@ -56,38 +65,34 @@ function CourseForm({ course, onDone }: { course?: Course; onDone: () => void })
 				/>
 			</Field>
 			{error && <ErrorNotice>保存できませんでした: {error.message}</ErrorNotice>}
-			<button type="submit" disabled={saving || !name.trim()} className={btnPrimary}>
-				{saving ? "保存中…" : "保存"}
-			</button>
-			{course &&
-				(confirming ? (
-					<div className="flex flex-col gap-2">
-						<p className="text-sm text-gray-900">
-							「{course.name}」を削除します。この科目のタスクは科目なしになります。
-						</p>
-						<div className="grid grid-cols-2 gap-2">
-							<button type="button" className={btnSecondary} onClick={() => setConfirming(false)}>
-								キャンセル
-							</button>
-							<button
-								type="button"
-								className={btnDanger}
-								disabled={saving}
-								onClick={() => remove.mutate(course.id, { onSuccess: onDone })}
-							>
-								削除する
-							</button>
-						</div>
-					</div>
-				) : (
-					<button
-						type="button"
-						className="self-start px-1 py-2 text-sm font-medium text-red-600"
-						onClick={() => setConfirming(true)}
-					>
+			<div className="flex gap-2">
+				<button type="submit" disabled={saving || !name.trim()} className={`${btnPrimary} flex-1`}>
+					{saving ? "保存中…" : "保存"}
+				</button>
+				{course && !confirming && (
+					<button type="button" className={btnDanger} onClick={() => setConfirming(true)}>
 						この科目を削除
 					</button>
-				))}
+				)}
+			</div>
+			{course && confirming && (
+				<div className="flex flex-col gap-2">
+					<p>「{course.name}」を削除します。この科目のタスクは科目なしになります。</p>
+					<div className="grid grid-cols-2 gap-2">
+						<button type="button" className={btnSecondary} onClick={() => setConfirming(false)}>
+							キャンセル
+						</button>
+						<button
+							type="button"
+							className={btnDanger}
+							disabled={saving}
+							onClick={() => remove.mutate(course.id, { onSuccess: onDone })}
+						>
+							削除する
+						</button>
+					</div>
+				</div>
+			)}
 		</form>
 	);
 }
@@ -99,13 +104,13 @@ export function CourseManager() {
 	const close = () => setEditing(null);
 
 	return (
-		<section className="flex flex-col gap-2">
+		<section className="flex flex-col">
 			<SectionTitle
 				action={
 					<button
 						type="button"
 						onClick={() => setEditing("new")}
-						className="px-2 py-1 text-sm font-bold text-blue-700"
+						className="rounded-sm px-1 py-0.5 text-xs text-sub active:bg-wash"
 					>
 						＋ 科目を追加
 					</button>
@@ -114,19 +119,22 @@ export function CourseManager() {
 				科目
 			</SectionTitle>
 			{courses.isError && <ErrorNotice>科目を読み込めませんでした</ErrorNotice>}
-			{courses.data?.length === 0 && <p className="text-sm text-gray-500">まだ科目がありません</p>}
-			<ul className="flex flex-col gap-2">
+			{courses.data?.length === 0 && <p className="py-2 text-xs text-faint">まだ科目がありません</p>}
+			<ul className={listClass}>
 				{courses.data?.map((c) => (
 					<li key={c.id}>
 						<button
 							type="button"
 							onClick={() => setEditing(c)}
-							className="flex w-full flex-col items-start rounded-lg border border-gray-300 bg-white px-3 py-2 text-left"
+							className="flex w-full items-baseline gap-2 py-2 text-left active:bg-wash"
 						>
-							<span className="text-base font-semibold text-gray-900">{c.name}</span>
-							{c.aliases.length > 0 && (
-								<span className="text-xs text-gray-500">別名: {c.aliases.join("、")}</span>
-							)}
+							<span className="shrink-0 font-medium">{c.name}</span>
+							<span className="min-w-0 flex-1 truncate text-xs text-sub">
+								{c.aliases.length > 0 && `別名: ${c.aliases.join("、")}`}
+							</span>
+							<span aria-hidden="true" className="text-faint">
+								›
+							</span>
 						</button>
 					</li>
 				))}

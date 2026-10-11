@@ -1,6 +1,7 @@
+import { btnGhost, listClass, Tag } from "../../components/ui";
 import type { BusyBlock } from "../../lib/queries";
+import { formatMinuteOfDay } from "../../lib/time-input";
 import {
-	formatRange,
 	formatSpan,
 	KIND_LABEL,
 	type Period,
@@ -17,70 +18,72 @@ type Props = {
 	onAdd: (weekday: number) => void;
 };
 
-/** 曜日ごとの繰り返しの予定(授業・バイト)。曜日の「＋」でその曜日に追加 */
+/** `10:40–12:10`(行の幅を詰めるため、他より細い区切りを使う) */
+const range = (startMin: number, endMin: number) => `${formatMinuteOfDay(startMin)}–${formatMinuteOfDay(endMin)}`;
+
+/** 曜日ごとの繰り返しの予定(授業・バイト)。左に曜日、右に行。曜日の「＋」でその曜日に追加 */
 export function WeekList({ blocks, periods, onEdit, onAdd }: Props) {
+	// 時限を登録してあるときは、行の頭に時限の枠を取って時刻の位置をそろえる
+	const hasPeriods = periods.length > 0;
 	return (
-		<div className="flex flex-col gap-3">
+		<ul className={listClass}>
 			{WEEKDAY_ORDER.map((w) => {
 				const rows = blocks.filter((b) => b.weekday === w).sort((a, b) => a.startMin - b.startMin);
 				return (
-					<section key={w} className="rounded-lg border border-gray-300 bg-white">
-						<header
-							className={`flex items-center justify-between px-3 py-1.5 ${rows.length > 0 ? "border-b border-gray-100" : ""}`}
-						>
-							<h3 className="flex items-baseline gap-3 text-base font-bold text-gray-900">
-								{WEEKDAY_LABEL[w]}曜日
-								{rows.length === 0 && (
-									<span className="text-sm font-normal text-gray-400">予定なし</span>
-								)}
-							</h3>
-							<button
-								type="button"
-								aria-label={`${WEEKDAY_LABEL[w]}曜日に追加`}
-								onClick={() => onAdd(w)}
-								className="rounded-md px-3 py-1 text-xl leading-none font-bold text-blue-700 active:bg-blue-50"
-							>
-								＋
-							</button>
-						</header>
-						{rows.length > 0 && (
-							<ul>
+					<li key={w} className="flex items-start gap-1.5 py-1">
+						<h3 className="w-4 shrink-0 py-1.5 text-sm font-semibold">
+							{WEEKDAY_LABEL[w]}
+							<span className="sr-only">曜日</span>
+						</h3>
+						{rows.length === 0 ? (
+							<p className="min-w-0 flex-1 py-2 text-xs text-faint">予定なし</p>
+						) : (
+							<ul className="min-w-0 flex-1">
 								{rows.map((b) => {
 									const period = periodOf(b, periods);
 									const span = formatSpan(b);
 									return (
-										<li key={b.id} className="border-b border-gray-100 last:border-b-0">
+										<li key={b.id}>
 											<button
 												type="button"
 												onClick={() => onEdit(b)}
-												className="flex w-full flex-col items-start px-3 py-2 text-left"
+												className="flex w-full items-baseline gap-1.5 py-1.5 text-left active:bg-wash"
 											>
-												<span className="flex items-baseline gap-2">
-													<span className="text-base font-semibold tabular-nums text-gray-900">
-														{period ? `${period.period}限 ` : ""}
-														{formatRange(b.startMin, b.endMin)}
-													</span>
-													<span
-														className={`rounded px-1.5 py-0.5 text-xs font-bold ${
-															b.kind === "class"
-																? "bg-blue-100 text-blue-800"
-																: "bg-emerald-100 text-emerald-800"
-														}`}
-													>
-														{KIND_LABEL[b.kind]}
+												<span className="shrink-0 font-medium whitespace-nowrap">
+													{hasPeriods && (
+														<span className="mr-1 inline-block w-6 text-xs font-normal text-sub">
+															{period ? `${period.period}限` : ""}
+														</span>
+													)}
+													<span className="inline-block min-w-[5rem]">
+														{range(b.startMin, b.endMin)}
 													</span>
 												</span>
-												<span className="text-sm text-gray-800">{b.label || "(名前なし)"}</span>
-												{span && <span className="text-xs text-gray-500">{span}</span>}
+												<span className="min-w-0 flex-1 text-balance">
+													{b.label || "(名前なし)"}
+													{span && <span className="block text-xs text-sub">{span}</span>}
+												</span>
+												<Tag>{KIND_LABEL[b.kind]}</Tag>
+												<span aria-hidden="true" className="text-faint">
+													›
+												</span>
 											</button>
 										</li>
 									);
 								})}
 							</ul>
 						)}
-					</section>
+						<button
+							type="button"
+							aria-label={`${WEEKDAY_LABEL[w]}曜日に追加`}
+							onClick={() => onAdd(w)}
+							className={`${btnGhost} mt-0.5`}
+						>
+							＋
+						</button>
+					</li>
 				);
 			})}
-		</div>
+		</ul>
 	);
 }

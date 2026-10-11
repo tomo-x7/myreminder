@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { btnDanger, btnPrimary, btnSecondary, ErrorNotice, Field, inputClass, QueryState } from "../../components/ui";
+import {
+	btnDanger,
+	btnSecondary,
+	ErrorNotice,
+	Field,
+	inputClass,
+	listClass,
+	Notice,
+	QueryState,
+} from "../../components/ui";
 import {
 	useCreateWebhook,
 	useDeleteWebhook,
@@ -44,12 +53,12 @@ function EventChecks({
 	disabled?: boolean;
 }) {
 	return (
-		<div className="flex flex-col gap-1">
+		<div className="flex flex-col">
 			{EVENTS.map((ev) => (
-				<label key={ev.value} className="flex items-center gap-3 py-1.5 text-base text-gray-900">
+				<label key={ev.value} className="flex items-center gap-2 py-1">
 					<input
 						type="checkbox"
-						className="h-5 w-5 shrink-0"
+						className="size-4 shrink-0 accent-ink"
 						disabled={disabled}
 						checked={value.includes(ev.value)}
 						onChange={(e) =>
@@ -94,16 +103,14 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 	}
 
 	return (
-		<li className="flex flex-col gap-3 rounded-lg border border-gray-300 bg-white p-4">
-			<div className="flex items-center justify-between gap-2">
-				<div className="min-w-0">
-					<p className="text-base font-bold text-gray-900">{KIND_LABEL[webhook.kind]}</p>
-					<p className="truncate font-mono text-sm text-gray-600">{webhook.maskedUrl}</p>
-				</div>
-				<label className="flex shrink-0 items-center gap-2 text-sm font-medium text-gray-700">
+		<li className="flex flex-col gap-2 py-2">
+			<div className="flex items-center gap-2">
+				<p className="shrink-0 font-semibold">{KIND_LABEL[webhook.kind]}</p>
+				<p className="min-w-0 flex-1 truncate font-mono text-xs text-sub">{webhook.maskedUrl}</p>
+				<label className="flex shrink-0 items-center gap-1.5 text-xs text-sub">
 					<input
 						type="checkbox"
-						className="h-5 w-5"
+						className="size-4 accent-ink"
 						checked={webhook.enabled}
 						disabled={busy}
 						onChange={(e) => save({ enabled: e.target.checked })}
@@ -114,9 +121,9 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 
 			<EventChecks value={webhook.events} disabled={busy} onChange={(events) => save({ events })} />
 
-			{webhook.lastError && <p className="text-sm text-red-700">前回の送信に失敗: {webhook.lastError}</p>}
+			{webhook.lastError && <Notice tone="danger">前回の送信に失敗: {webhook.lastError}</Notice>}
 
-			<div className="flex flex-wrap gap-2">
+			<div className="flex flex-wrap gap-1.5">
 				<button type="button" className={btnSecondary} disabled={busy} onClick={() => test.mutate(webhook.id)}>
 					{test.isPending ? "送信中…" : "テスト送信"}
 				</button>
@@ -132,11 +139,16 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 				>
 					URL を差し替える
 				</button>
+				{!confirming && (
+					<button type="button" onClick={() => setConfirming(true)} className={`${btnDanger} ml-auto`}>
+						削除
+					</button>
+				)}
 			</div>
 			{test.data?.ok && (
-				<output className="block rounded-md bg-green-100 px-3 py-2 text-sm text-green-800">
-					送信しました。{KIND_LABEL[webhook.kind]} を確認してください
-				</output>
+				<Notice>
+					<output>送信しました。{KIND_LABEL[webhook.kind]} を確認してください</output>
+				</Notice>
 			)}
 			{test.data && !test.data.ok && (
 				<ErrorNotice>送信に失敗しました{testError ? `: ${testError}` : ""}</ErrorNotice>
@@ -163,7 +175,7 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 							className={inputClass}
 						/>
 					</Field>
-					<button type="submit" className={btnPrimary} disabled={busy || !newUrl.trim()}>
+					<button type="submit" className={btnSecondary} disabled={busy || !newUrl.trim()}>
 						{update.isPending ? "保存中…" : "差し替える"}
 					</button>
 				</form>
@@ -171,11 +183,9 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 
 			{error && <ErrorNotice>{errorText(error)}</ErrorNotice>}
 
-			{confirming ? (
+			{confirming && (
 				<div className="flex flex-col gap-2">
-					<p className="text-sm text-gray-900">
-						この {KIND_LABEL[webhook.kind]} への報告を削除します。URL も消えます。
-					</p>
+					<p>この {KIND_LABEL[webhook.kind]} への報告を削除します。URL も消えます。</p>
 					<div className="grid grid-cols-2 gap-2">
 						<button type="button" className={btnSecondary} onClick={() => setConfirming(false)}>
 							キャンセル
@@ -190,14 +200,6 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 						</button>
 					</div>
 				</div>
-			) : (
-				<button
-					type="button"
-					onClick={() => setConfirming(true)}
-					className="self-start px-1 py-1 text-sm font-bold text-red-700"
-				>
-					削除
-				</button>
 			)}
 		</li>
 	);
@@ -226,42 +228,45 @@ function AddWebhookForm() {
 
 	return (
 		<form
-			className="flex flex-col gap-3 rounded-lg border border-gray-300 bg-white p-4"
+			className="mt-1 flex flex-col gap-2"
 			onSubmit={(e) => {
 				e.preventDefault();
 				submit();
 			}}
 		>
-			<p className="text-base font-bold text-gray-900">報告先を追加</p>
-			<Field label="種類">
-				<select
-					value={kind}
-					onChange={(e) => {
-						setKind(e.target.value as WebhookKind);
-						create.reset();
-					}}
-					className={inputClass}
-				>
-					<option value="discord">Discord</option>
-					<option value="slack">Slack</option>
-				</select>
-			</Field>
-			<Field label="webhook URL" hint={`形: ${URL_HINT[kind]}`}>
-				<input
-					type="url"
-					autoComplete="off"
-					autoCapitalize="off"
-					spellCheck={false}
-					value={url}
-					maxLength={500}
-					onChange={(e) => setUrl(e.target.value)}
-					placeholder={URL_HINT[kind]}
-					className={inputClass}
-				/>
-			</Field>
+			<p className="text-xs font-semibold text-sub">報告先を追加</p>
+			<div className="grid grid-cols-[6.5rem_1fr] gap-2">
+				<Field label="種類">
+					<select
+						value={kind}
+						onChange={(e) => {
+							setKind(e.target.value as WebhookKind);
+							create.reset();
+						}}
+						className={inputClass}
+					>
+						<option value="discord">Discord</option>
+						<option value="slack">Slack</option>
+					</select>
+				</Field>
+				<Field label="webhook URL">
+					<input
+						type="url"
+						autoComplete="off"
+						autoCapitalize="off"
+						spellCheck={false}
+						value={url}
+						maxLength={500}
+						onChange={(e) => setUrl(e.target.value)}
+						placeholder={URL_HINT[kind]}
+						className={inputClass}
+					/>
+				</Field>
+			</div>
+			<p className="text-xs text-faint">形: {URL_HINT[kind]}</p>
 			<EventChecks value={events} onChange={setEvents} />
 			{create.error && <ErrorNotice>{errorText(create.error)}</ErrorNotice>}
-			<button type="submit" disabled={create.isPending || !url.trim()} className={btnPrimary}>
+			<button type="submit" disabled={create.isPending || !url.trim()} className={btnSecondary}>
 				{create.isPending ? "保存中…" : "追加"}
 			</button>
 		</form>
@@ -272,8 +277,8 @@ function AddWebhookForm() {
 export function WebhookSettings() {
 	const webhooks = useWebhooks();
 	return (
-		<div className="flex flex-col gap-3">
-			<p className="text-sm text-gray-600">
+		<div className="flex flex-col gap-2">
+			<p className="text-xs text-sub">
 				課題を提出済みにしたことや、その日に課題に使った時間を、Discord / Slack に送れます。URL
 				は保存後は表示されません。
 			</p>
@@ -281,9 +286,9 @@ export function WebhookSettings() {
 				{(list) => (
 					<>
 						{list.length === 0 ? (
-							<p className="text-sm text-gray-500">まだ登録されていません</p>
+							<p className="text-xs text-faint">まだ登録されていません</p>
 						) : (
-							<ul className="flex flex-col gap-3">
+							<ul className={listClass}>
 								{list.map((w) => (
 									<WebhookRow key={w.id} webhook={w} />
 								))}

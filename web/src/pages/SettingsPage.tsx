@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { PageHeader, QueryState, SectionTitle } from "../components/ui";
+import { listClass, PageHeader, QueryState, SectionTitle } from "../components/ui";
 import { SettingsForm } from "../features/settings/SettingsForm";
 import { WebhookSettings } from "../features/webhooks";
 import { useSettings, useUpdateSettings } from "../lib/queries";
@@ -12,20 +12,24 @@ export function SettingsPage() {
 	const [saved, setSaved] = useState(false);
 
 	return (
-		<div className="flex flex-col gap-6">
+		<div className="flex flex-col gap-3">
 			<PageHeader title="設定" />
 			<section className="flex flex-col gap-2">
 				<SectionTitle>プッシュ通知(この端末)</SectionTitle>
 				<PushToggle />
 			</section>
-			<section className="flex flex-col gap-2">
+			<section className="flex flex-col">
 				<SectionTitle>ステータスと作業記録</SectionTitle>
-				<Link
-					href="/status"
-					className="rounded-lg border border-gray-300 bg-white px-4 py-3 text-base text-gray-800"
-				>
-					作業記録を見る・直す →
-				</Link>
+				<ul className={listClass}>
+					<li>
+						<Link href="/status" className="flex items-baseline justify-between gap-2 py-2 active:bg-wash">
+							作業記録を見る・直す
+							<span aria-hidden="true" className="text-faint">
+								›
+							</span>
+						</Link>
+					</li>
+				</ul>
 			</section>
 			<section className="flex flex-col gap-2">
 				<SectionTitle>Discord / Slack への報告</SectionTitle>
