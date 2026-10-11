@@ -3,13 +3,16 @@ import { useEffect, useRef, useState } from "react";
 import { btnGhost, btnPrimary, btnSecondary, chipClass, ErrorNotice, inputClass, Notice } from "../../components/ui";
 import { api } from "../../lib/api";
 import { CandidateCard } from "./CandidateCard";
-import { candidateToDraft, draftToInput, emptyDraft, hasProblems, validateDraft } from "./draft";
+import { candidateToDraft, draftToInput, emptyDraft, hasProblems, TITLE_MAX, validateDraft } from "./draft";
 import { resizeImage } from "./image";
 import type { Draft, StartSuggestion, TaskCreateInput } from "./types";
 
 type Props = {
-	/** 確認済みのタスクを保存する。reject すると画面にエラーを出してカードを残す */
-	onConfirm: (inputs: TaskCreateInput[]) => Promise<void>;
+	/**
+	 * 確認済みのタスクを保存する。reject すると画面にエラーを出してカードを残す。
+	 * i 番目を保存できるたびに onSaved(i) を呼ぶこと(保存済みのカードを消し、やり直しで二重に保存しないため)
+	 */
+	onConfirm: (inputs: TaskCreateInput[], onSaved: (index: number) => void) => Promise<void>;
 	/** 登録後・閉じるときに入力に戻したいとき用(任意) */
 	onCancel?: () => void;
 	/** 入力欄の初期値(Web Share Target などから渡す)。省略時は空 */
@@ -30,10 +33,18 @@ type ParseOutcome = {
 	now: number;
 	/** 解析に失敗/空だったときの案内。drafts は手入力用の空カード */
 	notice: string | null;
+	/** 解析に失敗した告知文の本文。手入力のときに見比べられるよう確認画面に残す */
+	pasted: string | null;
 };
 
 const LINE_MAX = 500;
 const TEXT_MAX = 8000;
+
+/** 手入力カードの題。1行ならその行、告知文なら最初の空でない行(本文は確認画面に残す) */
+function draftTitle(mode: Mode, text: string): string {
+	const line = mode === "line" ? text : (text.split("\n").find((l) => l.trim()) ?? "");
+	return line.trim().slice(0, TITLE_MAX);
+}
 
 function useNow(intervalMs = 30_000): number {
 	const [now, setNow] = useState(() => Date.now());
@@ -47,10 +58,11 @@ function useNow(intervalMs = 30_000): number {
 /** 解析 API を呼ぶ。失敗しても例外にせず、手入力のカードを返す */
 async function parseInput(mode: Mode, text: string): Promise<ParseOutcome> {
 	const fallback = (notice: string): ParseOutcome => ({
-		drafts: [emptyDraft(mode === "line" ? text : "")],
+		drafts: [emptyDraft(draftTitle(mode, text))],
 		startSuggestions: [],
 		now: Date.now(),
 		notice,
+		pasted: mode === "text" ? text : null,
 	});
 	try {
 		const res =
@@ -68,6 +80,7 @@ async function parseInput(mode: Mode, text: string): Promise<ParseOutcome> {
 			startSuggestions: data.startSuggestions,
 			now: data.now,
 			notice: null,
+			pasted: null,
 		};
 	} catch {
 		return fallback("通信に失敗しました。手入力してください");
@@ -83,6 +96,7 @@ async function parseImageInput(image: Blob): Promise<ParseOutcome> {
 		startSuggestions: [],
 		now: Date.now(),
 		notice,
+		pasted: null,
 	});
 	try {
 		const jpeg = await resizeImage(image);
@@ -100,6 +114,7 @@ async function parseImageInput(image: Blob): Promise<ParseOutcome> {
 			startSuggestions: data.startSuggestions,
 			now: data.now,
 			notice: PHOTO_NOTICE,
+			pasted: null,
 		};
 	} catch {
 		return fallback("写真を読み込めませんでした。手入力してください");
@@ -110,7 +125,11 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 	const now = useNow();
 	const [mode, setMode] = useState<Mode>(initialMode ?? "line");
 	const [text, setText] = useState(initialText ?? "");
-	const [outcome, setOutcome] = useState<{ notice: string | null; startSuggestions: StartSuggestion[] } | null>(null);
+	const [outcome, setOutcome] = useState<{
+		notice: string | null;
+		startSuggestions: StartSuggestion[];
+		pasted: string | null;
+	} | null>(null);
 	const [drafts, setDrafts] = useState<Draft[]>([]);
 	const [showProblems, setShowProblems] = useState(false);
 	const [saveError, setSaveError] = useState<string | null>(null);
@@ -138,20 +157,34 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 			"image" in input ? parseImageInput(input.image) : parseInput(input.mode, input.text),
 		onSuccess: (r) => {
 			setDrafts(r.drafts);
-			setOutcome({ notice: r.notice, startSuggestions: r.startSuggestions });
+			setOutcome({ notice: r.notice, startSuggestions: r.startSuggestions, pasted: r.pasted });
 			setShowProblems(false);
 			setSaveError(null);
 		},
 	});
 
+	const patchDraft = (key: string, patch: Partial<Draft>) =>
+		setDrafts((ds) => ds.map((d) => (d.key === key ? { ...d, ...patch } : d)));
+	const removeDraft = (key: string) => setDrafts((ds) => ds.filter((d) => d.key !== key));
+
+	// 途中で失敗したとき、保存できた分は画面から消す(やり直しで二重に保存しない)
+	const savedCount = useRef(0);
 	const save = useMutation({
-		mutationFn: (inputs: TaskCreateInput[]) => onConfirm(inputs),
+		mutationFn: ({ keys, inputs }: { keys: string[]; inputs: TaskCreateInput[] }) =>
+			onConfirm(inputs, (i) => {
+				savedCount.current += 1;
+				const key = keys[i];
+				if (key !== undefined) removeDraft(key);
+			}),
 		onSuccess: () => reset(),
-		onError: (e) => setSaveError(e instanceof Error ? e.message : "保存に失敗しました"),
+		onError: (e) => {
+			const msg = e instanceof Error ? e.message : "保存に失敗しました";
+			setSaveError(savedCount.current > 0 ? `${msg}(${savedCount.current}件は保存済み)` : msg);
+		},
 	});
 
-	function reset() {
-		setText("");
+	/** 入力画面に戻る。入力した文章は残す */
+	function back() {
 		setPreview(null);
 		setOutcome(null);
 		setDrafts([]);
@@ -159,9 +192,15 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 		setSaveError(null);
 	}
 
+	/** 保存し終えたあと。文章も消す */
+	function reset() {
+		setText("");
+		back();
+	}
+
 	function startManual() {
-		setDrafts([emptyDraft(mode === "line" ? text.trim() : "")]);
-		setOutcome({ notice: null, startSuggestions: [] });
+		setDrafts([emptyDraft(draftTitle(mode, text))]);
+		setOutcome({ notice: null, startSuggestions: [], pasted: mode === "text" && text.trim() ? text : null });
 	}
 
 	function submit() {
@@ -197,12 +236,9 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 			return;
 		}
 		setSaveError(null);
-		save.mutate(drafts.map((d) => draftToInput(d, courses)));
+		savedCount.current = 0;
+		save.mutate({ keys: drafts.map((d) => d.key), inputs: drafts.map((d) => draftToInput(d, courses)) });
 	}
-
-	const patchDraft = (key: string, patch: Partial<Draft>) =>
-		setDrafts((ds) => ds.map((d) => (d.key === key ? { ...d, ...patch } : d)));
-	const removeDraft = (key: string) => setDrafts((ds) => ds.filter((d) => d.key !== key));
 
 	// 写真を読み取っている間
 	if (outcome === null && parse.isPending && preview) {
@@ -317,6 +353,14 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 					<Notice tone="warn">{outcome.notice}</Notice>
 				</div>
 			)}
+			{outcome.pasted && (
+				<details open className="text-xs text-sub">
+					<summary className="cursor-pointer">貼り付けた本文</summary>
+					<p className="mt-1 max-h-40 overflow-y-auto border-l-2 border-line pl-2 break-words whitespace-pre-wrap">
+						{outcome.pasted}
+					</p>
+				</details>
+			)}
 			{preview && (
 				<img
 					src={preview}
@@ -346,7 +390,7 @@ export function QuickAdd({ onConfirm, onCancel, initialText, initialMode, autoSu
 			{saveError && <ErrorNotice>保存できませんでした: {saveError}</ErrorNotice>}
 
 			<div className="sticky bottom-0 flex gap-2 border-t border-line bg-paper py-2">
-				<button type="button" onClick={reset} disabled={saving} className={btnSecondary}>
+				<button type="button" onClick={back} disabled={saving} className={btnSecondary}>
 					戻る
 				</button>
 				<button

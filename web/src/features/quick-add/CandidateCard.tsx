@@ -1,7 +1,7 @@
 import { DueLabel } from "../../components/DueLabel";
 import { btnGhost, chipClass, Field, inputClass, Notice } from "../../components/ui";
 import { formatJstDateTime, fromDatetimeLocal } from "../../lib/date";
-import { type CourseOption, type DraftProblems, resolveCourseId } from "./draft";
+import { type CourseOption, type DraftProblems, FIRST_STEP_MAX, resolveCourseId, TITLE_MAX } from "./draft";
 import { CATEGORY_OPTIONS, type Category, type Draft, type StartSuggestion } from "./types";
 
 type Props = {
@@ -84,7 +84,13 @@ export function CandidateCard({
 						type="datetime-local"
 						value={draft.dueLocal}
 						disabled={disabled}
-						onChange={(e) => onChange({ dueLocal: e.target.value })}
+						onChange={(e) => {
+							const due = fromDatetimeLocal(e.target.value);
+							// 締切を着手の合図より前にしたら、合図は外す(締切の後に鳴らさない)
+							const dropStart =
+								due !== null && draft.plannedStartAt !== null && due <= draft.plannedStartAt;
+							onChange({ dueLocal: e.target.value, ...(dropStart && { plannedStartAt: null }) });
+						}}
 						className={inputClass}
 					/>
 				</Field>
@@ -105,6 +111,7 @@ export function CandidateCard({
 				<input
 					type="text"
 					value={draft.title}
+					maxLength={TITLE_MAX}
 					disabled={disabled}
 					onChange={(e) => onChange({ title: e.target.value })}
 					className={inputClass}
@@ -153,10 +160,11 @@ export function CandidateCard({
 				</Field>
 			</div>
 
-			<Field label="最初の一歩(任意)">
+			<Field label="最初の一歩(任意)" error={showProblems ? problems.firstStep : undefined}>
 				<input
 					type="text"
 					value={draft.firstStep}
+					maxLength={FIRST_STEP_MAX}
 					disabled={disabled}
 					onChange={(e) => onChange({ firstStep: e.target.value })}
 					placeholder="例: テンプレを開いて見出しだけ書く"
@@ -164,32 +172,35 @@ export function CandidateCard({
 				/>
 			</Field>
 
-			<fieldset className="flex flex-col gap-1">
-				<legend className="mb-1 text-xs text-sub">いつ始める?</legend>
-				<div className="flex flex-wrap gap-1.5">
-					{chips.map((s) => {
-						const selected = draft.plannedStartAt === s.at;
-						return (
-							<button
-								key={s.at}
-								type="button"
-								aria-pressed={selected}
-								disabled={disabled}
-								onClick={() => onChange({ plannedStartAt: selected ? null : s.at })}
-								className={`${chipClass(selected)} disabled:opacity-40`}
-							>
-								{s.label}
-							</button>
-						);
-					})}
-					{chips.length === 0 && <p className="text-xs text-faint">締切までに選べる候補がありません</p>}
-				</div>
-				<p className="text-xs text-faint">
-					{draft.plannedStartAt === null
-						? "決めない場合は、もう一度タップして解除"
-						: `${formatJstDateTime(draft.plannedStartAt)} に合図します`}
-				</p>
-			</fieldset>
+			{/* 候補が元からない(手入力のカードなど)ときは欄ごと出さない */}
+			{startSuggestions.length > 0 && (
+				<fieldset className="flex flex-col gap-1">
+					<legend className="mb-1 text-xs text-sub">いつ始める?</legend>
+					<div className="flex flex-wrap gap-1.5">
+						{chips.map((s) => {
+							const selected = draft.plannedStartAt === s.at;
+							return (
+								<button
+									key={s.at}
+									type="button"
+									aria-pressed={selected}
+									disabled={disabled}
+									onClick={() => onChange({ plannedStartAt: selected ? null : s.at })}
+									className={`${chipClass(selected)} disabled:opacity-40`}
+								>
+									{s.label}
+								</button>
+							);
+						})}
+						{chips.length === 0 && <p className="text-xs text-faint">締切までに選べる候補がありません</p>}
+					</div>
+					<p className="text-xs text-faint">
+						{draft.plannedStartAt === null
+							? "決めない場合は、もう一度タップして解除"
+							: `${formatJstDateTime(draft.plannedStartAt)} に合図します`}
+					</p>
+				</fieldset>
+			)}
 		</section>
 	);
 }

@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { btnGhost, btnPrimary, btnSecondary, chipClass, ErrorNotice, inputClass } from "../../components/ui";
+import {
+	btnGhost,
+	btnPrimary,
+	btnSecondary,
+	chipClass,
+	ErrorNotice,
+	inputClass,
+	StaleNotice,
+} from "../../components/ui";
 import {
 	errorText,
 	type SetStatusInput,
@@ -50,7 +58,8 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 	const [expanded, setExpanded] = useState(false);
 
 	if (status.isPending) return <p className="text-xs text-faint">読み込み中…</p>;
-	if (status.isError) return <p className="text-xs text-danger">ステータスを取得できませんでした</p>;
+	// データがあるうちの再取得の失敗では、作業を終えるボタンを消さない(下に注意だけ出す)
+	if (status.data === undefined) return <p className="text-xs text-danger">ステータスを取得できませんでした</p>;
 
 	const s = status.data;
 	const meta = LABEL[s.mode] ?? LABEL.normal;
@@ -133,6 +142,7 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 						<button
 							type="button"
 							className="self-start text-xs text-sub underline underline-offset-2"
+							disabled={stop.isPending}
 							onClick={() => doStop(0)}
 						>
 							ほとんど進まなかった(0%)
@@ -244,6 +254,7 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 			)}
 
 			{error && <ErrorNotice>{errorText(error)}</ErrorNotice>}
+			{status.isError && <StaleNotice onRetry={() => status.refetch()} />}
 		</section>
 	);
 }

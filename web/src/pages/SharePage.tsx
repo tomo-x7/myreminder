@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { Notice, PageHeader } from "../components/ui";
 import { takeSharedImage } from "../features/quick-add/image";
 import { QuickAdd } from "../features/quick-add/QuickAdd";
+import type { TaskCreateInput } from "../features/quick-add/types";
 import { useCreateTasks } from "../lib/queries";
 
 // QuickAdd の貼り付け入力の上限(TEXT_MAX)に合わせる
@@ -43,8 +44,8 @@ export function SharePage() {
 	}, [wantsImage]);
 
 	const save = useCallback(
-		async (inputs: Parameters<typeof create.mutateAsync>[0]) => {
-			await create.mutateAsync(inputs);
+		async (inputs: TaskCreateInput[], onSaved: (index: number) => void) => {
+			await create.mutateAsync({ inputs, onSaved });
 			navigate("/", { replace: true });
 		},
 		[create.mutateAsync, navigate],

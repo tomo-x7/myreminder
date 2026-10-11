@@ -62,9 +62,12 @@ function HomeBody({ plan, courses }: { plan: Plan; courses: readonly Course[] })
 			{next ? (
 				<NextCard task={next} course={courses.find((c) => c.id === next.courseId)} now={now} />
 			) : (
-				<p className="border-l-2 border-line pl-3 text-sub">
-					やることはありません。課題が出たら「＋ 追加」から登録する
-				</p>
+				// 期限切れだけが残っているときは「やることはない」と言わない(下の期限切れの欄が主役)
+				plan.overdue.length === 0 && (
+					<p className="border-l-2 border-line pl-3 text-sub">
+						やることはありません。課題が出たら「＋ 追加」から登録する
+					</p>
+				)
 			)}
 
 			<PlanAlerts plan={plan} now={now} />

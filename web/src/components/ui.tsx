@@ -107,7 +107,10 @@ export function Empty({ children }: { children: ReactNode }) {
 	return <p className="py-6 text-center text-xs text-faint">{children}</p>;
 }
 
-/** useQuery の結果の、読み込み中/エラーの表示。成功したら children にデータを渡す */
+/**
+ * useQuery の結果の、読み込み中/エラーの表示。成功したら children にデータを渡す。
+ * データがあるうちの再取得の失敗(復帰直後の圏外など)では、children を消さず(入力中のフォームを失わないため)、注意だけ添える
+ */
 export function QueryState<T>({
 	query,
 	children,
@@ -116,7 +119,7 @@ export function QueryState<T>({
 	children: (data: T) => ReactNode;
 }) {
 	if (query.isPending) return <p className="py-6 text-center text-xs text-faint">読み込み中…</p>;
-	if (query.isError || query.data === undefined) {
+	if (query.data === undefined) {
 		return (
 			<div className="flex flex-col items-start gap-2 py-3">
 				<ErrorNotice>読み込めませんでした: {query.error?.message ?? "不明なエラー"}</ErrorNotice>
@@ -126,5 +129,22 @@ export function QueryState<T>({
 			</div>
 		);
 	}
-	return children(query.data);
+	return (
+		<>
+			{query.isError && <StaleNotice onRetry={() => query.refetch()} />}
+			{children(query.data)}
+		</>
+	);
+}
+
+/** 表示中のデータの更新に失敗したときの1行 */
+export function StaleNotice({ onRetry }: { onRetry: () => void }) {
+	return (
+		<Notice tone="danger">
+			更新に失敗しました。
+			<button type="button" className="underline underline-offset-2" onClick={onRetry}>
+				再読み込み
+			</button>
+		</Notice>
+	);
 }

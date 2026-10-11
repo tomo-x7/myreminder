@@ -83,27 +83,60 @@ export const useSettings = () =>
 		},
 	});
 
-/** 更新系の mutation を作り、成功したらその key を無効化する */
-function useInvalidatingMutation<V, R>(mutationFn: (v: V) => Promise<R>, key: readonly unknown[]) {
+/**
+ * 更新系の mutation を作り、成功したらその key を無効化する。extra は同時に取り直す key
+ * (タスクを動かすと、作業中のステータスや作業記録も変わる)
+ */
+function useInvalidatingMutation<V, R>(
+	mutationFn: (v: V) => Promise<R>,
+	key: readonly unknown[],
+	extra: readonly (readonly unknown[])[] = [],
+) {
 	const qc = useQueryClient();
 	// 計画(/api/schedule)はタスク・予定・設定のどれが変わっても変わる
 	return useMutation({
 		mutationFn,
 		onSuccess: () =>
-			Promise.all([qc.invalidateQueries({ queryKey: key }), qc.invalidateQueries({ queryKey: ["schedule"] })]),
+			Promise.all([key, ["schedule"], ...extra].map((queryKey) => qc.invalidateQueries({ queryKey }))),
 	});
 }
 
-export const useCreateTasks = () =>
-	useInvalidatingMutation(async (inputs: TaskCreate[]) => {
-		// 順番に保存する(途中で失敗したら、そこで止めて画面に出す)
-		for (const json of inputs) assertOk(await api.api.tasks.$post({ json }));
-	}, queryKeys.tasks);
+// タスクを完了・提出済み・取り下げ・削除にすると、サーバーが作業中の記録を閉じる
+const TASK_SIDE_KEYS = [["status"], ["sessions"]] as const;
+
+export type CreateTasksInput = {
+	inputs: TaskCreate[];
+	/** i 番目を保存できるたびに呼ぶ。途中で失敗したときに、保存済みを再送しないための目印 */
+	onSaved?: (index: number) => void;
+};
+
+export function useCreateTasks() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: async ({ inputs, onSaved }: CreateTasksInput) => {
+			// 順番に保存する(途中で失敗したら、そこで止めて画面に出す)
+			for (const [i, json] of inputs.entries()) {
+				assertOk(await api.api.tasks.$post({ json }));
+				onSaved?.(i);
+			}
+		},
+		// 途中まで保存できた場合も一覧を取り直す
+		onSettled: () =>
+			Promise.all([
+				qc.invalidateQueries({ queryKey: queryKeys.tasks }),
+				qc.invalidateQueries({ queryKey: ["schedule"] }),
+			]),
+	});
+}
 
 export const useUpdateTask = () =>
-	useInvalidatingMutation(async ({ id, patch }: { id: string; patch: TaskPatch }) => {
-		assertOk(await api.api.tasks[":id"].$patch({ param: { id }, json: patch }));
-	}, queryKeys.tasks);
+	useInvalidatingMutation(
+		async ({ id, patch }: { id: string; patch: TaskPatch }) => {
+			assertOk(await api.api.tasks[":id"].$patch({ param: { id }, json: patch }));
+		},
+		queryKeys.tasks,
+		TASK_SIDE_KEYS,
+	);
 
 /** 削除した本人の詳細画面が 404 を再取得しないよう、無効化は待たずに先へ進む */
 export function useDeleteTask() {
@@ -114,8 +147,9 @@ export function useDeleteTask() {
 		},
 		onSuccess: (_, id) => {
 			qc.removeQueries({ queryKey: [...queryKeys.tasks, id], exact: true });
-			void qc.invalidateQueries({ queryKey: queryKeys.tasks });
-			void qc.invalidateQueries({ queryKey: ["schedule"] });
+			for (const queryKey of [queryKeys.tasks, ["schedule"], ...TASK_SIDE_KEYS]) {
+				void qc.invalidateQueries({ queryKey });
+			}
 		},
 	});
 }

@@ -93,6 +93,15 @@ function SessionItem({ session }: { session: SessionRow }) {
 		update.mutate({ id: session.id, patch: { startAt, endAt, progress } }, { onSuccess: () => setEditing(false) });
 	};
 
+	// 編集を始めるたびに、いまの記録の値から入れ直す(やめた編集の値を引きずらない)
+	const startEdit = () => {
+		setStart(toInput(session.startAt));
+		setEnd(toInput(session.endAt ?? session.startAt));
+		setProgress(session.progress);
+		update.reset();
+		setEditing(true);
+	};
+
 	const canEdit = !editing && session.endAt !== null;
 	const hasMeta = session.progress !== null || session.review === "needs_review" || session.edited;
 
@@ -114,7 +123,7 @@ function SessionItem({ session }: { session: SessionRow }) {
 					{session.edited && <Tag>編集済み</Tag>}
 					{canEdit && (
 						<div className="ml-auto flex shrink-0 gap-0.5">
-							<button type="button" className={`${rowBtn} text-sub`} onClick={() => setEditing(true)}>
+							<button type="button" className={`${rowBtn} text-sub`} onClick={startEdit}>
 								編集
 							</button>
 							<button

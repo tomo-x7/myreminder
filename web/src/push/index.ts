@@ -52,7 +52,8 @@ let registerWaiter: ((fid: string) => void) | undefined;
 const label = () => (/Android/i.test(navigator.userAgent) ? "Android" : navigator.platform || "browser");
 
 async function uploadFid(fid: string) {
-	const res = await api.api.push.tokens.$post({ json: { token: fid, label: label() } });
+	const res = await api.api.push.tokens.$post({ json: { token: fid, label: label() } }).catch(() => null);
+	if (!res) throw new Error("サーバーへの登録に失敗しました(通信エラー)");
 	if (!res.ok) throw new Error(`サーバーへの登録に失敗しました (${res.status})`);
 }
 
@@ -62,11 +63,12 @@ function setup(): Messaging {
 	app = initializeApp(firebaseConfig);
 	messaging = getMessaging(app);
 
-	// register() のたびに(FID の更新・pushsubscriptionchange でも)呼ばれる
+	// register() のたびに(FID の更新・pushsubscriptionchange でも)呼ばれる。
+	// registerWithFcm の最中なら呼び出し側が登録を待つ。それ以外(FID の更新)はここで登録し直す
 	onRegistered(messaging, (fid) => {
 		currentFid = fid;
-		uploadFid(fid).catch((e) => console.error(e));
-		registerWaiter?.(fid);
+		if (registerWaiter) registerWaiter(fid);
+		else uploadFid(fid).catch((e) => console.error(e));
 	});
 	onUnregistered(messaging, (fid) => {
 		api.api.push.tokens[":token"].$delete({ param: { token: fid } }).catch(() => {});
@@ -102,18 +104,24 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
 	return reg;
 }
 
-async function registerWithFcm(): Promise<string> {
+/** FCM に登録し、FID を Worker に登録するところまで待つ。どちらかが失敗したら throw する */
+async function registerWithFcm(): Promise<void> {
 	const m = setup();
 	const reg = await registerServiceWorker();
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	const fid = new Promise<string>((resolve, reject) => {
-		const timer = setTimeout(() => reject(new Error("FCM への登録がタイムアウトしました")), REGISTER_TIMEOUT_MS);
-		registerWaiter = (f) => {
-			clearTimeout(timer);
-			resolve(f);
-		};
+		timer = setTimeout(() => reject(new Error("FCM への登録がタイムアウトしました")), REGISTER_TIMEOUT_MS);
+		registerWaiter = resolve;
 	});
-	await register(m, { vapidKey, serviceWorkerRegistration: reg });
-	return fid;
+	// register() が先に失敗したとき、あとで reject されても未処理にならないようにする
+	fid.catch(() => {});
+	try {
+		await register(m, { vapidKey, serviceWorkerRegistration: reg });
+		await uploadFid(await fid);
+	} finally {
+		clearTimeout(timer);
+		registerWaiter = undefined;
+	}
 }
 
 /** 通知を有効にする。権限のダイアログを出すので、必ずボタン押下などのユーザー操作から呼ぶ */
@@ -141,7 +149,10 @@ export async function enablePush(): Promise<PushResult> {
 	}
 }
 
-/** 有効化済みの端末で、アプリを開くたびに呼ぶ。FID の更新や登録の期限切れを直す(権限のダイアログは出ない) */
+/**
+ * 有効化済みの端末で、アプリを開くたびに呼ぶ(main.tsx)。FID の更新や登録の期限切れを直し、
+ * 前面で届く通知の onMessage も付ける。"on"(権限 granted かつ有効化済み)でなければ何もしないので、権限のダイアログは出ない
+ */
 export async function syncPush(): Promise<void> {
 	if ((await getPushState()) !== "on") return;
 	await registerWithFcm().catch((e) => console.error(e));

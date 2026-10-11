@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { btnPrimary, btnSecondary, Notice } from "../components/ui";
-import { disablePush, enablePush, getPushState, type PushState, sendTestPush, syncPush } from "./index";
+import { disablePush, enablePush, getPushState, type PushState, sendTestPush } from "./index";
 
 const STATE_TEXT: Record<PushState, string> = {
 	unsupported: "このブラウザは通知に対応していません",
@@ -27,7 +27,6 @@ export function PushToggle() {
 
 	useEffect(() => {
 		getPushState().then(setState);
-		syncPush();
 	}, []);
 
 	const run = async (fn: () => Promise<{ ok: boolean; message?: string } | undefined>, okText?: string) => {

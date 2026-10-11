@@ -55,11 +55,17 @@ export function resolveCourseId(draft: Draft, courses: readonly CourseOption[]):
 	return courses.find((c) => [c.name, ...c.aliases].some((n) => norm(n) === key))?.id ?? null;
 }
 
-export type DraftProblems = { title?: string; due?: string; estimate?: string };
+/** worker の taskCreateSchema の上限 */
+export const TITLE_MAX = 200;
+export const FIRST_STEP_MAX = 200;
+
+export type DraftProblems = { title?: string; due?: string; estimate?: string; firstStep?: string };
 
 export function validateDraft(d: Draft): DraftProblems {
 	const problems: DraftProblems = {};
 	if (!d.title.trim()) problems.title = "タイトルを入力してください";
+	else if (d.title.trim().length > TITLE_MAX) problems.title = `タイトルは${TITLE_MAX}文字以内にしてください`;
+	if (d.firstStep.trim().length > FIRST_STEP_MAX) problems.firstStep = `${FIRST_STEP_MAX}文字以内にしてください`;
 	if (fromDatetimeLocal(d.dueLocal) === null) problems.due = "締切を入力してください";
 	const est = Number(d.estimateMin);
 	if (!Number.isInteger(est) || est < 1) problems.estimate = "見積もりは1分以上の整数で入力してください";

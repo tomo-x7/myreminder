@@ -2,13 +2,14 @@ import { useCallback } from "react";
 import { Sheet } from "../../components/Sheet";
 import { useCreateTasks } from "../../lib/queries";
 import { QuickAdd } from "../quick-add/QuickAdd";
+import type { TaskCreateInput } from "../quick-add/types";
 
 /** 「＋ 追加」で開く登録シート。保存したらタスクの一覧を更新して閉じる */
 export function AddTaskSheet({ onClose }: { onClose: () => void }) {
 	const create = useCreateTasks();
 	const save = useCallback(
-		async (inputs: Parameters<typeof create.mutateAsync>[0]) => {
-			await create.mutateAsync(inputs);
+		async (inputs: TaskCreateInput[], onSaved: (index: number) => void) => {
+			await create.mutateAsync({ inputs, onSaved });
 			onClose();
 		},
 		[create.mutateAsync, onClose],
