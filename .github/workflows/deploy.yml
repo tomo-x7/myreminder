@@ -79,7 +79,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           packageManager: pnpm
           workingDirectory: worker
-          command: d1 migrations apply myreminder --remote
+          command: d1 migrations apply myreminder-db --remote
 
       - name: Deploy Worker
         if: env.HAS_CF_SECRETS == 'true'
