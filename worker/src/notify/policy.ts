@@ -203,7 +203,7 @@ type RiskCtx = {
 	need: string;
 };
 
-const joinFacts = (sep: string, parts: (string | null)[]): string => parts.filter((p) => p !== null).join(sep);
+const joinFacts = (sep: string, parts: (string | null)[]): string => parts.filter((p): p is string => p !== null).join(sep);
 
 const withFirst = (body: string, first: string | null): string => (first ? `${body}\nまず: ${first}` : body);
 
@@ -220,13 +220,13 @@ const DANGER_VARIANTS: Variant[] = [
 	(c) => joinFacts("\n", [c.need, c.due, c.limit]),
 ];
 
-const PACE_SHORT = "普段のペースでは間に合わない";
+const PACE = "普段のペースでは間に合わない";
 
 /** 危険(普段のペースでは足りない=本気が必要) */
 const FULL_EFFORT_VARIANTS: Variant[] = [
-	(c) => joinFacts("・", [PACE_SHORT, c.need, c.due, c.limit]),
-	(c) => joinFacts("・", [c.due, c.need, c.limit, PACE_SHORT]),
-	(c) => joinFacts("\n", [PACE_SHORT, joinFacts("・", [c.need, c.due, c.limit])]),
+	(c) => joinFacts("・", [PACE, c.need, c.due, c.limit]),
+	(c) => joinFacts("・", [c.due, c.need, c.limit, PACE]),
+	(c) => joinFacts("\n", [PACE, joinFacts("・", [c.need, c.due, c.limit])]),
 ];
 
 type Candidate = { n: DesiredNotification; rank: number };
