@@ -324,7 +324,10 @@ export async function computeWhatIf(db: Db, now: Ms, taskId: string, startAt: Ms
 		workedToday: sameDay ? ctx.capacityInput.workedToday : 0,
 	});
 
-	const find = (out: PlanOutput) => out.tasks.find((t) => t.id === taskId) as PlanOutput["tasks"][number];
+	// 期限切れなどで plan() が tasks から外したタスクは、比べる相手がない
+	const beforeTask = base.tasks.find((t) => t.id === taskId);
+	const afterTask = moved.tasks.find((t) => t.id === taskId);
+	if (!beforeTask || !afterTask) return null;
 	const baseById = new Map(base.tasks.map((t) => [t.id, t]));
 	const changedOthers = moved.tasks.flatMap((t) => {
 		const b = baseById.get(t.id);
@@ -335,8 +338,8 @@ export async function computeWhatIf(db: Db, now: Ms, taskId: string, startAt: Ms
 	return {
 		taskId,
 		startAt: from,
-		before: snapshot(find(base)),
-		after: snapshot(find(moved)),
+		before: snapshot(beforeTask),
+		after: snapshot(afterTask),
 		bottleneck: { before: base.bottleneck, after: moved.bottleneck },
 		availableUsualMin: capacityUntil(later, target.dueAt, "usual"),
 		availableHardMin: capacityUntil(later, target.dueAt, "hard"),

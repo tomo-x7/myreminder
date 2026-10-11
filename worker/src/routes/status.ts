@@ -23,7 +23,12 @@ export const status = new Hono<Env>()
 		const db = getDb(c.env);
 		const now = Date.now();
 		const result = await startWorking(db, c.req.valid("json").taskId, now);
-		if (!result.ok) return c.json({ error: "not_found" as const }, 404);
+		if (!result.ok) {
+			// 提出済み・却下のタスクでは始められない
+			return result.error === "task_closed"
+				? c.json({ error: result.error }, 409)
+				: c.json({ error: "not_found" as const }, 404);
+		}
 		triggerReplan(c);
 		return c.json(await getEffectiveStatus(db, now), 200);
 	})

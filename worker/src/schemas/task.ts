@@ -7,7 +7,7 @@ const minutes = v.pipe(v.number(), v.integer(), v.minValue(1));
 
 export const taskCreateSchema = v.object({
 	title: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(200)),
-	courseId: v.optional(v.nullable(v.string())),
+	courseId: v.optional(v.nullable(v.pipe(v.string(), v.minLength(1)))),
 	category: v.optional(v.picklist(TASK_CATEGORIES), "other"),
 	dueAt: epochMs,
 	releaseAt: v.optional(v.nullable(epochMs)),

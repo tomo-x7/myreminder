@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { sessionsOverlap } from "./sessions";
 import {
+	busyRunAt,
 	type ManualStatus,
 	provisionalEnd,
 	resolveEffectiveStatus,
@@ -92,6 +93,33 @@ describe("resolveEffectiveStatus", () => {
 		expect(resolve("2026-10-12 12:00", { manual: { mode: "working", taskId: "t", until: null } }).mode).toBe(
 			"normal",
 		);
+	});
+});
+
+describe("busyRunAt", () => {
+	const run = (now: string, list: [string, string, string][]) =>
+		busyRunAt(
+			list.map(([label, start, end]) => ({ label, start: jst(start), end: jst(end) })),
+			jst(now),
+		);
+	it("now を含む予定の終わりまで。now で切らない", () => {
+		expect(run("2026-10-12 10:00", [["線形代数", "2026-10-12 09:00", "2026-10-12 10:40"]])).toEqual([
+			{ label: "線形代数", end: jst("2026-10-12 10:40") },
+		]);
+	});
+	it("隣り合う・重なる予定はつないで、最後の終わりを返す。ラベルは now を含む最初の予定", () => {
+		const list: [string, string, string][] = [
+			["2限", "2026-10-12 10:40", "2026-10-12 12:10"],
+			["1限", "2026-10-12 09:00", "2026-10-12 10:40"],
+			["バイト", "2026-10-12 12:00", "2026-10-12 17:00"],
+			["夜の講義", "2026-10-12 18:00", "2026-10-12 19:00"],
+		];
+		expect(run("2026-10-12 10:00", list)).toEqual([{ label: "1限", end: jst("2026-10-12 17:00") }]);
+	});
+	it("now を含む予定がなければ空(終わりちょうども含まない)", () => {
+		const list: [string, string, string][] = [["1限", "2026-10-12 09:00", "2026-10-12 10:40"]];
+		expect(run("2026-10-12 10:40", list)).toEqual([]);
+		expect(run("2026-10-12 08:59", list)).toEqual([]);
 	});
 });
 

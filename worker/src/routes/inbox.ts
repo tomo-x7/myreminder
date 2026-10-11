@@ -20,7 +20,12 @@ const INVALID_TASK = { error: "invalid_task" } as const;
 const DONE_STATES = ["TURNED_IN", "RETURNED"];
 
 const pendingWhere = eq(ingestItems.status, "pending");
-const changeWhere = and(eq(ingestItems.status, "linked"), isNotNull(ingestItems.pendingChange));
+// タスクが消えると taskId が null になる(linked のまま)。表示できないので数えない
+const changeWhere = and(
+	eq(ingestItems.status, "linked"),
+	isNotNull(ingestItems.taskId),
+	isNotNull(ingestItems.pendingChange),
+);
 
 export const inbox = new Hono<Env>()
 	.get("/", async (c) => {
@@ -118,7 +123,7 @@ export const inbox = new Hono<Env>()
 		const [row] = await getDb(c.env)
 			.select({
 				pending: sql<number>`coalesce(sum(case when ${ingestItems.status} = 'pending' then 1 else 0 end), 0)`,
-				changes: sql<number>`coalesce(sum(case when ${ingestItems.status} = 'linked' and ${ingestItems.pendingChange} is not null then 1 else 0 end), 0)`,
+				changes: sql<number>`coalesce(sum(case when ${ingestItems.status} = 'linked' and ${ingestItems.taskId} is not null and ${ingestItems.pendingChange} is not null then 1 else 0 end), 0)`,
 			})
 			.from(ingestItems);
 		return c.json({ pending: row?.pending ?? 0, changes: row?.changes ?? 0 }, 200);

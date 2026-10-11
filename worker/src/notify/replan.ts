@@ -21,7 +21,10 @@ import {
 
 const HISTORY_WINDOW = 14 * DAY;
 const LONG_GAP = 3 * DAY;
+/** 1回の batch に入れる文の数 */
 const BATCH = 40;
+/** D1 は1文あたり束縛できる値が100個まで。notifications の insert は1行7個(id の既定値を含む)なので、行数を絞る */
+const INSERT_ROWS = 10;
 
 type StoredPayload = {
 	title?: string;
@@ -60,7 +63,12 @@ export async function replanNotifications(db: Db, now: Ms): Promise<ReplanResult
 			.where(
 				or(
 					eq(ingestItems.status, "pending"),
-					and(eq(ingestItems.status, "linked"), isNotNull(ingestItems.pendingChange)),
+					// タスクが消えたもの(taskId が null)は受信箱に出ないので数えない
+					and(
+						eq(ingestItems.status, "linked"),
+						isNotNull(ingestItems.taskId),
+						isNotNull(ingestItems.pendingChange),
+					),
 				),
 			),
 	]);
@@ -200,8 +208,8 @@ export async function reconcile(
 	for (let i = 0; i < toDelete.length; i += BATCH) {
 		statements.push(db.delete(notifications).where(inArray(notifications.id, toDelete.slice(i, i + BATCH))));
 	}
-	for (let i = 0; i < inserts.length; i += BATCH) {
-		statements.push(db.insert(notifications).values(inserts.slice(i, i + BATCH)));
+	for (let i = 0; i < inserts.length; i += INSERT_ROWS) {
+		statements.push(db.insert(notifications).values(inserts.slice(i, i + INSERT_ROWS)));
 	}
 	statements.push(...updates);
 	for (let i = 0; i < statements.length; i += BATCH) {

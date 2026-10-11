@@ -1,5 +1,6 @@
 import { vValidator } from "@hono/valibot-validator";
 import { and, asc, eq, gte, inArray, lt } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import * as v from "valibot";
 import { getDb } from "../db";
@@ -9,6 +10,10 @@ import { triggerReplan } from "../notify/replan";
 import { notifySubmitted } from "../notify/webhook";
 import { taskCreateSchema, taskUpdateSchema } from "../schemas/task";
 import { courseExists, INVALID_COURSE, idParamSchema, NOT_FOUND } from "../services/http";
+import { closeWorkOnTask } from "../services/status";
+
+// これらにしたら、そのタスクの作業は終わり
+const CLOSING_STATUSES: readonly string[] = ["done", "submitted", "dismissed"];
 
 const epochMsQuery = v.pipe(v.string(), v.regex(/^\d+$/), v.transform(Number));
 
@@ -83,22 +88,24 @@ export const tasks = new Hono<Env>()
 			.where(eq(tasksTable.id, id))
 			.returning();
 
-		// 締切が変わったら履歴に残す(更新と同じバッチで原子的に)
-		const [row] =
-			patch.dueAt !== undefined && patch.dueAt !== current.dueAt
-				? (
-						await db.batch([
-							update,
-							db.insert(taskDueHistory).values({
-								taskId: id,
-								oldDueAt: current.dueAt,
-								newDueAt: patch.dueAt,
-								changedAt: now,
-								cause: "manual",
-							}),
-						])
-					)[0]
-				: await update;
+		// 更新と同じバッチで原子的に: 締切が変わったら履歴に残す。
+		// 完了・提出済み・却下にしたら、そのタスクの作業を閉じる(作業中のまま残さない。完了・提出済みは進捗 100)
+		const extra: BatchItem<"sqlite">[] = [];
+		if (patch.dueAt !== undefined && patch.dueAt !== current.dueAt) {
+			extra.push(
+				db.insert(taskDueHistory).values({
+					taskId: id,
+					oldDueAt: current.dueAt,
+					newDueAt: patch.dueAt,
+					changedAt: now,
+					cause: "manual",
+				}),
+			);
+		}
+		if (patch.status && patch.status !== current.status && CLOSING_STATUSES.includes(patch.status)) {
+			extra.push(...closeWorkOnTask(db, id, now, patch.status === "dismissed" ? null : 100));
+		}
+		const [[row]] = await db.batch([update, ...extra]);
 		triggerReplan(c);
 		// 提出済みにしたら Discord / Slack に報告する(レスポンスは待たせない)
 		if (submittedAt === now) c.executionCtx.waitUntil(notifySubmitted(db, id, now));

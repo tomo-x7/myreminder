@@ -82,6 +82,19 @@ export function resolveEffectiveStatus(input: {
 	return { mode: "normal", source: "auto" };
 }
 
+/**
+ * now を含む予定から、隣り合う・重なる予定をつないだ連続の区間の終わりを返す(授業が続けば最後の授業の終わり)。
+ * ラベルは now を含む最初の予定。now を含む予定がなければ空
+ */
+export function busyRunAt(intervals: { start: Ms; end: Ms; label: string }[], now: Ms): { label: string; end: Ms }[] {
+	const sorted = [...intervals].sort((a, b) => a.start - b.start);
+	const first = sorted.find((b) => b.start <= now && now < b.end);
+	if (!first) return [];
+	let end = first.end;
+	for (const b of sorted) if (b.start <= end && b.end > end) end = b.end;
+	return [{ label: first.label, end }];
+}
+
 /** 3時間たったか、残りの見積もりを超えたら確認する。残りが 0 以下のときは見積もりでは判定しない */
 export const STILL_WORKING_AFTER_MIN = 180;
 export function shouldAskStillWorking(elapsedMin: number, remainingEstimateMin: number): boolean {
@@ -120,6 +133,36 @@ const setUserStatus = (db: Db, values: { mode: UserMode; taskId: string | null; 
 		.values({ id: 1, ...values })
 		.onConflictDoUpdate({ target: userStatus.id, set: values });
 
+/** 開いている実績の終了を now にする文。開始より前の時刻にならないようにする。taskId があればそのタスクの分だけ */
+const closeOpenSessions = (db: Db, now: Ms, only?: { taskId: string; progress: number | null }) =>
+	db
+		.update(sessions)
+		.set({
+			endAt: sql`max(${sessions.startAt}, ${now})`,
+			...(only?.progress != null && { progress: only.progress }),
+		})
+		.where(
+			and(
+				eq(sessions.kind, "actual"),
+				isNull(sessions.endAt),
+				only ? eq(sessions.taskId, only.taskId) : undefined,
+			),
+		);
+
+/**
+ * タスクを終えた・取り下げたときに、そのタスクの作業を閉じる文(タスクの更新と同じ batch に入れる)。
+ * 開いている記録は now で閉じ、progress があれば進捗も入れる(null は触れない)。
+ * ステータスがそのタスクの作業中のままなら通常に戻す
+ */
+export const closeWorkOnTask = (db: Db, taskId: string, now: Ms, progress: number | null) =>
+	[
+		closeOpenSessions(db, now, { taskId, progress }),
+		db
+			.update(userStatus)
+			.set({ mode: "normal", taskId: null, until: null })
+			.where(and(eq(userStatus.id, 1), eq(userStatus.mode, "working"), eq(userStatus.taskId, taskId))),
+	] as const;
+
 /** 作業中(未終了)の実績。通常は高々1件 */
 export async function findOpenSessions(db: Db) {
 	return db
@@ -143,10 +186,14 @@ export async function getEffectiveStatus(db: Db, now: Ms): Promise<EffectiveStat
 		getSettings(db),
 		db.select().from(busyBlocks),
 	]);
-	const busy = expandBusyBlocks(
-		blocks.filter((b) => b.kind === "class" || b.kind === "job"),
+	// 終わりを正しく出すため、now で区切らずに先の1日まで展開する
+	const busy = busyRunAt(
+		expandBusyBlocks(
+			blocks.filter((b) => b.kind === "class" || b.kind === "job"),
+			now,
+			now + DAY,
+		),
 		now,
-		now + 1,
 	);
 	return resolveEffectiveStatus({
 		now,
@@ -163,19 +210,21 @@ export async function setManualStatus(db: Db, mode: Exclude<UserMode, "working">
 	await setUserStatus(db, { mode, taskId: null, until });
 }
 
-export type StartWorkingResult = { ok: true; sessionId: string } | { ok: false; error: "task_not_found" };
+export type StartWorkingResult =
+	| { ok: true; sessionId: string }
+	| { ok: false; error: "task_not_found" | "task_closed" };
 
-/** 作業を始める。開いている記録は進捗なしで閉じてから、新しい記録を作る。todo のタスクは doing にする */
+/**
+ * 作業を始める。開いている記録は進捗なしで閉じてから、新しい記録を作る。todo のタスクは doing にする。
+ * 提出済み・却下のタスクでは始められない(done は見直しで続けることがあるので許す)
+ */
 export async function startWorking(db: Db, taskId: string, now: Ms): Promise<StartWorkingResult> {
 	const [task] = await db.select({ id: tasks.id, status: tasks.status }).from(tasks).where(eq(tasks.id, taskId));
 	if (!task) return { ok: false, error: "task_not_found" };
+	if (task.status === "submitted" || task.status === "dismissed") return { ok: false, error: "task_closed" };
 	const sessionId = crypto.randomUUID();
 	await db.batch([
-		db
-			.update(sessions)
-			// 開始より前の時刻にならないようにする
-			.set({ endAt: sql`max(${sessions.startAt}, ${now})` })
-			.where(and(eq(sessions.kind, "actual"), isNull(sessions.endAt))),
+		closeOpenSessions(db, now),
 		db.insert(sessions).values({ id: sessionId, taskId, kind: "actual", startAt: now, endAt: null }),
 		setUserStatus(db, { mode: "working", taskId, until: null }),
 		db
