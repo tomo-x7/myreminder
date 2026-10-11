@@ -26,9 +26,9 @@ function TaskList({
 	const rows = listTasks(tasks, filter);
 	return (
 		<>
-			{update.isError && <ErrorNotice>更新できませんでした: {errorText(update.error)}</ErrorNotice>}
+			{update.isError && <ErrorNotice>更新失敗: {errorText(update.error)}</ErrorNotice>}
 			{rows.length === 0 ? (
-				<Empty>該当するタスクはありません</Empty>
+				<Empty>なし</Empty>
 			) : (
 				<ul className={`${listClass} border-t`}>
 					{rows.map((t) => (

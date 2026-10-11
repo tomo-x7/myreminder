@@ -55,7 +55,7 @@ export const webhooks = new Hono<Env>()
 		const db = getDb(c.env);
 		const [row] = await db.select().from(webhooksTable).where(eq(webhooksTable.id, id));
 		if (!row) return c.json(NOT_FOUND, 404);
-		const result = await sendWebhook(row.kind, row.url, "myreminder からのテスト送信です");
+		const result = await sendWebhook(row.kind, row.url, "テスト送信");
 		await db
 			.update(webhooksTable)
 			.set({ lastError: result.ok ? null : (result.error ?? "unknown_error") })

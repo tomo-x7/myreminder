@@ -33,7 +33,10 @@ export const schedule = new Hono<Env>()
 	.get("/start-suggestions", async (c) => {
 		const now = Date.now();
 		const ctx = await loadParseContext(getDb(c.env));
-		return c.json({ startSuggestions: computeStartSuggestions({ now, busy: ctx.busy, sleep: ctx.sleep }), now }, 200);
+		return c.json(
+			{ startSuggestions: computeStartSuggestions({ now, busy: ctx.busy, sleep: ctx.sleep }), now },
+			200,
+		);
 	})
 	.get("/slack", validate("query", slackQuerySchema), async (c) =>
 		c.json(await computeSlackList(getDb(c.env), Date.now(), c.req.valid("query").spareMin), 200),

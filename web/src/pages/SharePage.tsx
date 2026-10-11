@@ -6,7 +6,7 @@ import { takeSharedImage } from "../features/quick-add/image";
 import { QuickAdd } from "../features/quick-add/QuickAdd";
 
 /**
- * Web Share Target の受け口。貼り付けと同じ確認カードを、解析済みの状態で開く。
+ * Web Share Target の受け口。貼り付けと同じ確認カードを、AI で解析済みの状態で開く(テキストがなければ手入力)。
  * - テキスト: `/share?title=&text=&url=`
  * - 画像: `/share?image=1`。Service Worker が受けた画像を Cache に入れてここへ飛ばす
  */
@@ -27,9 +27,9 @@ export function SharePage() {
 
 	return (
 		<div className="flex flex-col gap-3">
-			<PageHeader title="共有から追加" />
+			<PageHeader title="共有" />
 			{image === undefined ? (
-				<p className="py-6 text-center text-xs text-faint">共有された画像を読み込んでいます…</p>
+				<p className="py-6 text-center text-xs text-faint">読み込み中…</p>
 			) : (
 				<QuickAdd
 					onDone={home}
@@ -42,9 +42,7 @@ export function SharePage() {
 			)}
 			{wantsImage && image === null && (
 				<div role="alert">
-					<Notice tone="warn">
-						共有された画像を受け取れませんでした。アプリの「写真から」で選び直してください
-					</Notice>
+					<Notice tone="warn">画像を受け取れなかった</Notice>
 				</div>
 			)}
 		</div>

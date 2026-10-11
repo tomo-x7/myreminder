@@ -29,17 +29,15 @@ function EveningRow({
 				<span className="font-semibold">{task.title}</span>
 				<DueLabel dueAt={task.dueAt} now={now} />
 			</Link>
-			{error && <ErrorNotice>更新できませんでした: {error}</ErrorNotice>}
+			{error && <ErrorNotice>{error}</ErrorNotice>}
 			<div className="flex items-center justify-between gap-2">
 				<span className="text-xs text-sub">{plannedText(task)}</span>
 				{done ? (
 					<div className="flex items-center gap-2">
-						<span className="text-sm font-semibold">
-							{submitted ? "提出済みにしました" : "終わりました"}
-						</span>
+						<span className="text-sm font-semibold">{submitted ? "提出済み" : "完了"}</span>
 						{!submitted && (
 							<button type="button" disabled={pending} onClick={submit} className={btnSecondary}>
-								提出済みにする
+								提出済み
 							</button>
 						)}
 					</div>
@@ -68,13 +66,10 @@ export function EveningPage() {
 	return (
 		<div className="flex flex-col gap-3">
 			<PageHeader title="夜の確認" />
-			<p className="text-xs text-sub">
-				今日の予定です。終わったものは「終わった」、できなかったものは時刻を決めて回します。
-			</p>
 			<QueryState query={schedule}>
 				{() =>
 					rows.length === 0 ? (
-						<Empty>今日の予定はありません</Empty>
+						<Empty>予定なし</Empty>
 					) : (
 						<ul className={`${listClass} border-t`}>
 							{rows.map((t) => (

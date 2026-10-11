@@ -30,7 +30,7 @@ export const NOTIFICATION_KINDS = [
 export const NOTIFICATION_STATUSES = ["pending", "sent", "deferred", "merged", "skipped"] as const;
 export const PUSH_PLATFORMS = ["web", "android"] as const;
 export const WEBHOOK_KINDS = ["discord", "slack"] as const;
-export const WEBHOOK_EVENTS = ["submitted", "daily_summary"] as const;
+export const WEBHOOK_EVENTS = ["submitted", "daily_summary", "all_notifications"] as const;
 export const AI_LOG_STATUSES = ["ok", "error"] as const;
 
 export type TaskCategory = (typeof TASK_CATEGORIES)[number];

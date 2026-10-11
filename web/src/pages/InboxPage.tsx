@@ -3,18 +3,13 @@ import { useNow } from "core/hooks/use-now";
 import { useCourses } from "core/queries/courses";
 import { useInbox } from "core/queries/inbox";
 import { useTasks } from "core/queries/tasks";
-import { listClass, PageHeader, QueryState, SectionTitle } from "../components/ui";
+import { Empty, listClass, PageHeader, QueryState, SectionTitle } from "../components/ui";
 import { InboxChangeCard, InboxItemCard } from "../features/inbox";
 
 function InboxBody({ inbox, courses, tasks }: { inbox: Inbox; courses: readonly Course[]; tasks: readonly Task[] }) {
 	const now = useNow();
 	if (inbox.pending.length === 0 && inbox.changes.length === 0) {
-		return (
-			<div className="flex flex-col gap-0.5 py-6 text-center">
-				<p className="font-semibold">確認待ちはありません</p>
-				<p className="text-xs text-faint">新しい課題が取り込まれると、ここに届きます</p>
-			</div>
-		);
+		return <Empty>確認待ちなし</Empty>;
 	}
 	return (
 		<>
@@ -37,7 +32,7 @@ function InboxBody({ inbox, courses, tasks }: { inbox: Inbox; courses: readonly 
 			)}
 			{inbox.changes.length > 0 && (
 				<section className="flex flex-col">
-					<SectionTitle>変更の提案 {inbox.changes.length}件</SectionTitle>
+					<SectionTitle>変更 {inbox.changes.length}件</SectionTitle>
 					<ul className={listClass}>
 						{inbox.changes.map((item) => (
 							<InboxChangeCard key={item.id} item={item} now={now} />

@@ -1,7 +1,7 @@
 // 取り込みのスナップショット → 書き込みの一覧(仕様: ai-docs/specs/ingest.md §1)。
 // planIngest は純粋関数: 既存の行・スナップショット・紐付け先のタスク・現在時刻だけから、
 // 何を書くか(行の作成・更新、タスクの変更、通知)を決める。DB には触れない
-import { fmtJst } from "../notify/policy";
+import { fmtDue, fmtJst } from "../notify/policy";
 import { DAY, HOUR, type Ms } from "../planner/types";
 import type { IngestItemInput, IngestResult } from "../schemas/ingest";
 
@@ -203,7 +203,7 @@ export function planIngest({ now, existing, snapshot, tasks }: PlanInput): Inges
 					priority: 1,
 					payload: {
 						title: `受信箱: ${next.title}`,
-						body: `受信箱: ${next.title}(締切 ${fmtJst(next.dueAt)})。追加するか、既存のタスクに紐付けよう。`,
+						body: `締切 ${fmtDue(next.dueAt, now)}`,
 						url: "/inbox",
 					},
 				});
@@ -263,7 +263,7 @@ export function planIngest({ now, existing, snapshot, tasks }: PlanInput): Inges
 						taskId: state.id,
 						priority: 1,
 						payload: {
-							title: `締切が早まりました: ${state.title}`,
+							title: `締切変更: ${state.title}`,
 							body: `${fmtJst(state.dueAt)} → ${fmtJst(next.dueAt)}`,
 							url: `/tasks/${state.id}`,
 						},
@@ -299,8 +299,8 @@ export function planIngest({ now, existing, snapshot, tasks }: PlanInput): Inges
 						taskId: state.id,
 						priority: 1,
 						payload: {
-							title: `提出が取り消されています: ${state.title}`,
-							body: `未提出に戻しました。締切 ${fmtJst(state.dueAt)}`,
+							title: `提出取消: ${state.title}`,
+							body: `未提出に戻した・締切 ${fmtDue(state.dueAt, now)}`,
 							url: `/tasks/${state.id}`,
 						},
 					});

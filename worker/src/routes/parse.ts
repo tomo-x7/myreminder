@@ -12,7 +12,7 @@ const lineSchema = v.object({ text: text(500) });
 const pasteSchema = v.object({ text: text(8000) });
 const imageSchema = v.object({ image: v.instance(File) });
 
-const TOO_LARGE = { error: "too_large", message: "画像が大きすぎます(1.5MB まで)" } as const;
+const TOO_LARGE = { error: "too_large", message: "画像は 1.5MB まで" } as const;
 
 // multipart の枠(境界・ヘッダー)の分だけ、画像の上限より少し広く取る
 const BODY_LIMIT_BYTES = MAX_IMAGE_BYTES + 64 * 1024;
@@ -42,10 +42,7 @@ export const parse = new Hono<Env>()
 			const { image } = c.req.valid("form");
 			if (image.size > MAX_IMAGE_BYTES) return c.json(TOO_LARGE, 413);
 			if (!(IMAGE_MIME_TYPES as readonly string[]).includes(image.type)) {
-				return c.json(
-					{ error: "unsupported_media_type" as const, message: "JPEG・PNG・WebP の画像だけ読み取れます" },
-					415,
-				);
+				return c.json({ error: "unsupported_media_type" as const, message: "JPEG・PNG・WebP のみ" }, 415);
 			}
 			const ctx = await loadParseContext(getDb(c.env));
 			const bytes = new Uint8Array(await image.arrayBuffer());

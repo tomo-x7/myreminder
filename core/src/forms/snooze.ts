@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { PlanTask, WhatIf } from "../api/types";
 import { formatJstDate, formatJstDateTime, HOUR } from "../domain/date";
 import { errorText } from "../domain/errors";
-import { bottleneckText, formatHours, RISK_LABEL } from "../domain/schedule";
+import { formatHours, RISK_LABEL } from "../domain/schedule";
 import { snoozeOptions } from "../domain/snooze-options";
 import { useNow } from "../hooks/use-now";
 import { useWhatIf } from "../queries/schedule";
@@ -14,33 +14,24 @@ import { floorToMinute } from "./common";
 export type SnoozeTarget = Pick<PlanTask, "id" | "title" | "dueAt" | "latestStartUsual" | "latestStartHard">;
 
 /** 「選んだ時刻に回した場合」の1行。label がなければ1文のまま横幅いっぱいに出す */
-export type SnoozeFactLine = { label?: string; text: string; warn?: boolean; block?: boolean };
+export type SnoozeFactLine = { label?: string; text: string; warn?: boolean };
 
 /** 選んだ時刻に回した場合の事実(再計画の結果)。評価や煽りは入れず、数字だけ出す */
-export function snoozeFacts(
-	target: SnoozeTarget,
-	data: WhatIf,
-	now: number,
-): { notice: string | null; lines: SnoozeFactLine[] } {
+export function snoozeFacts(target: SnoozeTarget, data: WhatIf): { notice: string | null; lines: SnoozeFactLine[] } {
 	const { before, after } = data;
 	const lines: SnoozeFactLine[] = [];
 	let notice: string | null = null;
 
 	// 着手デッドラインより後なら、先に事実を知らせる
 	if (target.latestStartHard !== null && data.startAt > target.latestStartHard) {
-		notice = `この時刻は着手デッドライン(${formatJstDateTime(target.latestStartHard)})より後。睡眠を削らずには間に合わなくなる`;
+		notice = `着手デッドライン ${formatJstDateTime(target.latestStartHard)} より後。睡眠を削らないと間に合わない`;
 	} else if (target.latestStartUsual !== null && data.startAt > target.latestStartUsual) {
-		notice = `この時刻は着手デッドライン(${formatJstDateTime(target.latestStartUsual)})より後。普段のペースでは間に合わなくなり、本気が必要になる`;
+		notice = `着手デッドライン ${formatJstDateTime(target.latestStartUsual)} より後。普段のペースでは間に合わない`;
 	}
 
-	const short = data.neededMin - data.availableUsualMin;
 	lines.push({
-		label: "その時刻から締切までの空き",
-		block: true,
-		text: `普段のペースで ${formatHours(data.availableUsualMin)} / 必要 ${formatHours(data.neededMin)}${
-			short > 0 ? `(${formatHours(short)} 足りない)` : ""
-		}`,
-		warn: short > 0,
+		text: `空き ${formatHours(data.availableUsualMin)} / 必要 ${formatHours(data.neededMin)}(普段のペース)`,
+		warn: data.neededMin > data.availableUsualMin,
 	});
 	lines.push({
 		label: "リスク",
@@ -49,7 +40,7 @@ export function snoozeFacts(
 				? `${RISK_LABEL[after.risk]}(変わらない)`
 				: `${RISK_LABEL[before.risk]} → ${RISK_LABEL[after.risk]}`,
 	});
-	const ls = (v: number | null) => (v === null ? "置けない" : formatJstDateTime(v));
+	const ls = (v: number | null) => (v === null ? "なし" : formatJstDateTime(v));
 	lines.push({
 		label: "着手デッドライン",
 		text:
@@ -59,12 +50,14 @@ export function snoozeFacts(
 	});
 	const { before: bb, after: ba } = data.bottleneck;
 	if (bb && ba) {
-		if (bb.slackUsual === ba.slackUsual) lines.push({ text: `${bottleneckText(ba, now)}(変わらない)` });
-		else
-			lines.push({
-				label: `山場(${formatJstDate(ba.dueAt)})の余裕`,
-				text: `${formatHours(bb.slackUsual)} → ${formatHours(ba.slackUsual)}`,
-			});
+		const label = `山場 ${formatJstDate(ba.dueAt)} 余裕`;
+		lines.push({
+			label,
+			text:
+				bb.slackUsual === ba.slackUsual
+					? `${formatHours(ba.slackUsual)}(変わらない)`
+					: `${formatHours(bb.slackUsual)} → ${formatHours(ba.slackUsual)}`,
+		});
 	}
 	for (const o of data.changedOthers) {
 		lines.push({ label: `「${o.title}」`, text: `${RISK_LABEL[o.before]} → ${RISK_LABEL[o.after]}` });

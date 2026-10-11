@@ -6,9 +6,8 @@ import { useBusyBlocks } from "core/queries/busy-blocks";
 import { useCourses } from "core/queries/courses";
 import { useSettings } from "core/queries/settings";
 import { useState } from "react";
-import { Link } from "wouter";
 import { Sheet } from "../components/Sheet";
-import { btnPrimary, linkClass, Notice, PageHeader, QueryState, SectionTitle } from "../components/ui";
+import { btnPrimary, PageHeader, QueryState, SectionTitle } from "../components/ui";
 import { BlockForm } from "../features/timetable/BlockForm";
 import { CourseManager } from "../features/timetable/CourseManager";
 import { OneOffList } from "../features/timetable/OneOffList";
@@ -24,7 +23,7 @@ function BlockSheet({ editing, onClose }: { editing: Editing; onClose: () => voi
 	const editor = useBlockEditor(block, onClose);
 
 	return (
-		<Sheet title={block ? "予定を編集" : "予定を追加"} onClose={onClose}>
+		<Sheet title={block ? "予定編集" : "予定追加"} onClose={onClose}>
 			<BlockForm
 				block={block}
 				defaultWeekday={editing.kind === "new" ? editing.weekday : undefined}
@@ -56,21 +55,13 @@ export function TimetablePage() {
 					</button>
 				}
 			/>
-			{periods.length === 0 && (
-				<Notice>
-					<Link href="/settings" className={linkClass}>
-						設定
-					</Link>
-					で時限の時刻を登録すると、授業を「N限」で選べます
-				</Notice>
-			)}
 			<QueryState query={blocks}>
 				{(list) => {
 					const { recurring, oneOff } = splitBusyBlocks(list);
 					return (
 						<>
 							<section className="flex flex-col">
-								<SectionTitle>毎週の予定</SectionTitle>
+								<SectionTitle>毎週</SectionTitle>
 								<WeekList
 									blocks={recurring}
 									periods={periods}
@@ -79,7 +70,7 @@ export function TimetablePage() {
 								/>
 							</section>
 							<section className="flex flex-col">
-								<SectionTitle>単発の予定</SectionTitle>
+								<SectionTitle>単発</SectionTitle>
 								<OneOffList
 									blocks={oneOff}
 									now={now}

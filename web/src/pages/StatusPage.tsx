@@ -5,7 +5,7 @@ import { SessionLog, StatusSwitcher } from "../features/status";
 export function StatusPage() {
 	return (
 		<div className="flex flex-col gap-3">
-			<PageHeader title="ステータスと作業記録" />
+			<PageHeader title="ステータス" />
 			<StatusSwitcher />
 			<SessionLog />
 		</div>

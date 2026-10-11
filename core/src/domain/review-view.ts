@@ -3,23 +3,23 @@ import type { Review, ReviewDay } from "../api/types";
 import { formatJstDateTime, MINUTE } from "./date";
 import { dateKeyParts, ratioText } from "./review";
 import { formatHours } from "./schedule";
+import { formatDuration } from "./time-input";
 
 /** ふりかえりの画面のパス。week は月曜の日付。ふりかえりの `prevWeek` / `nextWeek` をそのまま渡す */
 export const reviewPath = (week: string) => `/review?week=${week}`;
 
-/** `期限内・締切の 1.5h前に提出(10/20(月) 10:40)`。期限後は事実だけ */
+/** `締切の1.5h前 ・ 10/20(月) 10:40`(提出した時刻)。期限後は `締切の1.5h後` と事実だけ */
 export function submittedText(t: Review["submitted"][number]): string {
-	return `${t.onTime ? "期限内" : "期限後"}・締切の ${formatHours(Math.abs(t.dueAt - t.submittedAt) / MINUTE)}${
-		t.onTime ? "前" : "後"
-	}に提出(${formatJstDateTime(t.submittedAt)})`;
+	const gap = formatHours(Math.abs(t.dueAt - t.submittedAt) / MINUTE);
+	return `締切の${gap}${t.onTime ? "前" : "後"} ・ ${formatJstDateTime(t.submittedAt)}`;
 }
 
 export type EstimateView = {
-	/** 見積もりに対する実績の比率の言い方。比べられる記録がなければ null */
+	/** `実績/見積もり 1.3倍(中央値)`。比べられる記録がなければ null */
 	text: string | null;
 	/** この週に完了したものがなく、直近の週の値で言っているとき */
 	fromLatestWeek: boolean;
-	/** 8週の推移(スパークラインの説明文) */
+	/** 8週の推移(スパークラインの aria-label) */
 	trendLabel: string;
 };
 
@@ -30,7 +30,7 @@ export function estimateView({ estimate, estimateTrend }: Pick<Review, "estimate
 	return {
 		text: ratio === null ? null : ratioText(ratio),
 		fromLatestWeek: ratio !== null && estimate.medianRatio === null,
-		trendLabel: `見積もりに対する実績の比率の8週の推移。${estimateTrend
+		trendLabel: `実績/見積もり 8週: ${estimateTrend
 			.map((t) => (t.medianRatio === null ? "なし" : t.medianRatio.toFixed(1)))
 			.join("、")}`,
 	};
@@ -62,7 +62,7 @@ export function weekBars(days: readonly ReviewDay[]): BarView[] {
 			workedMin: d.workedMin,
 			hours: d.workedMin > 0 ? formatHours(d.workedMin) : "",
 			percent: (d.workedMin / max) * 100,
-			label: `${weekday}曜 ${d.workedMin}分`,
+			label: `${weekday}曜 ${formatDuration(d.workedMin)}`,
 			allNighter: d.allNighter,
 		};
 	});

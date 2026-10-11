@@ -3,8 +3,9 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { Db } from "../db";
 import { busyBlocks, notifications, sessions, tasks, type UserMode, userStatus } from "../db/schema";
+import { formatDuration } from "../notify/format";
 import { expandBusyBlocks } from "../planner/busy";
-import { DAY, HOUR, JST_OFFSET, MINUTE, type Ms, type SleepWindow } from "../planner/types";
+import { DAY, JST_OFFSET, MINUTE, type Ms, type SleepWindow } from "../planner/types";
 import { getSettings } from "../settings";
 
 // ---------- 純粋関数 ----------
@@ -316,7 +317,6 @@ export async function checkWorkingSessions(
 			.where(sql`json_extract(${notifications.payload}, '$.stillWorkingSessionId') = ${s.id}`)
 			.limit(1);
 		if (already) continue;
-		const hours = Math.floor((now - s.startAt) / HOUR);
 		await db.insert(notifications).values({
 			taskId: s.taskId,
 			kind: "start",
@@ -324,8 +324,8 @@ export async function checkWorkingSessions(
 			scheduledAt: now,
 			status: "pending",
 			payload: {
-				title: "まだやってる?",
-				body: `「${s.taskTitle}」を${hours >= 1 ? `${hours}時間以上` : "しばらく"}作業中のままです。終わっていたら記録を閉じよう`,
+				title: `作業中: ${s.taskTitle}`,
+				body: `経過 ${formatDuration((now - s.startAt) / MINUTE)}`,
 				url: STATUS_URL,
 				stillWorkingSessionId: s.id,
 			},

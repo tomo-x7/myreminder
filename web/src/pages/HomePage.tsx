@@ -13,7 +13,7 @@ import { NextCard, PlanAlerts } from "../features/schedule";
 import { StatusSwitcher } from "../features/status";
 import { AddTaskSheet } from "../features/tasks/AddTaskSheet";
 
-/** ホーム下部の1行。左に小さな見出し、右に中身 */
+/** ホーム下部の1行。左に小さな見出し、右に中身。中身がなければ見出しだけを本文の大きさで出す */
 function Row({
 	label,
 	href,
@@ -23,12 +23,18 @@ function Row({
 	label: string;
 	href?: string;
 	strong?: boolean;
-	children: ReactNode;
+	children?: ReactNode;
 }) {
 	const body = (
 		<>
-			<span className="w-16 shrink-0 text-xs whitespace-nowrap text-sub">{label}</span>
-			<span className={`min-w-0 flex-1 ${strong ? "font-semibold" : ""}`}>{children}</span>
+			{children ? (
+				<>
+					<span className="w-16 shrink-0 text-xs whitespace-nowrap text-sub">{label}</span>
+					<span className={`min-w-0 flex-1 ${strong ? "font-semibold" : ""}`}>{children}</span>
+				</>
+			) : (
+				<span className={`min-w-0 flex-1 ${strong ? "font-semibold" : ""}`}>{label}</span>
+			)}
 			{href && (
 				<span aria-hidden="true" className="text-faint">
 					›
@@ -65,12 +71,8 @@ function HomeBody({ plan, courses }: { plan: Plan; courses: readonly Course[] })
 			{next ? (
 				<NextCard task={next} course={nextCourse} now={now} />
 			) : (
-				// 期限切れだけが残っているときは「やることはない」と言わない(下の期限切れの欄が主役)
-				nothingToDo && (
-					<p className="border-l-2 border-line pl-3 text-sub">
-						やることはありません。課題が出たら「＋ 追加」から登録する
-					</p>
-				)
+				// 期限切れだけが残っているときは「未完了なし」と言わない(下の期限切れの欄が主役)
+				nothingToDo && <p className="border-l-2 border-line pl-3 text-sub">未完了なし</p>
 			)}
 
 			<PlanAlerts plan={plan} now={now} />
@@ -88,18 +90,14 @@ function HomeBody({ plan, courses }: { plan: Plan; courses: readonly Course[] })
 				)}
 				{awaitingSubmit > 0 && (
 					<Row label="未提出" href="/tasks?s=done" strong>
-						<span className="text-warn">完了したけど未提出 {awaitingSubmit}件</span>
+						<span className="text-warn">{awaitingSubmit}件</span>
 					</Row>
 				)}
 				<Row label="一覧" href="/tasks">
-					{others > 0 ? `ほかに未完了 ${others}件` : "一覧を見る"}
+					{others > 0 && `ほか ${others}件`}
 				</Row>
-				<Row label="夜の確認" href="/evening">
-					今日の予定の確認
-				</Row>
-				<Row label="ふりかえり" href="/review" strong={monday}>
-					先週のふりかえり
-				</Row>
+				<Row label="夜の確認" href="/evening" />
+				<Row label="ふりかえり" href="/review" strong={monday} />
 			</ul>
 		</>
 	);

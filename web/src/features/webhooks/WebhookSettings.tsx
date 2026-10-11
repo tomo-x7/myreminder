@@ -72,7 +72,7 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 
 			<EventChecks value={webhook.events} disabled={busy} onChange={editor.setEvents} />
 
-			{webhook.lastError && <Notice tone="danger">前回の送信に失敗: {webhook.lastError}</Notice>}
+			{webhook.lastError && <Notice tone="danger">前回失敗: {webhook.lastError}</Notice>}
 
 			<div className="flex flex-wrap gap-1.5">
 				<button type="button" className={btnSecondary} disabled={busy} onClick={editor.runTest}>
@@ -87,7 +87,7 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 						editor.resetReplace();
 					}}
 				>
-					URL を差し替える
+					URL 差し替え
 				</button>
 				{!confirming && (
 					<button type="button" onClick={() => setConfirming(true)} className={`${btnDanger} ml-auto`}>
@@ -97,11 +97,11 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 			</div>
 			{testResult?.ok && (
 				<Notice>
-					<output>送信しました。{WEBHOOK_KIND_LABEL[webhook.kind]} を確認してください</output>
+					<output>送信済み</output>
 				</Notice>
 			)}
 			{testResult && !testResult.ok && (
-				<ErrorNotice>送信に失敗しました{testResult.error ? `: ${testResult.error}` : ""}</ErrorNotice>
+				<ErrorNotice>送信失敗{testResult.error ? `: ${testResult.error}` : ""}</ErrorNotice>
 			)}
 
 			{replacing && (
@@ -112,7 +112,7 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 						editor.replaceUrl(() => setReplacing(false));
 					}}
 				>
-					<Field label="新しい URL" hint={`形: ${WEBHOOK_URL_HINT[webhook.kind]}`}>
+					<Field label="新しい URL">
 						<input
 							type="url"
 							autoComplete="off"
@@ -126,7 +126,7 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 						/>
 					</Field>
 					<button type="submit" className={btnSecondary} disabled={busy || !editor.hasNewUrl}>
-						{editor.updating ? "保存中…" : "差し替える"}
+						{editor.updating ? "保存中…" : "差し替え"}
 					</button>
 				</form>
 			)}
@@ -135,13 +135,13 @@ function WebhookRow({ webhook }: { webhook: Webhook }) {
 
 			{confirming && (
 				<div className="flex flex-col gap-2">
-					<p>この {WEBHOOK_KIND_LABEL[webhook.kind]} への報告を削除します。URL も消えます。</p>
+					<p>{WEBHOOK_KIND_LABEL[webhook.kind]} を削除</p>
 					<div className="grid grid-cols-2 gap-2">
 						<button type="button" className={btnSecondary} onClick={() => setConfirming(false)}>
-							キャンセル
+							やめる
 						</button>
 						<button type="button" className={btnDanger} disabled={busy} onClick={editor.remove}>
-							削除する
+							削除
 						</button>
 					</div>
 				</div>
@@ -161,7 +161,7 @@ function AddWebhookForm() {
 				add.submit();
 			}}
 		>
-			<p className="text-xs font-semibold text-sub">報告先を追加</p>
+			<p className="text-xs font-semibold text-sub">追加</p>
 			<div className="grid grid-cols-[6.5rem_1fr] gap-2">
 				<Field label="種類">
 					<select
@@ -173,7 +173,7 @@ function AddWebhookForm() {
 						<option value="slack">Slack</option>
 					</select>
 				</Field>
-				<Field label="webhook URL">
+				<Field label="URL">
 					<input
 						type="url"
 						autoComplete="off"
@@ -187,7 +187,6 @@ function AddWebhookForm() {
 					/>
 				</Field>
 			</div>
-			<p className="text-xs text-faint">形: {WEBHOOK_URL_HINT[add.kind]}</p>
 			<EventChecks value={add.events} onChange={add.setEvents} />
 			{add.error && <ErrorNotice>{add.error}</ErrorNotice>}
 			<button type="submit" disabled={add.pending || !add.hasUrl} className={btnSecondary}>
@@ -202,15 +201,11 @@ export function WebhookSettings() {
 	const webhooks = useWebhooks();
 	return (
 		<div className="flex flex-col gap-2">
-			<p className="text-xs text-sub">
-				課題を提出済みにしたことや、その日に課題に使った時間を、Discord / Slack に送れます。URL
-				は保存後は表示されません。
-			</p>
 			<QueryState query={webhooks}>
 				{(list) => (
 					<>
 						{list.length === 0 ? (
-							<p className="text-xs text-faint">まだ登録されていません</p>
+							<p className="text-xs text-faint">なし</p>
 						) : (
 							<ul className={listClass}>
 								{list.map((w) => (

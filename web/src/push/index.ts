@@ -111,7 +111,7 @@ async function registerWithFcm(): Promise<void> {
 	const reg = await registerServiceWorker();
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const fid = new Promise<string>((resolve, reject) => {
-		timer = setTimeout(() => reject(new Error("FCM への登録がタイムアウトしました")), REGISTER_TIMEOUT_MS);
+		timer = setTimeout(() => reject(new Error("FCM への登録がタイムアウト")), REGISTER_TIMEOUT_MS);
 		registerWaiter = resolve;
 	});
 	// register() が先に失敗したとき、あとで reject されても未処理にならないようにする
@@ -128,25 +128,23 @@ async function registerWithFcm(): Promise<void> {
 /** 通知を有効にする。権限のダイアログを出すので、必ずボタン押下などのユーザー操作から呼ぶ */
 export async function enablePush(): Promise<PushResult> {
 	const state = await getPushState();
-	if (state === "unsupported") return { ok: false, message: "このブラウザはプッシュ通知に対応していません" };
+	if (state === "unsupported") return { ok: false, message: "非対応のブラウザ" };
 	if (state === "unconfigured")
 		return {
 			ok: false,
-			message: "Firebase の設定が未入力です。web/src/push/firebase-config.ts を埋めてください(docs/setup.md 2)",
+			message: "Firebase が未設定(web/src/push/firebase-config.ts)",
 		};
-	if (state === "denied")
-		return { ok: false, message: "通知がブロックされています。ブラウザのサイトの設定で許可してください" };
+	if (state === "denied") return { ok: false, message: "通知がブロックされている" };
 
 	try {
 		// await の前に権限を求める(ユーザー操作の文脈を保つため)
-		if ((await Notification.requestPermission()) !== "granted")
-			return { ok: false, message: "通知が許可されませんでした" };
+		if ((await Notification.requestPermission()) !== "granted") return { ok: false, message: "通知が未許可" };
 		await registerWithFcm();
 		setFlag(true);
 		return { ok: true };
 	} catch (e) {
 		console.error(e);
-		return { ok: false, message: e instanceof Error ? e.message : "通知を有効にできませんでした" };
+		return { ok: false, message: e instanceof Error ? e.message : "有効化に失敗" };
 	}
 }
 

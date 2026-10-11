@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { HOUR, MINUTE } from "../planner/types";
 import {
+	appendCapped,
 	capDecision,
 	type DesiredNotification,
 	generateNotifications,
@@ -103,7 +104,7 @@ describe("リスク別の個別通知", () => {
 		const start = list.filter((n) => n.kind === "start");
 		expect(start).toHaveLength(1);
 		expect(at(start[0])).toBe(ps);
-		expect(start[0].payload.body).toContain("まず5分: テンプレを開く");
+		expect(start[0].payload.body).toContain("まず: テンプレを開く");
 	});
 
 	it("watch: 着手時刻がなければおすすめ着手時刻。授業中なら授業の終わりに寄せる", () => {
@@ -173,8 +174,8 @@ describe("リスク別の個別通知", () => {
 		expect(start).toHaveLength(1);
 		expect(at(start[0])).toBe(ps);
 		expect(start[0].dedupeKey).toBe(`start:t1:${ps}`);
-		expect(start[0].payload.body).toContain("決めた時刻になった");
-		expect(start[0].payload.body).toContain("まず5分: テンプレを開く");
+		expect(start[0].payload.body).toContain("着手予定");
+		expect(start[0].payload.body).toContain("まず: テンプレを開く");
 		// 着手時刻がなければ送らない(おすすめ着手時刻は注意の話)
 		expect(gen({ tasks: [relaxed({})] }).filter((n) => n.kind === "start")).toHaveLength(0);
 		// 過ぎた着手時刻・着手デッドラインより後の着手時刻は送らない
@@ -221,7 +222,9 @@ describe("リスク別の個別通知", () => {
 			],
 		});
 		const risk = list.find((n) => n.dedupeKey.startsWith("risk:")) as DesiredNotification;
-		expect(risk.payload.body).toContain("普段のペースだと間に合わない。今日から本気モードで");
+		expect(risk.payload.title).toBe("着手: 英語レポート");
+		expect(risk.payload.body).toContain("普段のペースでは間に合わない");
+		expect(risk.payload.body).toContain("必要 2h");
 	});
 
 	it("danger: 同じタスクの連続通知で文面が重ならない。送信済みの文面とも変える", () => {
@@ -237,7 +240,15 @@ describe("リスク別の個別通知", () => {
 		const list = generateNotifications(input).filter((n) => n.dedupeKey.startsWith("risk:"));
 		expect(list.length).toBeGreaterThanOrEqual(2);
 		expect(new Set(list.map((n) => n.payload.body)).size).toBe(list.length);
-		expect(new Set(list.map((n) => n.payload.title)).size).toBe(list.length);
+		// タイトルは種類の語+課題名で固定。変えるのは本文の事実の並べ方だけ
+		expect(list.every((n) => n.payload.title === "着手: 英語レポート")).toBe(true);
+		for (const n of list) {
+			expect(n.payload.body).toContain("必要 2h");
+			expect(n.payload.body).toContain("締切 10/16(金) 23:59");
+			expect(n.payload.body).toContain("着手の限界");
+			expect(n.payload.body).toContain("まず: 見出しを書く");
+			expect(n.payload.body).not.toContain("約");
+		}
 
 		// 1件送信済み(その本文) → 次の件は別の文面、キーは続き番号、間隔は3時間以上あく
 		const sent = {
@@ -315,7 +326,8 @@ describe("リスク別の個別通知", () => {
 		const drop = list.find((n) => n.dedupeKey.startsWith("drop:")) as DesiredNotification;
 		expect(drop.kind).toBe("critical");
 		expect(drop.payload.body).toContain("英語レポート");
-		expect(drop.payload.body).toContain("全部は終わらない");
+		expect(drop.payload.body).toContain("本気のペースでも不足");
+		expect(drop.payload.body).toContain("英語レポート(10/20(火))");
 	});
 
 	it("critical: 捨てる候補の通知は活動日(起床から起床)に1回。0時をまたいでも同じキー", () => {
@@ -368,6 +380,11 @@ describe("安全網(締切ベース)", () => {
 			["risk", due - 24 * HOUR],
 			["critical", due - 3 * HOUR],
 		]);
+		const [day, three] = list.filter((n) => n.taskId);
+		expect(day.payload.title).toBe("締切 24h前: 英語レポート");
+		expect(day.payload.body).toBe("締切 10/14(水) 15:00・明日・残り 24h");
+		expect(three.payload.title).toBe("至急: 英語レポート");
+		expect(three.payload.body).toBe("締切 10/14(水) 15:00・今日・残り 3h");
 	});
 
 	it("致命の通知と30分以内に重なる安全網は1つにする", () => {
@@ -415,6 +432,9 @@ describe("提出確認", () => {
 		const sc = list.filter((n) => n.kind === "submit_check");
 		expect(sc.map(at)).toEqual([doneAt + 30 * MINUTE, due - 24 * HOUR, due - 3 * HOUR].sort((a, b) => a - b));
 		expect(list.some((n) => n.kind === "critical")).toBe(false);
+		expect(sc[0].payload.title).toBe("提出は?: 英語レポート");
+		expect(sc[0].payload.body).toBe("未提出・締切 10/14(水) 15:00・明日");
+		expect(sc[1].payload.body).toBe("未提出・締切 10/14(水) 15:00・明日・残り 24h");
 	});
 });
 
@@ -446,15 +466,17 @@ describe("ダイジェスト", () => {
 		const mon = list.find((n) => n.dedupeKey === "digest:morning:10/12(月)") as DesiredNotification;
 		expect(mon.kind).toBe("weekly");
 		expect(at(mon)).toBe(jst("2026-10-12 08:00"));
-		expect(mon.payload.body).toContain("今週の山場: 10/18(日)、余裕1.5h");
-		expect(mon.payload.body).toContain("今週の締切");
-		expect(mon.payload.body).toContain("今日やる: 「英語レポート」");
+		expect(mon.payload.title).toBe("今週");
+		expect(mon.payload.body).toContain("今週の山場 10/18(日)・余裕 1.5h");
+		expect(mon.payload.body).toContain("今週の締切 1件");
+		expect(mon.payload.body).toContain("今日: 英語レポート");
 		const tue = list.find((n) => n.dedupeKey.startsWith("digest:morning:10/13")) as DesiredNotification;
 		expect(tue.kind).toBe("digest");
 		expect(tue.payload.body).not.toContain("今週の締切");
 		const eve = list.find((n) => n.dedupeKey === "digest:evening:10/12(月)") as DesiredNotification;
 		expect(eve.kind).toBe("evening");
-		expect(eve.payload.body).toContain("終わった?");
+		expect(eve.payload.title).toBe("今夜");
+		expect(eve.payload.body).toBe("今日の予定: 英語レポート");
 	});
 
 	it("長く空いたあとの最初の朝(月曜以外)にも見通しが付く。kind は digest", () => {
@@ -462,8 +484,8 @@ describe("ダイジェスト", () => {
 		const m = list.filter((n) => n.dedupeKey.startsWith("digest:morning:"));
 		expect(m[0].kind).toBe("digest");
 		expect(m[0].payload.body).toContain("今週の締切");
-		expect(m[0].payload.title).not.toBe("今日のダイジェスト");
-		expect(m[1]?.payload.body ?? "").not.toContain("しばらくぶり");
+		expect(m[0].payload.title).toBe("今日");
+		expect(m[1]?.payload.body ?? "").not.toContain("今週の締切");
 	});
 
 	it("朝の時刻が睡眠中・授業中なら切れ目に寄せる。期限切れ件数・時刻は JST の相対表示", () => {
@@ -482,7 +504,7 @@ describe("ダイジェスト", () => {
 	it("受信箱の確認待ちがあれば、朝のダイジェストに件数の行が付く(夜には付かない)", () => {
 		const list = gen({ now: jst("2026-10-13 20:00"), tasks: [t0], inboxPending: 3 });
 		const m = list.find((n) => n.dedupeKey.startsWith("digest:morning:")) as DesiredNotification;
-		expect(m.payload.body).toContain("受信箱: 確認待ち 3件");
+		expect(m.payload.body).toContain("受信箱 3件");
 		const eve = list.find((n) => n.dedupeKey.startsWith("digest:evening:")) as DesiredNotification;
 		expect(eve.payload.body).not.toContain("受信箱");
 	});
@@ -497,7 +519,7 @@ describe("ダイジェスト", () => {
 		const list = gen({ now: jst("2026-10-13 20:00"), tasks: [], inboxPending: 2 });
 		const m = list.filter((n) => n.dedupeKey.startsWith("digest:morning:"));
 		expect(m.length).toBeGreaterThan(0);
-		expect(m[0].payload.body).toBe("受信箱: 確認待ち 2件");
+		expect(m[0].payload.body).toBe("受信箱 2件");
 	});
 
 	it("何もなければダイジェストを作らない", () => {
@@ -553,10 +575,17 @@ describe("送信時の判断", () => {
 		).toBe(true);
 	});
 
+	it("上限でまとめた通知は、ダイジェストの本文に足す", () => {
+		expect(appendCapped("今日: A", [{ title: "着手: X" }])).toBe("今日: A\nまとめ 1件\n着手: X");
+		expect(appendCapped("", [{ title: "着手: X" }])).toBe("まとめ 1件\n着手: X");
+		expect(appendCapped("今日: A", [])).toBe("今日: A");
+	});
+
 	it("保留のまとめ文面", () => {
 		const s = summarizeDeferred([{ title: "A" }, { title: "B" }]);
-		expect(s.title).toBe("保留中の通知 2件");
-		expect(s.body).toBe("・A\n・B");
+		expect(s.title).toBe("保留 2件");
+		expect(s.body).toBe("A\nB");
+		expect(summarizeDeferred([{ title: "A" }], 5, "まとめ").title).toBe("まとめ 1件");
 		expect(summarizeDeferred(Array.from({ length: 7 }, (_, i) => ({ title: `T${i}` }))).body).toContain("ほか2件");
 	});
 });

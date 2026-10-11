@@ -19,10 +19,10 @@ export function TaskDetailPage() {
 	return (
 		<div className="flex flex-col gap-3">
 			<PageHeader
-				title="タスクの編集"
+				title="編集"
 				action={
 					<Link href="/tasks" className={btnGhost}>
-						← 一覧へ
+						← 一覧
 					</Link>
 				}
 			/>
@@ -39,23 +39,21 @@ export function TaskDetailPage() {
 							onSave={editor.save}
 						/>
 						{editor.saved && (
-							<output className="block border-l-2 border-ink py-0.5 pl-2 text-xs">保存しました</output>
+							<output className="block border-l-2 border-ink py-0.5 pl-2 text-xs">保存済み</output>
 						)}
 
 						<section className="mt-1 flex flex-col gap-2 border-t border-line pt-3">
-							{editor.removeError && (
-								<ErrorNotice>削除できませんでした: {editor.removeError}</ErrorNotice>
-							)}
+							{editor.removeError && <ErrorNotice>削除失敗: {editor.removeError}</ErrorNotice>}
 							{confirming ? (
 								<>
-									<p className="font-medium">「{t.title}」を削除します。元に戻せません。</p>
+									<p className="font-medium">「{t.title}」を削除</p>
 									<div className="grid grid-cols-2 gap-2">
 										<button
 											type="button"
 											className={btnSecondary}
 											onClick={() => setConfirming(false)}
 										>
-											キャンセル
+											やめる
 										</button>
 										<button
 											type="button"
@@ -63,7 +61,7 @@ export function TaskDetailPage() {
 											disabled={editor.removing}
 											onClick={() => editor.remove(() => navigate("/tasks", { replace: true }))}
 										>
-											{editor.removing ? "削除中…" : "削除する"}
+											{editor.removing ? "削除中…" : "削除"}
 										</button>
 									</div>
 								</>
@@ -73,7 +71,7 @@ export function TaskDetailPage() {
 									className={`${btnDanger} self-start`}
 									onClick={() => setConfirming(true)}
 								>
-									このタスクを削除
+									削除
 								</button>
 							)}
 						</section>

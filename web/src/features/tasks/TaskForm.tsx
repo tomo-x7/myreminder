@@ -55,7 +55,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				/>
 			</Field>
 
-			<Field label="締切(日本時間)" error={problems.dueAt}>
+			<Field label="締切" error={problems.dueAt}>
 				<DatetimeInput value={form.dueAt} onChange={(v) => set("dueAt", v)} className={inputClass} />
 			</Field>
 
@@ -104,7 +104,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 						className={inputClass}
 					/>
 				</Field>
-				<Field label="最小の作業単位(分)" error={problems.minBlockMin}>
+				<Field label="最小単位(分)" error={problems.minBlockMin}>
 					<input
 						type="number"
 						inputMode="numeric"
@@ -116,19 +116,18 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				</Field>
 			</div>
 
-			<Field label="最初の一歩(任意)">
+			<Field label="最初の一歩">
 				<input
 					type="text"
 					value={form.firstStep}
 					maxLength={FIRST_STEP_MAX}
 					onChange={(e) => set("firstStep", e.target.value)}
-					placeholder="例: テンプレを開いて見出しだけ書く"
 					className={inputClass}
 				/>
 			</Field>
 
 			<div className="grid grid-cols-2 gap-2">
-				<Field label="着手する時刻(任意)" hint="決めた時刻に合図します">
+				<Field label="着手時刻">
 					<DatetimeInput
 						value={form.plannedStartAt}
 						onChange={(v) => set("plannedStartAt", v)}
@@ -136,7 +135,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 					/>
 				</Field>
 
-				<Field label="公開日時(任意)" hint="これより前は着手できない課題のとき">
+				<Field label="公開日時">
 					<DatetimeInput
 						value={form.releaseAt}
 						onChange={(v) => set("releaseAt", v)}
@@ -145,7 +144,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				</Field>
 			</div>
 
-			<Field label="メモ(任意)">
+			<Field label="メモ">
 				<textarea
 					rows={3}
 					value={form.note}
@@ -155,7 +154,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				/>
 			</Field>
 
-			{error && <ErrorNotice>保存できませんでした: {error}</ErrorNotice>}
+			{error && <ErrorNotice>保存失敗: {error}</ErrorNotice>}
 			<button type="submit" disabled={saving} className={`${btnPrimary} w-full`}>
 				{saving ? "保存中…" : "保存"}
 			</button>

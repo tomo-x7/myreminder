@@ -107,7 +107,7 @@ describe("parseImage(スタブした AI の出力でパイプラインを通す)
 		expect(calls[2]?.input.max_tokens).toBe(1500);
 	});
 
-	it("全部失敗 → candidates 空 + error。課題なしは『写真から…見つかりませんでした』", async () => {
+	it("全部失敗 → candidates 空 + error。課題なしは『写真に課題なし』", async () => {
 		const failed = await parseImage(
 			{} as CloudflareBindings,
 			input,
@@ -115,14 +115,14 @@ describe("parseImage(スタブした AI の出力でパイプラインを通す)
 			fakeDeps([chat("x"), chat("x"), chat("x")]).deps,
 		);
 		expect(failed.candidates).toEqual([]);
-		expect(failed.error).toContain("手入力");
+		expect(failed.error).toBe("AI の出力が読み取れない");
 		const empty = await parseImage(
 			{} as CloudflareBindings,
 			input,
 			ctx,
 			fakeDeps([chat('{"candidates":[]}')]).deps,
 		);
-		expect(empty.error).toBe("写真から課題が見つかりませんでした");
+		expect(empty.error).toBe("写真に課題なし");
 	});
 });
 
@@ -136,7 +136,7 @@ describe("POST /image(DB に触れる前の検査)", () => {
 	it("上限を超えたら 413", async () => {
 		const res = await post(new File([new Uint8Array(MAX_IMAGE_BYTES + 1)], "a.jpg", { type: "image/jpeg" }));
 		expect(res.status).toBe(413);
-		expect(await res.json()).toEqual({ error: "too_large", message: expect.stringContaining("大きすぎ") });
+		expect(await res.json()).toEqual({ error: "too_large", message: "画像は 1.5MB まで" });
 	});
 
 	it("画像以外は 415", async () => {

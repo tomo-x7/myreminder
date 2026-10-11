@@ -76,6 +76,6 @@ export async function parseImage(
 		candidates,
 		startSuggestions,
 		now,
-		error: candidates.length === 0 ? "写真から課題が見つかりませんでした" : null,
+		error: candidates.length === 0 ? "写真に課題なし" : null,
 	};
 }

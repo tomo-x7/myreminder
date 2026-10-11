@@ -32,10 +32,9 @@ const ValueRow = ({ label, hint, children }: { label: string; hint?: string; chi
 	</label>
 );
 
-/** 睡眠・ダイジェスト・普段のキャパ・通知の上限・時限の編集。まとめて保存する */
+/** 睡眠・まとめの時刻・普段の作業時間・通知の上限・時限の編集。まとめて保存する */
 export function SettingsForm({ settings, saving, error, saved, onSave }: Props) {
-	const { form, set, crossesMidnight, setPeriod, addPeriod, removePeriod, problem, submit } =
-		useSettingsForm(settings);
+	const { form, set, setPeriod, addPeriod, removePeriod, problem, submit } = useSettingsForm(settings);
 
 	return (
 		<form
@@ -62,9 +61,6 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 						/>
 					</Field>
 				</div>
-				<p className="text-xs text-faint">
-					{crossesMidnight ? "日をまたぐ睡眠です。" : ""}この時間は作業時間に入れません(徹夜を防ぎます)
-				</p>
 			</Group>
 
 			<Group title="通知">
@@ -84,7 +80,7 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 						/>
 					</Field>
 				</div>
-				<ValueRow label="1日の通知の上限(件)" hint="致命的なもの以外の個別通知の上限">
+				<ValueRow label="通知の上限(件/日)">
 					<input
 						type="number"
 						inputMode="numeric"
@@ -102,16 +98,13 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 						onChange={(e) => set("criticalDuringSleep", e.target.checked)}
 						className="mt-0.5 size-4 shrink-0 accent-ink"
 					/>
-					<span className="flex flex-col">
-						寝ている間も致命的な通知を送る
-						<span className="text-xs text-faint">オフなら起きた時刻に送る(締切に近すぎるときは寝る前)</span>
-					</span>
+					<span>睡眠中も致命通知</span>
 				</label>
 			</Group>
 
-			<Group title="普段の作業時間(1日)">
+			<Group title="作業時間(1日)">
 				<div className="grid grid-cols-2 gap-2">
-					<Field label="平日(時間)">
+					<Field label="平日(h)">
 						<input
 							type="number"
 							inputMode="decimal"
@@ -123,7 +116,7 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 							className={inputClass}
 						/>
 					</Field>
-					<Field label="休日(時間)">
+					<Field label="休日(h)">
 						<input
 							type="number"
 							inputMode="decimal"
@@ -136,13 +129,10 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 						/>
 					</Field>
 				</div>
-				<p className="text-xs text-faint">実績がたまるまでの初期値です</p>
 			</Group>
 
 			<Group title="時限の時刻">
-				{form.periods.length === 0 && (
-					<p className="text-xs text-faint">未登録です。時間割で「N限」から選べるようになります</p>
-				)}
+				{form.periods.length === 0 && <p className="text-xs text-faint">未登録</p>}
 				{form.periods.length > 0 && (
 					<div className="grid grid-cols-[3.5rem_1fr_1fr_2rem] items-center gap-x-2 gap-y-1.5">
 						<span className="text-xs text-sub">時限</span>
@@ -186,18 +176,18 @@ export function SettingsForm({ settings, saving, error, saved, onSave }: Props) 
 					</div>
 				)}
 				<button type="button" onClick={addPeriod} className={`${btnGhost} self-start`}>
-					＋ 時限を追加
+					＋ 時限
 				</button>
 			</Group>
 
-			{(problem || error) && <ErrorNotice>{problem ?? `保存できませんでした: ${error}`}</ErrorNotice>}
+			{(problem || error) && <ErrorNotice>{problem ?? `保存失敗: ${error}`}</ErrorNotice>}
 			{saved && !saving && (
 				<Notice>
-					<output>保存しました</output>
+					<output>保存済み</output>
 				</Notice>
 			)}
 			<button type="submit" disabled={saving} className={btnPrimary}>
-				{saving ? "保存中…" : "設定を保存"}
+				{saving ? "保存中…" : "保存"}
 			</button>
 		</form>
 	);

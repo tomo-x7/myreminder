@@ -43,12 +43,12 @@ export type NotificationPayload = {
 	dedupeKey?: string;
 	/** 「まだやってる?」(status.ts)の目印。保留・上限の対象外 */
 	stillWorkingSessionId?: string;
-	/** 上限でまとめた通知。次のダイジェスト(なければ「通知のまとめ」)で知らせる */
+	/** 上限でまとめた通知。次のダイジェスト(なければ「まとめ」)で知らせる */
 	capped?: boolean;
 	carriedAt?: number;
-	/** 上限でまとめた通知を送る「通知のまとめ」 */
+	/** 上限でまとめた通知を送る「まとめ」 */
 	cappedCarry?: boolean;
-	/** 保留が明けて「保留中の通知」にまとめた先 */
+	/** 保留が明けて「保留」にまとめた先 */
 	mergedInto?: string;
 	attempts?: number;
 	sentAt?: number;
@@ -64,15 +64,15 @@ export type DispatchedNotification = {
 export type DispatchSummary = { configured: boolean; notifications: DispatchedNotification[] };
 
 const DEFAULT_TITLES: Record<(typeof NOTIFICATION_KINDS)[number], string> = {
-	digest: "今日のダイジェスト",
-	start: "そろそろ始めよう",
-	risk: "締切が近いよ",
-	critical: "至急: 締切が迫っている",
-	due_change: "締切が変わった",
-	submit_check: "提出した?",
-	evening: "今日の振り返り",
-	weekly: "今週の見通し",
-	inbox: "受信箱に新着",
+	digest: "今日",
+	start: "着手",
+	risk: "締切",
+	critical: "至急",
+	due_change: "締切変更",
+	submit_check: "提出は?",
+	evening: "今夜",
+	weekly: "今週",
+	inbox: "受信箱",
 };
 
 const asPayload = (p: unknown): NotificationPayload => (p && typeof p === "object" ? (p as NotificationPayload) : {});
@@ -232,7 +232,7 @@ const asRow = (r: Row): RowLike => ({
 });
 /** 古くなった通知は送らない(時刻に意味がある通知が、後からまとめて届かないように) */
 const STALE_MS = 6 * HOUR;
-/** 保留してから、これより古いものは「保留中」にも載せない */
+/** 保留してから、これより古いものは「保留」にも載せない */
 const DEFERRED_EXPIRY = DAY;
 const TASK_BOUND_KINDS: AnyKind[] = ["start", "risk", "critical", "submit_check"];
 const CHUNK = 80;
@@ -401,7 +401,7 @@ async function selectByPolicy(db: Db, now: Ms, due: ReturnType<typeof and>, limi
 	return send;
 }
 
-/** 上限でまとめた通知を、まだ来る今日のダイジェストに載せられないとき、1日1回だけ「通知のまとめ」にする */
+/** 上限でまとめた通知を、まだ来る今日のダイジェストに載せられないとき、1日1回だけ「まとめ」にする */
 async function scheduleCombinedIfNoDigest(db: Db, now: Ms): Promise<void> {
 	const dayEnd = startOfJstDay(now) + DAY;
 	const [digestLeft] = await db
@@ -430,14 +430,14 @@ async function scheduleCombinedIfNoDigest(db: Db, now: Ms): Promise<void> {
 	if (combined) return;
 	const capped = await uncarried(db);
 	if (capped.length === 0) return;
-	const { title, body } = summarizeDeferred(capped);
+	const { title, body } = summarizeDeferred(capped, 5, "まとめ");
 	await db.insert(notifications).values({
 		kind: "digest",
 		priority: 0,
 		scheduledAt: now,
 		status: "pending",
 		payload: {
-			title: title.replace("保留中の通知", "通知のまとめ"),
+			title,
 			body,
 			url: "/",
 			combined: true,

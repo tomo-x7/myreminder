@@ -22,7 +22,7 @@ const ERROR_TEXT: Record<string, string> = {
 	// 状態・作業記録
 	overlap: "時間が重なる",
 	invalid_range: "終了が開始より前",
-	invalid_end_at: "終了が開始〜現在の外",
+	invalid_end_at: "終了が範囲外(開始〜現在)",
 	not_working: "作業中ではない",
 	working: "作業中",
 	task_closed: "提出済み・取り下げのタスク",

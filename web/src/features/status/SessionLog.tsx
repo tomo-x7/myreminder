@@ -88,7 +88,7 @@ function SessionItem({ session }: { session: SessionRow }) {
 								type="button"
 								className={`${rowBtn} text-danger`}
 								disabled={edit.removing}
-								onClick={() => window.confirm("この作業記録を削除しますか?") && edit.remove()}
+								onClick={() => window.confirm("削除する?") && edit.remove()}
 							>
 								削除
 							</button>
@@ -121,7 +121,7 @@ function AddForm({ onDone }: { onDone: () => void }) {
 	return (
 		<div className="flex flex-col gap-2 border-l-2 border-ink pl-3">
 			<select className={inputClass} value={f.taskId} onChange={(e) => f.setTaskId(e.target.value)}>
-				<option value="">タスクを選ぶ</option>
+				<option value="">タスク</option>
 				{f.tasks?.map((t) => (
 					<option key={t.id} value={t.id}>
 						{t.title}
@@ -154,14 +154,14 @@ export function SessionLog({ initialDays = 14 }: { initialDays?: number }) {
 				<h2 className="text-base font-bold">作業記録</h2>
 				{!adding && (
 					<button type="button" className={btnSecondary} onClick={() => setAdding(true)}>
-						＋ 記録を追加
+						＋ 追加
 					</button>
 				)}
 			</div>
 			{adding && <AddForm onDone={() => setAdding(false)} />}
 			{sessions.isPending && <p className="text-xs text-faint">読み込み中…</p>}
-			{sessions.isError && <ErrorNotice>作業記録を取得できませんでした</ErrorNotice>}
-			{sessions.data && groups.length === 0 && <Empty>この期間の作業記録はありません</Empty>}
+			{sessions.isError && <ErrorNotice>取得エラー</ErrorNotice>}
+			{sessions.data && groups.length === 0 && <Empty>なし</Empty>}
 			{groups.map(({ day, items, totalMs }) => (
 				<div key={day} className="flex flex-col">
 					<SectionTitle action={<span className="text-xs text-sub">合計 {fmtDuration(totalMs)}</span>}>
@@ -175,7 +175,7 @@ export function SessionLog({ initialDays = 14 }: { initialDays?: number }) {
 				</div>
 			))}
 			<button type="button" className={`${btnGhost} self-center`} onClick={loadMore}>
-				さらに前を見る
+				さらに前
 			</button>
 		</section>
 	);

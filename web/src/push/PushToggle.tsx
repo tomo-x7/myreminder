@@ -3,11 +3,11 @@ import { btnPrimary, btnSecondary, Notice } from "../components/ui";
 import { disablePush, enablePush, getPushState, type PushState, sendTestPush } from "./index";
 
 const STATE_TEXT: Record<PushState, string> = {
-	unsupported: "このブラウザは通知に対応していません",
-	unconfigured: "Firebase の設定が未入力です",
-	denied: "通知がブロックされています(ブラウザの設定で許可)",
-	off: "通知はオフです",
-	on: "通知はオンです",
+	unsupported: "非対応のブラウザ",
+	unconfigured: "Firebase が未設定",
+	denied: "ブロック中",
+	off: "オフ",
+	on: "オン",
 };
 
 // 状態は小さな点で示す(オンは墨、オフは白抜き、使えないときは灰)
@@ -55,15 +55,15 @@ export function PushToggle() {
 								className={btnSecondary}
 								onClick={() => run(() => disablePush().then(() => undefined))}
 							>
-								オフにする
+								無効化
 							</button>
 							<button
 								type="button"
 								disabled={busy}
 								className={btnSecondary}
-								onClick={() => run(sendTestPush, "テスト通知を送りました")}
+								onClick={() => run(sendTestPush, "送信済み")}
 							>
-								テスト通知
+								テスト
 							</button>
 						</>
 					) : (
@@ -73,7 +73,7 @@ export function PushToggle() {
 							className={btnPrimary}
 							onClick={() => run(enablePush)}
 						>
-							通知をオンにする
+							有効化
 						</button>
 					)}
 				</div>

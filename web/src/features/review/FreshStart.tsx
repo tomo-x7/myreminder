@@ -1,16 +1,17 @@
-import { isJstMonday } from "core/domain/home";
+import { bottleneckText } from "core/domain/schedule";
 import { useNow } from "core/hooks/use-now";
-import { BottleneckLine } from "./BottleneckLine";
+import { useSchedule } from "core/queries/schedule";
 
-/** 今の週への見通し(フレッシュスタート)。月曜は「新しい週」と言う */
+/** 今の週の山場(フレッシュスタート。plan.md §2.2-9)。山場がないとき・取れないときは何も出さない */
 export function FreshStart() {
 	const now = useNow();
-	const monday = isJstMonday(now);
+	const bottleneck = useSchedule().data?.bottleneck;
+	if (!bottleneck) return null;
 	return (
 		<section className="border-l-2 border-ink py-0.5 pl-2">
 			<p className="font-semibold">
-				{monday ? "新しい週。" : "今週の見通し。"}
-				<BottleneckLine now={now} />
+				<span className="mr-1.5 text-xs font-normal text-sub">山場</span>
+				{bottleneckText(bottleneck, now)}
 			</p>
 		</section>
 	);

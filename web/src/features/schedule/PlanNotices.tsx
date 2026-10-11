@@ -2,7 +2,7 @@ import type { Plan } from "core/api/types";
 import { formatDue } from "core/domain/date";
 import { Link } from "wouter";
 
-/** 期限切れと、本気でも間に合わない場合の候補 */
+/** 期限切れと、本気でも間に合わないタスク */
 export function PlanAlerts({ plan, now }: { plan: Plan; now: number }) {
 	return (
 		<>
@@ -26,7 +26,7 @@ export function PlanAlerts({ plan, now }: { plan: Plan; now: number }) {
 			)}
 			{plan.dropCandidates.length > 0 && (
 				<p className="border-l-2 border-danger pl-2 text-sm text-danger">
-					本気でも間に合わない。手を抜く・延長を頼む候補:{" "}
+					本気でも間に合わない:{" "}
 					{plan.dropCandidates.map((t, i) => (
 						<span key={t.id}>
 							{i > 0 && "、"}

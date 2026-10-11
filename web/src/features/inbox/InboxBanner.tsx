@@ -8,14 +8,14 @@ export function useInboxTotal(): number | null {
 	return total === 0 ? null : total;
 }
 
-/** 「受信箱: 確認待ち N件 →」。0件のときは何も出さない */
+/** 「確認待ち N件 ›」。0件のときは何も出さない */
 export function InboxBanner() {
 	const total = useInboxTotal();
 	if (total === null) return null;
 	return (
 		<Link href="/inbox" className="flex items-center justify-between border-l-2 border-ink py-0.5 pl-2 text-sm">
 			<span>
-				受信箱: 確認待ち <span className="font-semibold">{total}件</span>
+				確認待ち <span className="font-semibold">{total}件</span>
 			</span>
 			<span aria-hidden="true" className="text-faint">
 				›

@@ -82,7 +82,7 @@ export function snapToClassStart(
 	const weekday = toJstParts(dueAt).weekday;
 	const starts = classes.filter((b) => b.weekday === weekday).map((b) => b.startMin as number);
 	if (starts.length === 0) {
-		return { dueAt, reason: `${WEEKDAYS_JA[weekday]}曜に授業が見つかりません(時間割を確認)` };
+		return { dueAt, reason: `授業前の締切だが${WEEKDAYS_JA[weekday]}曜に授業なし` };
 	}
 	return { dueAt: startOfJstDay(dueAt) + Math.min(...starts) * MINUTE_MS, reason: null };
 }
@@ -102,16 +102,16 @@ export function normalizeCandidates(
 
 		let dueAt = r.due === null ? null : parseJstDateTime(r.due);
 		if (dueAt === null) {
-			reasons.push("締切を読み取れませんでした");
+			reasons.push("締切が読み取れない");
 		} else {
 			const names = course ? [course.name, ...course.aliases] : r.courseName ? [r.courseName] : [];
 			const snapped = snapToClassStart(dueAt, r.dueText, names, ctx.busy);
 			dueAt = snapped.dueAt;
 			if (snapped.reason) reasons.push(snapped.reason);
-			if (dueAt < now) reasons.push("締切が過去になっています");
-			else if (dueAt > now + 366 * DAY_MS) reasons.push("締切が1年以上先です");
+			if (dueAt < now) reasons.push("締切が過去");
+			else if (dueAt > now + 366 * DAY_MS) reasons.push("締切が1年以上先");
 		}
-		if (confidence < REVIEW_CONFIDENCE) reasons.push("自信が低い解釈です");
+		if (confidence < REVIEW_CONFIDENCE) reasons.push(`AI の確度 ${Math.round(confidence * 100)}%`);
 
 		return {
 			title: r.title.slice(0, 200),
@@ -189,17 +189,17 @@ export async function parseTasks(
 		candidates,
 		startSuggestions,
 		now,
-		error: candidates.length === 0 ? "課題が見つかりませんでした" : null,
+		error: candidates.length === 0 ? "課題なし" : null,
 	};
 }
 
 export function failureMessage(code: "quota" | "invalid_output" | "upstream"): string {
 	switch (code) {
 		case "quota":
-			return "AI の無料枠を使い切りました。手入力してください";
+			return "AI の無料枠切れ";
 		case "invalid_output":
-			return "AI の出力を読み取れませんでした。手入力してください";
+			return "AI の出力が読み取れない";
 		case "upstream":
-			return "AI に接続できませんでした。手入力してください";
+			return "AI に接続できない";
 	}
 }

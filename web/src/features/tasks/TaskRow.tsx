@@ -46,7 +46,7 @@ export function TaskRow({ task, course, now, onSubmit, busy }: Props) {
 							onClick={() => onSubmit(task)}
 							className={`${btnSecondary} py-1 text-xs`}
 						>
-							提出済みにする
+							提出済み
 						</button>
 					</div>
 				)}

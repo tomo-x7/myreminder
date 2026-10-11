@@ -14,14 +14,14 @@ async function resizeImage(file: Blob): Promise<Blob> {
 		canvas.width = width;
 		canvas.height = height;
 		const ctx = canvas.getContext("2d");
-		if (!ctx) throw new Error("canvas を使えません");
+		if (!ctx) throw new Error("canvas を使えない");
 		// JPEG は透過がないので、PNG の透明部分が黒くならないよう白で塗ってから描く
 		ctx.fillStyle = "#fff";
 		ctx.fillRect(0, 0, width, height);
 		ctx.drawImage(bitmap, 0, 0, width, height);
 		return await new Promise<Blob>((resolve, reject) => {
 			canvas.toBlob(
-				(b) => (b ? resolve(b) : reject(new Error("画像を変換できませんでした"))),
+				(b) => (b ? resolve(b) : reject(new Error("画像を変換できなかった"))),
 				"image/jpeg",
 				JPEG_QUALITY,
 			);

@@ -21,10 +21,7 @@ export function weekLabel(monday: string): string {
 	return `${shortDate(monday)}(月)〜${shortDate(end)}(日)`;
 }
 
-/** 比率の傾向を、評価をつけずに言う: `見積もりの 1.4 倍かかる傾向` */
+/** 実績/見積もりの比率を、評価をつけずに言う: `実績/見積もり 1.4倍(中央値)` */
 export function ratioText(ratio: number): string {
-	const r = (Math.round(ratio * 10) / 10).toFixed(1);
-	if (ratio >= 1.05) return `見積もりの ${r} 倍かかる傾向`;
-	if (ratio <= 0.95) return `見積もりの ${r} 倍で終わる傾向`;
-	return "見積もりどおりに終わる傾向";
+	return `実績/見積もり ${(Math.round(ratio * 10) / 10).toFixed(1)}倍(中央値)`;
 }

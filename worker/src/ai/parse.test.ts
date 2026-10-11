@@ -113,7 +113,7 @@ describe("normalizeCandidates", () => {
 	it("授業のない曜日の「授業前」は確認対象", () => {
 		const [c] = normalizeCandidates(raw({ due: "2026-10-13T10:40" }), ctx, NOW, "line");
 		expect(c?.needsReview).toBe(true);
-		expect(c?.reviewReasons.join()).toContain("授業が見つかりません");
+		expect(c?.reviewReasons).toContain("授業前の締切だが火曜に授業なし");
 	});
 
 	it("24:00 は翌日 0:00。締切が読めない/過去/確信度が低いは確認対象", () => {
@@ -122,9 +122,10 @@ describe("normalizeCandidates", () => {
 		const [b] = normalizeCandidates(raw({ due: null }), ctx, NOW, "line");
 		expect(b).toMatchObject({ dueAt: null, needsReview: true });
 		const [p] = normalizeCandidates(raw({ due: "2026-10-01T10:00" }), ctx, NOW, "line");
-		expect(p?.reviewReasons).toContain("締切が過去になっています");
+		expect(p?.reviewReasons).toContain("締切が過去");
 		const [l] = normalizeCandidates(raw({ confidence: 0.69 }), ctx, NOW, "line");
 		expect(l?.needsReview).toBe(true);
+		expect(l?.reviewReasons).toContain("AI の確度 69%");
 		const [ok] = normalizeCandidates(raw({ confidence: 0.7 }), ctx, NOW, "line");
 		expect(ok?.needsReview).toBe(false);
 	});
@@ -259,10 +260,10 @@ describe("parseTasks(記録した出力でパイプラインを通す)", () => {
 			deps("わかりません"),
 		);
 		expect(r.candidates).toEqual([]);
-		expect(r.error).toContain("手入力");
+		expect(r.error).toBe("AI の出力が読み取れない");
 	});
 
-	it("text: 課題なしは正しい答え(error は『見つかりませんでした』)", async () => {
+	it("text: 課題なしは正しい答え(error は『課題なし』)", async () => {
 		const r = await parseTasks(
 			{} as CloudflareBindings,
 			{ text: "x", mode: "text", now: NOW },
@@ -270,6 +271,6 @@ describe("parseTasks(記録した出力でパイプラインを通す)", () => {
 			deps('{"candidates":[]}'),
 		);
 		expect(r.candidates).toEqual([]);
-		expect(r.error).toBe("課題が見つかりませんでした");
+		expect(r.error).toBe("課題なし");
 	});
 });

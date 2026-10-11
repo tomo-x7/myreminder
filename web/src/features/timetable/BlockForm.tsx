@@ -45,8 +45,8 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 			<div className="flex gap-1.5" role="tablist" aria-label="種類">
 				{(
 					[
-						["recurring", "毎週(時間割・バイト)"],
-						["oneoff", "単発の予定"],
+						["recurring", "毎週"],
+						["oneoff", "単発"],
 					] as const
 				).map(([s, label]) => (
 					<button
@@ -116,9 +116,9 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 
 					{form.kind === "class" && (
 						<fieldset className="flex flex-col gap-1">
-							<legend className="mb-1 text-xs text-sub">時限から選ぶ</legend>
+							<legend className="mb-1 text-xs text-sub">時限</legend>
 							{periods.length === 0 ? (
-								<p className="text-xs text-faint">設定で時限の時刻を登録すると、ここから選べます</p>
+								<p className="text-xs text-faint">未登録</p>
 							) : (
 								<div className="flex flex-wrap gap-1.5">
 									{periods.map((p) => {
@@ -154,37 +154,37 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 					</div>
 
 					<div className="grid grid-cols-2 gap-2">
-						<Field label="期間の開始(任意)" hint="学期の始まり">
+						<Field label="期間の開始">
 							<DateInput
 								value={form.dateFrom}
 								onChange={(v) => set("dateFrom", v)}
 								className={inputClass}
 							/>
 						</Field>
-						<Field label="期間の終了(任意)" hint="学期の終わり(この日を含む)">
+						<Field label="期間の終了(当日含む)">
 							<DateInput value={form.dateTo} onChange={(v) => set("dateTo", v)} className={inputClass} />
 						</Field>
 					</div>
 				</>
 			) : (
 				<>
-					<Field label="開始(日本時間)">
+					<Field label="開始">
 						<DatetimeInput value={form.startAt} onChange={setStartAt} className={inputClass} />
 					</Field>
-					<Field label="終了(日本時間)">
+					<Field label="終了">
 						<DatetimeInput value={form.endAt} onChange={(v) => set("endAt", v)} className={inputClass} />
 					</Field>
 				</>
 			)}
 
-			{(problem || error) && <ErrorNotice>{problem ?? `保存できませんでした: ${error}`}</ErrorNotice>}
+			{(problem || error) && <ErrorNotice>{problem ?? `保存失敗: ${error}`}</ErrorNotice>}
 			<div className="flex gap-2">
 				<button type="submit" disabled={saving} className={`${btnPrimary} flex-1`}>
 					{saving ? "保存中…" : "保存"}
 				</button>
 				{onDelete && !confirming && (
 					<button type="button" className={btnDanger} onClick={() => setConfirming(true)}>
-						この予定を削除
+						削除
 					</button>
 				)}
 			</div>
@@ -192,10 +192,10 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 			{onDelete && confirming && (
 				<div className="grid grid-cols-2 gap-2">
 					<button type="button" className={btnSecondary} onClick={() => setConfirming(false)}>
-						キャンセル
+						やめる
 					</button>
 					<button type="button" className={btnDanger} disabled={saving} onClick={onDelete}>
-						削除する
+						削除
 					</button>
 				</div>
 			)}

@@ -37,7 +37,7 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 				</p>
 				{item.description && (
 					<details className="text-xs text-sub">
-						<summary className="cursor-pointer py-0.5">本文を見る</summary>
+						<summary className="cursor-pointer py-0.5">本文</summary>
 						<p className="border-l-2 border-line pl-2 break-words whitespace-pre-wrap">
 							{item.description}
 						</p>
@@ -75,7 +75,7 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 				<div className="flex flex-col gap-2 border-l-2 border-ink pl-2">
 					{hasCandidates && (
 						<div className="flex flex-col">
-							<p className="text-xs font-semibold text-sub">同じ課題かもしれないタスク</p>
+							<p className="text-xs font-semibold text-sub">重複の候補</p>
 							<ul className={listClass}>
 								{item.candidates.map((c) => (
 									<li key={c.taskId} className="flex flex-col gap-0.5 py-1.5">
@@ -87,7 +87,7 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 												onClick={() => f.linkTo(c.taskId)}
 												className={`${btnSecondary} shrink-0`}
 											>
-												このタスクに紐付ける
+												紐付け
 											</button>
 										</div>
 										<span className="text-xs text-sub">{candidateMeta(c, now)}</span>
@@ -98,14 +98,14 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 					)}
 					<div className="flex items-end gap-1.5">
 						<div className="min-w-0 flex-1">
-							<Field label={hasCandidates ? "ほかのタスクに紐付ける" : "紐付けるタスク"}>
+							<Field label={hasCandidates ? "ほかのタスク" : "タスク"}>
 								<select
 									value={f.otherTaskId}
 									disabled={f.busy}
 									onChange={(e) => f.setOtherTaskId(e.target.value)}
 									className={inputClass}
 								>
-									<option value="">選んでください</option>
+									<option value="">-</option>
 									{f.linkable.map((t) => (
 										<option key={t.id} value={t.id}>
 											{taskOptionLabel(t)}
@@ -120,10 +120,9 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 							onClick={f.linkSelected}
 							className={`${btnSecondary} shrink-0`}
 						>
-							選んだタスクに紐付ける
+							紐付け
 						</button>
 					</div>
-					<p className="text-xs text-faint">タスクの中身は変わりません。以後、取り込み元の変化が伝わります</p>
 				</div>
 			)}
 
@@ -140,7 +139,7 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 						onChange={f.editDraft}
 					/>
 					<button type="button" disabled={f.busy} onClick={f.save} className={btnPrimary}>
-						{f.saving ? "保存中…" : "タスクとして保存"}
+						{f.saving ? "保存中…" : "追加"}
 					</button>
 				</div>
 			)}

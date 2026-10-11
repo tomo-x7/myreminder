@@ -14,7 +14,7 @@ export function SettingsPage() {
 		<div className="flex flex-col gap-3">
 			<PageHeader title="設定" />
 			<section className="flex flex-col gap-2">
-				<SectionTitle>プッシュ通知(この端末)</SectionTitle>
+				<SectionTitle>通知(この端末)</SectionTitle>
 				<PushToggle />
 			</section>
 			<section className="flex flex-col">
@@ -22,7 +22,7 @@ export function SettingsPage() {
 				<ul className={listClass}>
 					<li>
 						<Link href="/status" className="flex items-baseline justify-between gap-2 py-2 active:bg-wash">
-							作業記録を見る・直す
+							作業記録
 							<span aria-hidden="true" className="text-faint">
 								›
 							</span>

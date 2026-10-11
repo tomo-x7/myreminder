@@ -203,7 +203,8 @@ type RiskCtx = {
 	need: string;
 };
 
-const joinFacts = (sep: string, parts: (string | null)[]): string => parts.filter((p): p is string => p !== null).join(sep);
+const joinFacts = (sep: string, parts: (string | null)[]): string =>
+	parts.filter((p): p is string => p !== null).join(sep);
 
 const withFirst = (body: string, first: string | null): string => (first ? `${body}\nまず: ${first}` : body);
 
@@ -250,7 +251,7 @@ export function generateNotifications(input: PolicyInput): DesiredNotification[]
 		const at = critTime(input, now, now + DAY);
 		const list = input.dropCandidates
 			.slice(0, 3)
-			.map((d) => `「${d.title}」(${fmtDate(d.dueAt)})`)
+			.map((d) => `${d.title}(${fmtDate(d.dueAt)})`)
 			.join("、");
 		const more = input.dropCandidates.length > 3 ? ` ほか${input.dropCandidates.length - 3}件` : "";
 		cands.push({
@@ -263,8 +264,8 @@ export function generateNotifications(input: PolicyInput): DesiredNotification[]
 				scheduledAt: at,
 				priority: 2,
 				payload: {
-					title: "全部は間に合わない",
-					body: `本気でやっても全部は終わらない計算。後回し・相談の候補は ${list}${more}。何を手放すか決めよう。`,
+					title: "至急: 間に合わない",
+					body: `本気のペースでも不足\n落とす候補: ${list}${more}`,
 					url: "/tasks",
 				},
 			},
@@ -344,8 +345,7 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 		const critical = th.tag !== "24h";
 		const at = critical && !isDone ? critTime(input, t, due) : cal.snapForward(t);
 		if (at >= due || (th.tag === "24h" && at > due - 3 * HOUR)) return;
-		const left = fmtSpan(due - at);
-		const dueStr = fmtDue(due, at);
+		const dueFacts = `締切 ${fmtDue(due, at)}・残り ${fmtSpan(due - at)}`;
 		if (isDone) {
 			out.push({
 				rank: RANK.submit,
@@ -356,8 +356,8 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 					scheduledAt: at,
 					priority: th.tag === "24h" ? 0 : 1,
 					payload: {
-						title: `提出した?: ${task.title}`,
-						body: `終わったけど、まだ提出済みになってない。締切 ${dueStr}(あと${left})`,
+						title: `提出は?: ${task.title}`,
+						body: `未提出・${dueFacts}`,
 						url,
 					},
 				},
@@ -373,8 +373,8 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 				scheduledAt: at,
 				priority: critical ? 2 : 0,
 				payload: {
-					title: critical ? `至急: ${task.title}` : `締切が近い: ${task.title}`,
-					body: withFirst(`未提出。締切 ${dueStr}(あと${left})`, first),
+					title: critical ? `至急: ${task.title}` : `締切 ${th.tag}前: ${task.title}`,
+					body: withFirst(dueFacts, first),
 					url,
 				},
 			},
@@ -396,8 +396,8 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 						scheduledAt: at,
 						priority: 0,
 						payload: {
-							title: `提出した?: ${task.title}`,
-							body: `終わりにしたけど、提出は済んだ? 出したら「提出済み」にしよう。締切 ${fmtDue(due, at)}`,
+							title: `提出は?: ${task.title}`,
+							body: `未提出・締切 ${fmtDue(due, at)}`,
 							url,
 						},
 					},
@@ -435,8 +435,15 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 					scheduledAt: at,
 					priority: 0,
 					payload: {
-						title: `そろそろ始めよう: ${task.title}`,
-						body: withFirst(`${planned ? "決めた時刻になった。" : ""}締切 ${fmtDue(due, at)}`, first),
+						title: `着手: ${task.title}`,
+						body: withFirst(
+							joinFacts("・", [
+								planned ? "着手予定" : null,
+								`必要 ${fmtNeed(plan.remainingP80)}`,
+								`締切 ${fmtDue(due, at)}`,
+							]),
+							first,
+						),
 						url,
 					},
 				},
@@ -491,28 +498,24 @@ function dangerCandidates(
 		if (t < limit) times.push(t);
 	}
 
-	const templates = plan.needsFullEffort ? FULL_EFFORT_TEMPLATES : DANGER_TEMPLATES;
+	const variants = plan.needsFullEffort ? FULL_EFFORT_VARIANTS : DANGER_VARIANTS;
 	const out: Candidate[] = [];
 	const used = new Set<string>();
 	times.forEach((at, i) => {
 		const ctx: RiskCtx = {
-			title: task.title,
-			due: fmtDue(due, at),
-			startBy:
+			due: `締切 ${fmtDue(due, at)}`,
+			limit:
 				plan.latestStartUsual !== null && plan.latestStartUsual >= at
-					? `${relDay(plan.latestStartUsual, at)} ${fmtTime(plan.latestStartUsual)}`
+					? `着手の限界 ${fmtAt(plan.latestStartUsual, at)}`
 					: null,
-			need: fmtMinutes(plan.remainingP80),
-			first,
+			need: `必要 ${fmtNeed(plan.remainingP80)}`,
 		};
 		// 使い終えた文面は避ける(直近の文面・この回で使った文面と同じにしない)
-		let idx = (nextIndex + i) % templates.length;
-		let msg = templates[idx](ctx);
-		let body = withFirst(msg.body, first);
-		for (let tries = 0; tries < templates.length && (recentBodies.has(body) || used.has(body)); tries++) {
-			idx = (idx + 1) % templates.length;
-			msg = templates[idx](ctx);
-			body = withFirst(msg.body, first);
+		let idx = (nextIndex + i) % variants.length;
+		let body = withFirst(variants[idx](ctx), first);
+		for (let tries = 0; tries < variants.length && (recentBodies.has(body) || used.has(body)); tries++) {
+			idx = (idx + 1) % variants.length;
+			body = withFirst(variants[idx](ctx), first);
 		}
 		used.add(body);
 		out.push({
@@ -523,7 +526,7 @@ function dangerCandidates(
 				taskId: task.id,
 				scheduledAt: at,
 				priority: 1,
-				payload: { title: msg.title, body, url: taskUrl(task.id) },
+				payload: { title: `着手: ${task.title}`, body, url: taskUrl(task.id) },
 			},
 		});
 	});
@@ -543,7 +546,7 @@ function effectiveStart(t: PolicyTask): Ms | null {
 const listTitles = (items: { title: string }[], max = 3): string => {
 	const head = items
 		.slice(0, max)
-		.map((t) => `「${t.title}」`)
+		.map((t) => t.title)
 		.join("、");
 	return items.length > max ? `${head} ほか${items.length - max}件` : head;
 };
@@ -574,9 +577,7 @@ function digestNotifications(input: PolicyInput, cal: Calendar): DesiredNotifica
 			const outlook = monday || (firstMorning && input.longGap);
 			firstMorning = false;
 			const lines: string[] = [];
-			if (monday) lines.push("新しい週のはじまり。ここから整えよう。");
-			else if (outlook) lines.push("しばらくぶり。今日からやり直そう。");
-			if (todays.length > 0) lines.push(`今日やる: ${listTitles(todays)}`);
+			if (todays.length > 0) lines.push(`今日: ${listTitles(todays)}`);
 			const soon = tasks
 				.filter((t) => t.dueAt >= dayStart && t.dueAt < dayStart + 2 * DAY)
 				.sort((a, b) => a.dueAt - b.dueAt);
@@ -592,16 +593,16 @@ function digestNotifications(input: PolicyInput, cal: Calendar): DesiredNotifica
 			if (b && b.dueAt > dayStart && b.dueAt < dayStart + 14 * DAY) {
 				const label = b.dueAt < dayStart + 7 * DAY ? "今週の山場" : "次の山場";
 				lines.push(
-					`${label}: ${fmtDate(b.dueAt)}、${b.slackUsual >= 0 ? "余裕" : "不足"}${fmtHours(b.slackUsual)}`,
+					`${label} ${fmtDate(b.dueAt)}・${b.slackUsual >= 0 ? "余裕" : "不足"} ${formatHours(Math.abs(b.slackUsual))}`,
 				);
 			}
 			if (outlook) {
 				const week = tasks.filter((t) => t.dueAt >= dayStart && t.dueAt < dayStart + 7 * DAY);
-				lines.push(week.length > 0 ? `今週の締切 ${week.length}件` : "今週の締切はまだない");
+				lines.push(`今週の締切 ${week.length > 0 ? `${week.length}件` : "なし"}`);
 			}
-			if (doneUnsubmitted.length > 0) lines.push(`提出はした?: ${listTitles(doneUnsubmitted)}`);
+			if (doneUnsubmitted.length > 0) lines.push(`未提出: ${listTitles(doneUnsubmitted)}`);
 			if (input.overdue.length > 0) lines.push(`期限切れ ${input.overdue.length}件`);
-			if (input.inboxPending > 0) lines.push(`受信箱: 確認待ち ${input.inboxPending}件`);
+			if (input.inboxPending > 0) lines.push(`受信箱 ${input.inboxPending}件`);
 			if (
 				lines.length > 0 &&
 				(todays.length > 0 ||
@@ -617,7 +618,7 @@ function digestNotifications(input: PolicyInput, cal: Calendar): DesiredNotifica
 					scheduledAt: morningAt,
 					priority: 0,
 					payload: {
-						title: monday ? "今週の見通し" : outlook ? "おかえり、今日の見通し" : "今日のダイジェスト",
+						title: monday ? "今週" : "今日",
 						body: lines.join("\n"),
 						// 月曜の朝は、先週のふりかえり(#26)に飛ばす
 						url: monday ? "/review" : "/",
@@ -633,18 +634,15 @@ function digestNotifications(input: PolicyInput, cal: Calendar): DesiredNotifica
 			const plannedToday = [...todays, ...dueToday.filter((t) => !todays.includes(t))];
 			if (plannedToday.length > 0 || doneUnsubmitted.length > 0) {
 				const lines: string[] = [];
-				if (plannedToday.length > 0) {
-					lines.push(`今日の予定: ${listTitles(plannedToday)}`);
-					lines.push("終わった? 済にするか、いつに回すか決めよう。");
-				}
-				if (doneUnsubmitted.length > 0) lines.push(`提出はした?: ${listTitles(doneUnsubmitted)}`);
+				if (plannedToday.length > 0) lines.push(`今日の予定: ${listTitles(plannedToday)}`);
+				if (doneUnsubmitted.length > 0) lines.push(`未提出: ${listTitles(doneUnsubmitted)}`);
 				out.push({
 					dedupeKey: `digest:evening:${dateKey}`,
 					kind: "evening",
 					taskId: null,
 					scheduledAt: eveningAt,
 					priority: 0,
-					payload: { title: "今日の振り返り", body: lines.join("\n"), url: "/" },
+					payload: { title: "今夜", body: lines.join("\n"), url: "/" },
 				});
 			}
 		}
@@ -720,16 +718,20 @@ export function taskClosedForNotify(task: { status: string; dueAt: Ms }, now: Ms
 	return task.status === "submitted" || task.status === "dismissed" || task.dueAt <= now;
 }
 
-/** 保留が明けたときの1通にまとめた文面 */
-export function summarizeDeferred(items: { title: string }[], max = 5): { title: string; body: string } {
-	const lines = items.slice(0, max).map((i) => `・${i.title}`);
+/** 保留が明けたときの1通にまとめた文面。タイトルは「保留 N件」(label で変える)、本文は通知のタイトルを並べる */
+export function summarizeDeferred(
+	items: { title: string }[],
+	max = 5,
+	label = "保留",
+): { title: string; body: string } {
+	const lines = items.slice(0, max).map((i) => i.title);
 	if (items.length > max) lines.push(`ほか${items.length - max}件`);
-	return { title: `保留中の通知 ${items.length}件`, body: lines.join("\n") };
+	return { title: `${label} ${items.length}件`, body: lines.join("\n") };
 }
 
 /** 上限でまとめた通知を、次のダイジェストに足す文面 */
 export function appendCapped(body: string, items: { title: string }[]): string {
 	if (items.length === 0) return body;
-	const { body: list } = summarizeDeferred(items);
-	return `${body}${body ? "\n" : ""}まとめた通知 ${items.length}件:\n${list}`;
+	const { title, body: list } = summarizeDeferred(items, 5, "まとめ");
+	return `${body}${body ? "\n" : ""}${title}\n${list}`;
 }

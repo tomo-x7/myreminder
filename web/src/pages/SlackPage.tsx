@@ -1,23 +1,16 @@
 import type { SlackItem } from "core/api/types";
 import { SPARE_CHOICES, slackGainText, slackReasonText } from "core/domain/slack";
+import { formatDuration } from "core/domain/time-input";
 import { useNow } from "core/hooks/use-now";
 import { useSlackView } from "core/screens/slack";
 import { useStartTask } from "core/screens/start-task";
 import { Link } from "wouter";
 import { DueLabel } from "../components/DueLabel";
-import {
-	btnSecondary,
-	chipClass,
-	Empty,
-	ErrorNotice,
-	listClass,
-	Notice,
-	PageHeader,
-	QueryState,
-} from "../components/ui";
+import { btnSecondary, chipClass, Empty, ErrorNotice, listClass, PageHeader, QueryState } from "../components/ui";
 
 function SlackRow({ item, spareMin, now }: { item: SlackItem; spareMin: number; now: number }) {
 	const start = useStartTask(item.id);
+	const gain = slackGainText(item, spareMin);
 	return (
 		<li className="flex items-start gap-2 py-2">
 			<div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -25,7 +18,7 @@ function SlackRow({ item, spareMin, now }: { item: SlackItem; spareMin: number; 
 					<span className="font-semibold">{item.title}</span>
 					<DueLabel dueAt={item.dueAt} now={now} />
 				</Link>
-				<p className="text-xs font-medium">{slackGainText(item, spareMin)}</p>
+				{gain && <p className="text-xs font-medium">{gain}</p>}
 				<p className="text-xs text-sub">{slackReasonText(item.reason)}</p>
 				{start.error && <ErrorNotice>{start.error}</ErrorNotice>}
 			</div>
@@ -41,7 +34,7 @@ function SlackRow({ item, spareMin, now }: { item: SlackItem; spareMin: number; 
 	);
 }
 
-/** 余裕リスト(plan.md §3.6)。余裕のあるタスクを、今やると生み出せる余裕の大きい順に */
+/** 余裕リスト(plan.md §3.6)。余裕のあるタスクを、今やると生み出せる余裕の大きい順に。説明は plan.md にあり、画面には書かない */
 export function SlackPage() {
 	const now = useNow();
 	const { list, spare, shown, choose, reset } = useSlackView();
@@ -49,13 +42,10 @@ export function SlackPage() {
 	return (
 		<div className="flex flex-col gap-3">
 			<PageHeader title="余裕リスト" />
-			<p className="text-xs text-sub">
-				余裕のあるタスクを、次の空き時間にやると生み出せる余裕が大きい順に並べます。
-			</p>
 			<fieldset className="flex flex-wrap items-center gap-1.5">
 				<legend className="sr-only">空き時間の長さ</legend>
 				<span aria-hidden="true" className="text-xs text-sub">
-					空き時間の長さ
+					空き
 				</span>
 				{SPARE_CHOICES.map((m) => (
 					<button
@@ -65,12 +55,12 @@ export function SlackPage() {
 						onClick={() => choose(m)}
 						className={chipClass(shown === m)}
 					>
-						{m}分
+						{formatDuration(m)}
 					</button>
 				))}
 				{spare !== undefined && (
 					<button type="button" onClick={reset} className="text-xs text-sub underline underline-offset-2">
-						次の空きに合わせる
+						次の空き
 					</button>
 				)}
 			</fieldset>
@@ -78,7 +68,7 @@ export function SlackPage() {
 			<QueryState query={list}>
 				{(data) =>
 					data.items.length === 0 ? (
-						<Empty>余裕のあるタスクはありません</Empty>
+						<Empty>なし</Empty>
 					) : (
 						<ol className={`${listClass} border-t`}>
 							{data.items.map((item) => (
@@ -88,10 +78,6 @@ export function SlackPage() {
 					)
 				}
 			</QueryState>
-
-			<Notice>
-				理論上は締切が早いものほど上に来やすい。差がつくのは、まとまった時間が要る・見積もりが読めない・山場の手前、の3つのとき。
-			</Notice>
 		</div>
 	);
 }

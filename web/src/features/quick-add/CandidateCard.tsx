@@ -1,5 +1,4 @@
 import type { StartSuggestion } from "core/api/types";
-import { formatJstDateTime } from "core/domain/date";
 import {
 	type CourseOption,
 	type DraftPatch,
@@ -20,6 +19,8 @@ type Props = {
 	/** 保存を押したあとに true。未入力の欄にエラーを出す */
 	showProblems: boolean;
 	problems: DraftProblems;
+	/** タイトルを締切・見積もりより上に出す(手入力のカード。確認画面は締切から確かめる) */
+	titleFirst?: boolean;
 	courses: readonly CourseOption[];
 	startSuggestions: readonly StartSuggestion[];
 	now: number;
@@ -31,9 +32,7 @@ type Props = {
 /** 締切を曜日+相対つきで大きく見せる。日付の取り違えを防ぐ要(plan.md §3.2) */
 function DuePreview({ dueAt, now, error }: { dueAt: number | null; now: number; error?: string }) {
 	if (dueAt === null) {
-		return (
-			<p className={`text-base font-semibold ${error ? "text-danger" : "text-faint"}`}>締切を入力してください</p>
-		);
+		return <p className={`text-base font-semibold ${error ? "text-danger" : "text-faint"}`}>締切が未入力</p>;
 	}
 	return <DueLabel dueAt={dueAt} now={now} size="lg" />;
 }
@@ -42,6 +41,7 @@ export function CandidateCard({
 	draft,
 	showProblems,
 	problems,
+	titleFirst,
 	courses,
 	startSuggestions,
 	now,
@@ -52,6 +52,18 @@ export function CandidateCard({
 	const courseKnown = resolveCourseId(draft, courses) !== null;
 	const chips = selectableStarts(startSuggestions, now, draft.dueAt);
 	const listId = `courses-${draft.key}`;
+	const titleField = (
+		<Field label="タイトル" error={showProblems ? problems.title : undefined}>
+			<input
+				type="text"
+				value={draft.title}
+				maxLength={TITLE_MAX}
+				disabled={disabled}
+				onChange={(e) => onChange({ title: e.target.value })}
+				className={inputClass}
+			/>
+		</Field>
+	);
 
 	return (
 		<section
@@ -86,8 +98,10 @@ export function CandidateCard({
 				</Notice>
 			)}
 
+			{titleFirst && titleField}
+
 			<div className="grid grid-cols-[1fr_6rem] gap-2">
-				<Field label="締切(日本時間)" error={showProblems ? problems.due : undefined}>
+				<Field label="締切">
 					<DatetimeInput
 						value={draft.dueAt}
 						disabled={disabled}
@@ -108,27 +122,14 @@ export function CandidateCard({
 				</Field>
 			</div>
 
-			<Field label="タイトル" error={showProblems ? problems.title : undefined}>
-				<input
-					type="text"
-					value={draft.title}
-					maxLength={TITLE_MAX}
-					disabled={disabled}
-					onChange={(e) => onChange({ title: e.target.value })}
-					className={inputClass}
-				/>
-			</Field>
+			{!titleFirst && titleField}
 
 			<div className="grid grid-cols-2 gap-2">
 				<Field
 					label="科目"
 					hint={
 						draft.courseName.trim() !== "" &&
-						(courseKnown ? (
-							"登録済みの科目"
-						) : (
-							<span className="text-warn">未登録の科目(科目なしで保存)</span>
-						))
+						!courseKnown && <span className="text-warn">未登録(科目なしで保存)</span>
 					}
 				>
 					<input
@@ -161,19 +162,18 @@ export function CandidateCard({
 				</Field>
 			</div>
 
-			<Field label="最初の一歩(任意)" error={showProblems ? problems.firstStep : undefined}>
+			<Field label="最初の一歩" error={showProblems ? problems.firstStep : undefined}>
 				<input
 					type="text"
 					value={draft.firstStep}
 					maxLength={FIRST_STEP_MAX}
 					disabled={disabled}
 					onChange={(e) => onChange({ firstStep: e.target.value })}
-					placeholder="例: テンプレを開いて見出しだけ書く"
 					className={inputClass}
 				/>
 			</Field>
 
-			{/* 候補が元からない(手入力のカードなど)ときは欄ごと出さない */}
+			{/* 候補が取れていない(読み込み前・失敗)ときは欄ごと出さない */}
 			{startSuggestions.length > 0 && (
 				<fieldset className="flex flex-col gap-1">
 					<legend className="mb-1 text-xs text-sub">いつ始める?</legend>
@@ -195,13 +195,8 @@ export function CandidateCard({
 								</button>
 							);
 						})}
-						{chips.length === 0 && <p className="text-xs text-faint">締切までに選べる候補がありません</p>}
+						{chips.length === 0 && <p className="text-xs text-faint">候補なし</p>}
 					</div>
-					<p className="text-xs text-faint">
-						{draft.plannedStartAt === null
-							? "決めない場合は、もう一度タップして解除"
-							: `${formatJstDateTime(draft.plannedStartAt)} に合図します`}
-					</p>
 				</fieldset>
 			)}
 		</section>

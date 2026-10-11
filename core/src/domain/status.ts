@@ -46,7 +46,7 @@ export function statusHeadline(s: Pick<EffectiveStatus, "mode" | "taskTitle" | "
 /** 見出しの補足。作業中は開始時刻と経過、それ以外は期限。自動で期限もなければ空 */
 export function statusDetail(s: EffectiveStatus, now: number): string {
 	if (s.mode === "working" && s.openSession) {
-		return `${formatJstTime(s.openSession.startAt)} から ${fmtClock(now - s.openSession.startAt)}`;
+		return `${formatJstTime(s.openSession.startAt)} ・ ${fmtClock(now - s.openSession.startAt)}`;
 	}
 	if (s.until) return `${formatJstTime(s.until)} まで${s.source === "auto" ? "(自動)" : ""}`;
 	return s.source === "manual" ? "手動" : "";

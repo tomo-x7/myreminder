@@ -8,8 +8,8 @@ import { btnPrimary, btnSecondary, chipClass, ErrorNotice, inputClass, Notice } 
 export type { SnoozeTarget };
 
 /** 選んだ時刻に回した場合の事実(再計画の結果)。評価や煽りは入れず、数字だけ出す */
-function Facts({ target, data, now }: { target: SnoozeTarget; data: WhatIf; now: number }) {
-	const { notice, lines } = snoozeFacts(target, data, now);
+function Facts({ target, data }: { target: SnoozeTarget; data: WhatIf }) {
+	const { notice, lines } = snoozeFacts(target, data);
 
 	return (
 		<>
@@ -25,8 +25,8 @@ function Facts({ target, data, now }: { target: SnoozeTarget; data: WhatIf; now:
 						);
 					return (
 						<div key={l.label} className="contents">
-							<dt className={l.block ? "col-span-2 text-sub" : "text-sub"}>{l.label}</dt>
-							<dd className={`${l.block ? "col-span-2" : ""} ${dd}`}>{l.text}</dd>
+							<dt className="text-sub">{l.label}</dt>
+							<dd className={dd}>{l.text}</dd>
 						</div>
 					);
 				})}
@@ -64,7 +64,7 @@ export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose
 				{snooze.custom && !saved && (
 					<div className="flex gap-1.5">
 						<DatetimeInput
-							aria-label="着手する時刻"
+							aria-label="着手時刻"
 							className={inputClass}
 							value={snooze.customAt}
 							onChange={snooze.setCustomAt}
@@ -82,15 +82,15 @@ export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose
 
 				{startAt !== null && (
 					<section className="flex flex-col gap-2 border-t border-line pt-2">
-						<p className="text-base font-bold">{formatJstDateTime(startAt)} に回す</p>
-						{whatIf.loading && <p className="text-xs text-faint">再計画しています…</p>}
-						{whatIf.error && <ErrorNotice>再計画できませんでした: {whatIf.error}</ErrorNotice>}
-						{whatIf.data && <Facts target={target} data={whatIf.data} now={snooze.now} />}
-						{snooze.saveError && <ErrorNotice>保存できませんでした: {snooze.saveError}</ErrorNotice>}
+						<p className="text-base font-bold">{formatJstDateTime(startAt)}</p>
+						{whatIf.loading && <p className="text-xs text-faint">計算中…</p>}
+						{whatIf.error && <ErrorNotice>{whatIf.error}</ErrorNotice>}
+						{whatIf.data && <Facts target={target} data={whatIf.data} />}
+						{snooze.saveError && <ErrorNotice>{snooze.saveError}</ErrorNotice>}
 						{saved ? (
 							<>
 								<output className="block border-l-2 border-ink py-0.5 pl-2 text-sm font-semibold">
-									{formatJstDateTime(startAt)} に回しました
+									回した
 								</output>
 								<button type="button" onClick={onClose} className={btnPrimary}>
 									閉じる
@@ -103,7 +103,7 @@ export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose
 								onClick={snooze.save}
 								className={btnPrimary}
 							>
-								この時刻に回す
+								回す
 							</button>
 						)}
 					</section>

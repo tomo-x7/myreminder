@@ -89,19 +89,49 @@ export async function sendWebhook(kind: WebhookKind, url: string, text: string):
 	}
 }
 
-/** イベントを購読している有効な webhook に送り、結果を last_error に残す */
-async function sendToSubscribers(db: Db, event: WebhookEvent, text: string): Promise<void> {
+export type WebhookTarget = typeof webhooksTable.$inferSelect;
+
+/** イベントを購読している有効な webhook(上限つき) */
+async function loadTargets(db: Db, event: WebhookEvent): Promise<WebhookTarget[]> {
 	const rows = await db.select().from(webhooksTable).where(eq(webhooksTable.enabled, true));
-	const targets = rows.filter((w) => w.events.includes(event)).slice(0, MAX_TARGETS);
-	await Promise.all(
+	return rows.filter((w) => w.events.includes(event)).slice(0, MAX_TARGETS);
+}
+
+/** 「すべての通知」を購読している有効な webhook(プッシュと同じ内容を一緒に送る先) */
+export const loadMirrorTargets = (db: Db) => loadTargets(db, "all_notifications");
+
+/** 宛先に送り、結果を last_error に残す。1件でも届けば true */
+export async function postToTargets(db: Db, targets: WebhookTarget[], text: string): Promise<boolean> {
+	const oks = await Promise.all(
 		targets.map(async (w) => {
 			const result = await sendWebhook(w.kind, w.url, text);
 			await db
 				.update(webhooksTable)
 				.set({ lastError: result.ok ? null : (result.error ?? "unknown_error") })
 				.where(eq(webhooksTable.id, w.id));
+			return result.ok;
 		}),
 	);
+	return oks.some(Boolean);
+}
+
+/** イベントを購読している有効な webhook に送り、結果を last_error に残す */
+async function sendToSubscribers(db: Db, event: WebhookEvent, text: string): Promise<void> {
+	await postToTargets(db, await loadTargets(db, event), text);
+}
+
+/**
+ * プッシュの通知を webhook 向けの文面にする(タイトル・本文・開く画面の絶対 URL)。
+ * 長さの上限は buildWebhookBody が種類ごとにかけるので、ここでは切らない
+ */
+export function formatNotificationForWebhook(
+	message: { title: string; body: string; url: string },
+	origin: string,
+): string {
+	const lines = [message.title];
+	if (message.body) lines.push(message.body);
+	lines.push(new URL(message.url, origin).toString());
+	return lines.join("\n");
 }
 
 /**

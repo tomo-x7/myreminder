@@ -123,7 +123,7 @@ export function QueryState<T>({
 	if (query.data === undefined) {
 		return (
 			<div className="flex flex-col items-start gap-2 py-3">
-				<ErrorNotice>読み込めませんでした: {query.error ? errorText(query.error) : "不明なエラー"}</ErrorNotice>
+				<ErrorNotice>{query.error ? errorText(query.error) : "エラー"}</ErrorNotice>
 				<button type="button" className={btnSecondary} onClick={() => query.refetch()}>
 					再読み込み
 				</button>
@@ -142,7 +142,7 @@ export function QueryState<T>({
 export function StaleNotice({ onRetry }: { onRetry: () => void }) {
 	return (
 		<Notice tone="danger">
-			更新に失敗しました。
+			更新失敗{" "}
 			<button type="button" className="underline underline-offset-2" onClick={onRetry}>
 				再読み込み
 			</button>

@@ -21,16 +21,15 @@ export function TotalCard({ review }: { review: Review }) {
 	);
 }
 
-/** 「徹夜なし 6/7 日」。ストリークにはしない(連続の長さは数えない) */
+/** 「徹夜なし 6/7日」。ストリークにはしない(連続の長さは数えない) */
 export function NoAllNighterCard({ review }: { review: Review }) {
 	if (review.countedDays === 0) return null;
 	return (
 		<dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-0.5">
 			<dt className="text-xs text-sub">徹夜なし</dt>
 			<dd className="font-bold">
-				{review.noAllNighterDays}/{review.countedDays} 日
+				{review.noAllNighterDays}/{review.countedDays}日
 			</dd>
-			<dd className="col-span-2 text-xs text-faint">睡眠時間帯に1時間以上かかる作業がなかった日の数です</dd>
 		</dl>
 	);
 }
@@ -41,7 +40,7 @@ export function SubmittedList({ submitted }: { submitted: Review["submitted"] })
 		<section className="flex flex-col">
 			<SectionTitle>提出したもの</SectionTitle>
 			{submitted.length === 0 ? (
-				<p className="py-2 text-xs text-faint">この週に提出したものはありません</p>
+				<p className="py-2 text-xs text-faint">なし</p>
 			) : (
 				<ul className={listClass}>
 					{submitted.map((t) => (
@@ -64,18 +63,18 @@ export function EstimateCard({ review }: { review: Review }) {
 	const { text, fromLatestWeek, trendLabel } = estimateView(review);
 	return (
 		<section className="flex flex-col gap-2">
-			<SectionTitle>見積もりの精度</SectionTitle>
+			<SectionTitle>見積もり精度</SectionTitle>
 			{text === null ? (
-				<p className="text-xs text-faint">まだ比べられる記録がありません</p>
+				<p className="text-xs text-faint">記録なし</p>
 			) : (
 				<div className="flex flex-col gap-0.5">
 					<p className="font-bold">{text}</p>
-					{fromLatestWeek && <p className="text-xs text-sub">この週に完了したものはなく、直近の週の値です</p>}
+					{fromLatestWeek && <p className="text-xs text-sub">直近の週の値</p>}
 				</div>
 			)}
 			<div className="flex flex-col gap-0.5">
 				<Sparkline values={estimateTrend.map((t) => t.medianRatio)} label={trendLabel} />
-				<p className="text-xs text-faint">8週の中央値の推移(破線が見積もりどおり)</p>
+				<p className="text-xs text-faint">8週の推移(破線 = 1.0倍)</p>
 			</div>
 			{estimate.tasks.length > 0 && (
 				<ul className={listClass}>

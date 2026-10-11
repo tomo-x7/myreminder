@@ -14,7 +14,7 @@ export function OneOffList({ blocks, now, onEdit }: Props) {
 	return (
 		<div className="flex flex-col">
 			{rows.length === 0 ? (
-				<p className="border-b border-line py-2 text-xs text-faint">単発の予定はありません</p>
+				<p className="border-b border-line py-2 text-xs text-faint">なし</p>
 			) : (
 				<ul className={listClass}>
 					{rows.map(({ block: b, text, label, kind, past }) => (
@@ -39,7 +39,7 @@ export function OneOffList({ blocks, now, onEdit }: Props) {
 			)}
 			{pastCount > 0 && (
 				<button type="button" onClick={() => setShowPast((v) => !v)} className={`${btnGhost} mt-1 self-start`}>
-					{showPast ? "終わった予定を隠す" : `終わった予定を見る(${pastCount}件)`}
+					{showPast ? "終了分を隠す" : `終了分 ${pastCount}件`}
 				</button>
 			)}
 		</div>

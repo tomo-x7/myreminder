@@ -35,37 +35,35 @@ function CourseForm({ course, onDone }: { course?: Course; onDone: () => void })
 					className={inputClass}
 				/>
 			</Field>
-			<Field
-				label="別名(任意)"
-				hint="ポータルやメールでの表記ゆれを、カンマ区切りで。AI が科目を当てるのに使います"
-			>
+			<Field label="別名">
 				<input
 					type="text"
 					value={form.aliases}
 					onChange={(e) => set("aliases", e.target.value)}
+					placeholder="カンマ区切り"
 					className={inputClass}
 				/>
 			</Field>
-			{error && <ErrorNotice>保存できませんでした: {error}</ErrorNotice>}
+			{error && <ErrorNotice>保存失敗: {error}</ErrorNotice>}
 			<div className="flex gap-2">
 				<button type="submit" disabled={saving || !canSave} className={`${btnPrimary} flex-1`}>
 					{saving ? "保存中…" : "保存"}
 				</button>
 				{course && !confirming && (
 					<button type="button" className={btnDanger} onClick={() => setConfirming(true)}>
-						この科目を削除
+						削除
 					</button>
 				)}
 			</div>
 			{course && confirming && (
 				<div className="flex flex-col gap-2">
-					<p>「{course.name}」を削除します。この科目のタスクは科目なしになります。</p>
+					<p>「{course.name}」を削除(タスクは科目なしになる)</p>
 					<div className="grid grid-cols-2 gap-2">
 						<button type="button" className={btnSecondary} onClick={() => setConfirming(false)}>
-							キャンセル
+							やめる
 						</button>
 						<button type="button" className={btnDanger} disabled={saving} onClick={remove}>
-							削除する
+							削除
 						</button>
 					</div>
 				</div>
@@ -89,14 +87,14 @@ export function CourseManager() {
 						onClick={() => setEditing("new")}
 						className="-mb-0.5 rounded-sm px-1 py-0.5 text-xs text-sub active:bg-wash"
 					>
-						＋ 科目を追加
+						＋ 追加
 					</button>
 				}
 			>
 				科目
 			</SectionTitle>
-			{courses.isError && <ErrorNotice>科目を読み込めませんでした</ErrorNotice>}
-			{courses.data?.length === 0 && <p className="py-2 text-xs text-faint">まだ科目がありません</p>}
+			{courses.isError && <ErrorNotice>科目の読み込み失敗</ErrorNotice>}
+			{courses.data?.length === 0 && <p className="py-2 text-xs text-faint">なし</p>}
 			<ul className={listClass}>
 				{courses.data?.map((c) => (
 					<li key={c.id}>
@@ -115,7 +113,7 @@ export function CourseManager() {
 				))}
 			</ul>
 			{editing && (
-				<Sheet title={editing === "new" ? "科目を追加" : "科目を編集"} onClose={close}>
+				<Sheet title={editing === "new" ? "科目追加" : "科目編集"} onClose={close}>
 					<CourseForm course={editing === "new" ? undefined : editing} onDone={close} />
 				</Sheet>
 			)}

@@ -30,8 +30,8 @@ export function emptySessionForm(now: number): SessionForm {
 
 export function validateSessionForm(f: SessionForm): SessionFormProblems {
 	const problems: SessionFormProblems = {};
-	if (f.startAt === null) problems.startAt = "開始を入力してください";
-	if (f.endAt === null) problems.endAt = "終了を入力してください";
+	if (f.startAt === null) problems.startAt = "開始が未入力";
+	if (f.endAt === null) problems.endAt = "終了が未入力";
 	return problems;
 }
 
@@ -46,7 +46,7 @@ export function sessionFormToCreate(f: SessionForm, taskId: string): SessionCrea
 	return { taskId, startAt: f.startAt, endAt: f.endAt, progress: f.progress };
 }
 
-/** 作業記録の一覧。JST の日ごと(新しい順)にまとめ、「さらに前を見る」で期間を広げる */
+/** 作業記録の一覧。JST の日ごと(新しい順)にまとめ、「さらに前」で期間を広げる */
 export function useSessionLog(initialDays = 14, moreDays = 14) {
 	const now = useNow(60_000);
 	const [days, setDays] = useState(initialDays);

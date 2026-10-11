@@ -1,6 +1,7 @@
 import type { SessionRow } from "core/api/types";
 import { formatJstDateTime, formatJstTime } from "core/domain/date";
 import { PROGRESS_STEPS } from "core/domain/session";
+import { formatDuration } from "core/domain/time-input";
 import { fmtDuration } from "core/domain/work-log";
 import { useSessionReview } from "core/forms/session";
 import { useReviewSessions } from "core/queries/sessions";
@@ -16,7 +17,7 @@ function ReviewItem({ session }: { session: SessionRow }) {
 			<div>
 				<p className="font-semibold">いつ終わった?</p>
 				<p className="text-xs text-sub">
-					「{session.taskTitle}」を {formatJstDateTime(session.startAt)} から作業中のままでした
+					{session.taskTitle} ・ {formatJstDateTime(session.startAt)}〜
 				</p>
 			</div>
 			<div className="flex flex-col gap-1.5">
@@ -27,7 +28,7 @@ function ReviewItem({ session }: { session: SessionRow }) {
 						disabled={r.confirming}
 						onClick={() => r.confirm(provisional)}
 					>
-						仮の時刻のまま: {formatJstTime(provisional)}({fmtDuration(provisional - session.startAt)})
+						仮の時刻 {formatJstTime(provisional)}({fmtDuration(provisional - session.startAt)})
 					</button>
 				)}
 				<button
@@ -36,7 +37,7 @@ function ReviewItem({ session }: { session: SessionRow }) {
 					disabled={r.confirming}
 					onClick={() => r.confirm(byEstimate)}
 				>
-					開始 + 見積もり: {formatJstDateTime(byEstimate)}({session.taskEstimateMin}分)
+					開始+見積もり {formatJstDateTime(byEstimate)}({formatDuration(session.taskEstimateMin)})
 				</button>
 				<div className="flex gap-1.5">
 					<DatetimeInput
@@ -50,12 +51,12 @@ function ReviewItem({ session }: { session: SessionRow }) {
 						disabled={r.confirming || r.customAt === null}
 						onClick={r.confirmCustom}
 					>
-						この時刻
+						確定
 					</button>
 				</div>
 			</div>
 			<div className="flex flex-wrap items-center gap-1.5 text-xs">
-				<span className="text-sub">進み具合(任意)</span>
+				<span className="text-sub">進捗</span>
 				{PROGRESS_STEPS.map((p) => (
 					<button
 						key={p}
@@ -72,9 +73,9 @@ function ReviewItem({ session }: { session: SessionRow }) {
 				type="button"
 				className="self-start text-xs text-danger underline underline-offset-2 disabled:opacity-40"
 				disabled={r.removing}
-				onClick={() => window.confirm("この作業記録を削除しますか?") && r.remove()}
+				onClick={() => window.confirm("削除する?") && r.remove()}
 			>
-				この記録を削除
+				削除
 			</button>
 			{r.errorMessage && <ErrorNotice>{r.errorMessage}</ErrorNotice>}
 		</li>

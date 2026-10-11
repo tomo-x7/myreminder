@@ -27,7 +27,7 @@ export function ReviewPage() {
 							</Link>
 							<div className="text-center">
 								<p className="font-bold">{weekLabel(r.week)}</p>
-								{r.isCurrentWeek && <p className="text-xs text-sub">今週(途中)</p>}
+								{r.isCurrentWeek && <p className="text-xs text-sub">今週</p>}
 							</div>
 							{r.nextWeek ? (
 								<Link href={reviewPath(r.nextWeek)} className={btnSecondary}>
@@ -45,7 +45,7 @@ export function ReviewPage() {
 								href="/status"
 								className="flex items-center justify-between border-l-2 border-warn py-0.5 pl-2 font-semibold text-warn"
 							>
-								確認待ちの記録が {r.unconfirmedCount} 件あります →
+								確認待ち {r.unconfirmedCount}件 →
 							</Link>
 						)}
 

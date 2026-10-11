@@ -56,7 +56,7 @@ export const push = new Hono<Env>()
 			.values({
 				kind: "start",
 				scheduledAt: now,
-				payload: { title: title ?? "テスト通知", body: body ?? "myreminder からのテスト送信です", url: "/" },
+				payload: { title: title ?? "テスト", body: body ?? "テスト送信", url: "/" },
 			})
 			.returning({ id: notifications.id });
 

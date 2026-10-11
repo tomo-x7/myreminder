@@ -25,7 +25,7 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 
 	if (status.isPending) return <p className="text-xs text-faint">読み込み中…</p>;
 	// データがあるうちの再取得の失敗では、作業を終えるボタンを消さない(下に注意だけ出す)
-	if (s === undefined) return <p className="text-xs text-danger">ステータスを取得できませんでした</p>;
+	if (s === undefined) return <p className="text-xs text-danger">ステータス取得エラー</p>;
 
 	return (
 		<section className="flex flex-col gap-2">
@@ -45,7 +45,7 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 			{working ? (
 				f.stopping ? (
 					<div className="flex flex-col gap-2 border-l-2 border-ink pl-3">
-						<p className="text-xs font-semibold">どれくらい進んだ?</p>
+						<p className="text-xs font-semibold">進捗</p>
 						<div className="grid grid-cols-4 gap-1.5">
 							{PROGRESS_STEPS.map((p) => (
 								<button
@@ -65,10 +65,10 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 							disabled={f.stopPending}
 							onClick={() => f.stopWith(0)}
 						>
-							ほとんど進まなかった(0%)
+							0%
 						</button>
 						<div className="flex flex-wrap items-center gap-1.5 text-xs">
-							<span>いつ終わった?</span>
+							<span>終了</span>
 							<button type="button" className={chipClass(f.agoMin === 0)} onClick={() => f.setAgoMin(0)}>
 								今
 							</button>
@@ -87,11 +87,11 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 									type="number"
 									min={1}
 									inputMode="numeric"
-									className={`${inputClass} w-14 py-0.5`}
+									className={`${inputClass} w-14! py-0.5`}
 									value={f.agoMin || ""}
 									onChange={(e) => f.setAgoMin(parseAgoMin(e.target.value))}
 								/>
-								分前に終わった
+								分前
 							</label>
 						</div>
 						<button
@@ -99,12 +99,12 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 							className="self-start text-xs text-sub underline underline-offset-2"
 							onClick={() => f.setStopping(false)}
 						>
-							まだ続ける
+							続ける
 						</button>
 					</div>
 				) : (
 					<button type="button" className={btnPrimary} onClick={() => f.setStopping(true)}>
-						作業を終える
+						終了
 					</button>
 				)
 			) : compact && !f.expanded ? null : (
@@ -143,7 +143,7 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 								className="self-start text-xs text-sub underline underline-offset-2"
 								onClick={f.clearManual}
 							>
-								手動の設定を解除して自動に戻す
+								自動に戻す
 							</button>
 						)}
 					</div>
@@ -154,7 +154,7 @@ export function StatusSwitcher({ compact = false }: { compact?: boolean }) {
 							value={f.taskId}
 							onChange={(e) => f.setTaskId(e.target.value)}
 						>
-							<option value="">作業するタスクを選ぶ</option>
+							<option value="">タスク</option>
 							{f.tasks?.map((t) => (
 								<option key={t.id} value={t.id}>
 									{t.title}

@@ -36,7 +36,7 @@ export function NextCard({ task, course, now }: { task: PlanTask; course: Course
 	return (
 		<section className={`flex flex-col gap-2 border-l-2 pl-3 ${style.border}`}>
 			<div className="flex items-baseline justify-between gap-2 text-xs">
-				<span className="text-sub">次にやること</span>
+				<span className="text-sub">次</span>
 				<span className={style.text}>{RISK_LABEL[task.risk]}</span>
 			</div>
 			<div className="flex flex-col gap-0.5">
@@ -46,7 +46,7 @@ export function NextCard({ task, course, now }: { task: PlanTask; course: Course
 				</Link>
 				<p className="text-xs text-sub">{nextMeta(task, course)}</p>
 			</div>
-			{task.needsFullEffort && <Notice tone="danger">普段のペースでは足りない。本気が必要</Notice>}
+			{task.needsFullEffort && <Notice tone="danger">普段のペースでは間に合わない</Notice>}
 			<StartDeadline task={task} now={now} />
 			{task.firstStep && (
 				<p>

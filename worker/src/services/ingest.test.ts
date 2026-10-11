@@ -67,6 +67,7 @@ describe("初めて見たもの", () => {
 		expect(p.notifications).toHaveLength(1);
 		expect(p.notifications[0]).toMatchObject({ kind: "inbox", taskId: null, payload: { url: "/inbox" } });
 		expect(p.notifications[0].payload.title).toContain("第3回レポート");
+		expect(p.notifications[0].payload.body).toBe("締切 10/15(木) 11:00・2日後");
 	});
 
 	it("締切なしは通知しない", () => {
@@ -193,7 +194,7 @@ describe("紐付け済みの変化", () => {
 		]);
 		expect(p.notifications).toHaveLength(1);
 		expect(p.notifications[0]).toMatchObject({ kind: "due_change", taskId: "t1" });
-		expect(p.notifications[0].payload.title).toContain("締切が早まりました");
+		expect(p.notifications[0].payload.title).toContain("締切変更: ");
 		expect(p.notifications[0].payload.body).toContain("→");
 		expect(p.updates[0].set).toMatchObject({ dueAt: earlier });
 		expect(p.updates[0].set.pendingChange).toBeUndefined();
@@ -307,7 +308,7 @@ describe("紐付け済みの変化", () => {
 		expect(p.taskChanges).toEqual([{ taskId: "t1", set: { status: "todo", submittedAt: null }, dueHistory: [] }]);
 		expect(p.notifications).toHaveLength(1);
 		expect(p.notifications[0]).toMatchObject({ kind: "inbox", taskId: "t1" });
-		expect(p.notifications[0].payload.title).toContain("提出が取り消されています");
+		expect(p.notifications[0].payload.title).toContain("提出取消: ");
 	});
 
 	it("RECLAIMED_BY_STUDENT でも、タスクが submitted でなければ何もしない", () => {
