@@ -29,10 +29,11 @@ export function fromDateInput(value: string): number | null {
 	return value ? fromDatetimeLocal(`${value}T00:00`) : null;
 }
 
-/** 90 → `1時間30分`、45 → `45分`、120 → `2時間` */
+/** 90 → `1h30m`、45 → `45m`、120 → `2h`。長さの表記はこれ1つにそろえる(ai-docs/specs/ui.md の文言) */
 export function formatDuration(min: number): string {
-	const h = Math.floor(min / 60);
-	const m = min % 60;
-	if (h === 0) return `${m}分`;
-	return m === 0 ? `${h}時間` : `${h}時間${m}分`;
+	const total = Math.max(0, Math.round(min));
+	const h = Math.floor(total / 60);
+	const m = total % 60;
+	if (h === 0) return `${m}m`;
+	return m === 0 ? `${h}h` : `${h}h${m}m`;
 }

@@ -1,6 +1,7 @@
 // 計画まわりの表示用の関数。リスクの色(Tailwind のクラス)は画面の層が決める
 import type { PlanTask } from "../api/types";
 import { formatJstDate, formatWeekLabel } from "./date";
+import { formatDuration } from "./time-input";
 
 export type Risk = PlanTask["risk"];
 
@@ -26,19 +27,14 @@ export function pickNext<T extends Pick<PlanTask, "risk" | "latestStartUsual" | 
 }
 
 /** 90 → `1h30m`、40 → `40m`、120 → `2h` */
-export function formatShort(min: number): string {
-	const total = Math.max(0, Math.round(min));
-	const h = Math.floor(total / 60);
-	const m = total % 60;
-	if (h === 0) return `${m}m`;
-	return m === 0 ? `${h}h` : `${h}h${m}m`;
-}
+/** formatDuration と同じ(`1h30m`)。呼び出し側の名前を変えないための別名 */
+export const formatShort = formatDuration;
 
-/** 270 → `4.5h`、40 → `40分`。空きや余裕の大きさの表示。負の値は符号を付ける */
+/** 270 → `4.5h`、40 → `40m`。空きや余裕の大きさの表示。負の値は符号を付ける */
 export function formatHours(min: number): string {
 	const sign = min < 0 ? "-" : "";
 	const abs = Math.abs(min);
-	if (abs < 60) return `${sign}${Math.round(abs)}分`;
+	if (abs < 60) return `${sign}${Math.round(abs)}m`;
 	return `${sign}${(Math.round((abs / 60) * 10) / 10).toString()}h`;
 }
 
