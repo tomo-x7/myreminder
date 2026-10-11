@@ -11,6 +11,7 @@ import {
 	type PolicyTask,
 	type RowLike,
 	summarizeDeferred,
+	taskClosedForNotify,
 } from "./policy";
 
 const jst = (s: string) => Date.parse(`${s.replace(" ", "T")}:00+09:00`);
@@ -155,6 +156,36 @@ describe("リスク別の個別通知", () => {
 		expect(s.dedupeKey).toBe("start:t1:rec");
 	});
 
+	it("relaxed: 本人が決めた着手時刻には合図を1回送る。おすすめ着手時刻の合図は注意だけ", () => {
+		const ps = jst("2026-10-14 20:00");
+		const relaxed = (over: Partial<PolicyTask>) =>
+			task({
+				plan: plan({
+					risk: "relaxed",
+					latestStartUsual: jst("2026-10-18 12:00"),
+					recommendedStart: jst("2026-10-16 12:00"),
+				}),
+				...over,
+			});
+		const start = gen({ tasks: [relaxed({ plannedStartAt: ps, firstStep: "テンプレを開く" })] }).filter(
+			(n) => n.kind === "start",
+		);
+		expect(start).toHaveLength(1);
+		expect(at(start[0])).toBe(ps);
+		expect(start[0].dedupeKey).toBe(`start:t1:${ps}`);
+		expect(start[0].payload.body).toContain("決めた時刻になった");
+		expect(start[0].payload.body).toContain("まず5分: テンプレを開く");
+		// 着手時刻がなければ送らない(おすすめ着手時刻は注意の話)
+		expect(gen({ tasks: [relaxed({})] }).filter((n) => n.kind === "start")).toHaveLength(0);
+		// 過ぎた着手時刻・着手デッドラインより後の着手時刻は送らない
+		expect(
+			gen({ tasks: [relaxed({ plannedStartAt: jst("2026-10-13 09:00") })] }).filter((n) => n.kind === "start"),
+		).toHaveLength(0);
+		expect(
+			gen({ tasks: [relaxed({ plannedStartAt: jst("2026-10-19 10:00") })] }).filter((n) => n.kind === "start"),
+		).toHaveLength(0);
+	});
+
 	it("danger: 切れ目ごとに最大3件、3時間以上あける。睡眠中には置かない", () => {
 		const now = jst("2026-10-13 12:00");
 		const list = gen({
@@ -224,6 +255,30 @@ describe("リスク別の個別通知", () => {
 		expect(at(next[0])).toBeGreaterThanOrEqual(sent.at + 3 * HOUR);
 	});
 
+	it("danger: 履歴の窓から古い分が落ちても、キーは残っているキーとぶつからない", () => {
+		// risk:t1:0〜2 は14日の窓から落ちて 3〜5 だけ残っている。続きは 6 から
+		const history = [3, 4, 5].map((i) => ({
+			taskId: "t1",
+			kind: "risk" as const,
+			dedupeKey: `risk:t1:${i}`,
+			at: jst("2026-10-01 10:00") + i * HOUR,
+			body: `b${i}`,
+		}));
+		const list = gen({
+			tasks: [
+				task({
+					dueAt: jst("2026-10-16 23:59"),
+					plan: plan({ risk: "danger", latestStartUsual: jst("2026-10-16 12:00") }),
+				}),
+			],
+			history,
+		});
+		const keys = list.filter((n) => n.dedupeKey.startsWith("risk:")).map((n) => n.dedupeKey);
+		expect(keys.length).toBeGreaterThan(0);
+		expect(keys[0]).toBe("risk:t1:6");
+		for (const k of keys) expect(history.map((h) => h.dedupeKey)).not.toContain(k);
+	});
+
 	it("danger: 24時間に3件送ったあとは作らない", () => {
 		const history = [0, 1, 2].map((i) => ({
 			taskId: "t1",
@@ -263,6 +318,22 @@ describe("リスク別の個別通知", () => {
 		expect(drop.payload.body).toContain("全部は終わらない");
 	});
 
+	it("critical: 捨てる候補の通知は活動日(起床から起床)に1回。0時をまたいでも同じキー", () => {
+		const dropKey = (now: string) =>
+			gen({
+				now: jst(now),
+				tasks: [task({ plan: plan({ risk: "critical" }) })],
+				dropCandidates: [{ id: "t1", title: "英語レポート", dueAt: jst("2026-10-20 23:59") }],
+			}).find((n) => n.dedupeKey.startsWith("drop:"))?.dedupeKey;
+		const evening = dropKey("2026-10-13 19:00");
+		expect(evening).toBeDefined();
+		// 0:00(睡眠 1:00〜8:00 の前)は同じ活動日
+		expect(dropKey("2026-10-14 00:00")).toBe(evening);
+		// 睡眠中に作り直しても、送る時刻は起床後=次の活動日
+		expect(dropKey("2026-10-14 03:00")).not.toBe(evening);
+		expect(dropKey("2026-10-14 09:00")).toBe(dropKey("2026-10-14 03:00"));
+	});
+
 	it("critical: 睡眠中の時刻は、設定が false なら起床後、true ならそのまま", () => {
 		const due = jst("2026-10-14 04:00"); // due-3h = 1:00(睡眠中)
 		const t = task({ dueAt: due, plan: plan({ risk: "critical" }) });
@@ -273,6 +344,18 @@ describe("リスク別の個別通知", () => {
 			n.dedupeKey.endsWith(":3h"),
 		);
 		expect(at(on[0])).toBe(due - 3 * HOUR);
+	});
+});
+
+describe("taskClosedForNotify", () => {
+	const now = jst("2026-10-13 12:00");
+	it("提出済み・取り下げ・締切後は送る意味がない", () => {
+		expect(taskClosedForNotify({ status: "submitted", dueAt: now + HOUR }, now)).toBe(true);
+		expect(taskClosedForNotify({ status: "dismissed", dueAt: now + HOUR }, now)).toBe(true);
+		expect(taskClosedForNotify({ status: "todo", dueAt: now }, now)).toBe(true);
+		expect(taskClosedForNotify({ status: "doing", dueAt: now - HOUR }, now)).toBe(true);
+		expect(taskClosedForNotify({ status: "todo", dueAt: now + 1 }, now)).toBe(false);
+		expect(taskClosedForNotify({ status: "done", dueAt: now + HOUR }, now)).toBe(false);
 	});
 });
 

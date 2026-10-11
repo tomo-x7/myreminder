@@ -313,6 +313,21 @@ describe("plan: リスクの段階", () => {
 	});
 });
 
+describe("plan: おすすめ着手時刻と公開日時", () => {
+	it("遡る下限は max(now, releaseAt)。公開前の時刻にはならない", () => {
+		// 火曜 10:00 公開・13:00 締切・150 分。着手デッドラインは 10:30 で、margin 75 分は公開日時までしか遡れない
+		const release = jst("2026-10-13 10:00");
+		const a = byId(run([task("a", "2026-10-13 13:00", 150, { releaseAt: release })]), "a");
+		expect(a.latestStartUsual).toBe(jst("2026-10-13 10:30"));
+		expect(a.recommendedStart).toBe(release);
+	});
+
+	it("公開日時が過ぎていれば、これまでどおり now が下限", () => {
+		const a = byId(run([task("a", "2026-10-12 12:00", 150, { releaseAt: jst("2026-10-01 00:00") })]), "a");
+		expect(a.recommendedStart).toBe(NOW);
+	});
+});
+
 describe("plan: 性質", () => {
 	const base = [
 		task("t1", "2026-10-13 12:00", 100),

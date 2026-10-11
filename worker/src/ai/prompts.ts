@@ -1,5 +1,5 @@
 // 日本語のプロンプト。小さいモデルでも日付を取り違えにくいよう、暦(今日から14日)と時間割を具体的に渡す
-import type { BusyBlockRow } from "./busy";
+import { type BusyBlockRow, isBlockActive } from "./busy";
 import type { ChatMessage } from "./client";
 import type { CourseRef } from "./courses";
 import {
@@ -34,9 +34,12 @@ export function buildCalendar(now: number, days = 14): string {
 	return lines.join("\n");
 }
 
-/** 曜日ごと(月曜始まり)の授業: `月: 10:40-12:10 情報倫理` */
-export function buildTimetable(blocks: readonly BusyBlockRow[]): string {
-	const classes = blocks.filter((b) => b.kind === "class" && b.weekday != null && b.startMin != null);
+/** 曜日ごと(月曜始まり)の授業: `月: 10:40-12:10 情報倫理`。今日有効なもの(前の学期の分は除く) */
+export function buildTimetable(blocks: readonly BusyBlockRow[], now: number): string {
+	const today = startOfJstDay(now);
+	const classes = blocks.filter(
+		(b) => b.kind === "class" && b.weekday != null && b.startMin != null && isBlockActive(b, today, today + DAY_MS),
+	);
 	if (classes.length === 0) return "(登録なし)";
 	const lines: string[] = [];
 	for (const wd of [1, 2, 3, 4, 5, 6, 0]) {
@@ -106,7 +109,7 @@ function buildSystem(mode: ParseMode, ctx: PromptContext): string {
 		"",
 		`## 現在日時(JST)\n${formatJstWithWeekday(ctx.now)}`,
 		`## 暦(今日から14日)\n${buildCalendar(ctx.now)}`,
-		`## 時間割(毎週)\n${buildTimetable(ctx.busy)}`,
+		`## 時間割(毎週)\n${buildTimetable(ctx.busy, ctx.now)}`,
 		`## 科目一覧\n${buildCourseList(ctx.courses)}`,
 		"",
 		OUTPUT_SPEC,

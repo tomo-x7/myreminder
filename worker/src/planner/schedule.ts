@@ -247,8 +247,10 @@ export function plan(input: PlanInput): PlanOutput {
 		const t = live[k];
 		const marginMs = Math.round(Math.max(30, marginRatio * t.remainingP80) * MINUTE);
 		const scratch = usual.lay.dayRem ? Float64Array.from(usual.lay.dayRem) : null;
-		const { blocks, leftMs } = takeBackward(usual.lay, ls, now, marginMs, 0, scratch, false);
-		return leftMs > 0 || blocks.length === 0 ? now : blocks[0].start;
+		// 公開日時より前には着手できないので、遡る下限は max(now, releaseAt)
+		const lower = Math.max(now, t.releaseAt ?? Number.NEGATIVE_INFINITY);
+		const { blocks, leftMs } = takeBackward(usual.lay, ls, lower, marginMs, 0, scratch, false);
+		return leftMs > 0 || blocks.length === 0 ? lower : blocks[0].start;
 	};
 
 	// 8. リスク

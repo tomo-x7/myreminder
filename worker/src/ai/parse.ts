@@ -4,7 +4,7 @@ import * as v from "valibot";
 import type { Db } from "../db";
 import { busyBlocks, courses as coursesTable, settings, type TaskCategory } from "../db/schema";
 import type { TaskCreateInput } from "../schemas/task";
-import { type BusyBlockRow, DEFAULT_SLEEP, type SleepWindow } from "./busy";
+import { type BusyBlockRow, DEFAULT_SLEEP, isBlockActive, type SleepWindow } from "./busy";
 import { type ClientDeps, runJson } from "./client";
 import { type CourseRef, labelMatchesCourse, matchCourse } from "./courses";
 import { DAY_MS, MINUTE_MS, parseJstDateTime, startOfJstDay, toJstParts, WEEKDAYS_JA } from "./jst";
@@ -68,9 +68,15 @@ export function snapToClassStart(
 	busy: readonly BusyBlockRow[],
 ): { dueAt: number; reason: string | null } {
 	if (!dueText || !BEFORE_CLASS_RE.test(dueText) || courseNames.length === 0) return { dueAt, reason: null };
+	// 締切の日に有効な授業だけ(前の学期の時間割が残っていても使わない)
+	const day = startOfJstDay(dueAt);
 	const classes = busy.filter(
 		(b) =>
-			b.kind === "class" && b.weekday != null && b.startMin != null && labelMatchesCourse(b.label, courseNames),
+			b.kind === "class" &&
+			b.weekday != null &&
+			b.startMin != null &&
+			isBlockActive(b, day, day + DAY_MS) &&
+			labelMatchesCourse(b.label, courseNames),
 	);
 	if (classes.length === 0) return { dueAt, reason: null };
 	const weekday = toJstParts(dueAt).weekday;

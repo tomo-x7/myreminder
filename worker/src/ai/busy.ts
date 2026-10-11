@@ -9,6 +9,16 @@ export type Interval = { start: number; end: number };
 /** 睡眠の既定: 1:00–8:00 */
 export const DEFAULT_SLEEP: SleepWindow = { startMin: 60, endMin: 480 };
 
+/**
+ * 繰り返しの予定の期間(dateFrom・dateTo の日を含む)が [from, to) と重なるか。期間なしは常に true。
+ * 前の学期の時間割が残っていても、今の予定として扱わないために使う
+ */
+export function isBlockActive(b: Pick<BusyBlockRow, "dateFrom" | "dateTo">, from: number, to: number): boolean {
+	if (b.dateFrom != null && startOfJstDay(b.dateFrom) >= to) return false;
+	if (b.dateTo != null && startOfJstDay(b.dateTo) + DAY_MS <= from) return false;
+	return true;
+}
+
 /** [from, to) と重なる、繰り返し・単発の予定の区間 */
 export function expandBusyBlocks(blocks: readonly BusyBlockRow[], from: number, to: number): Interval[] {
 	const out: Interval[] = [];
@@ -21,8 +31,7 @@ export function expandBusyBlocks(blocks: readonly BusyBlockRow[], from: number, 
 		for (let day = startOfJstDay(from); day < to; day += DAY_MS) {
 			if (toJstParts(day).weekday !== b.weekday) continue;
 			// 期間つき(学期)の外の日は除く
-			if (b.dateFrom != null && day + DAY_MS <= b.dateFrom) continue;
-			if (b.dateTo != null && day > b.dateTo) continue;
+			if (!isBlockActive(b, day, day + DAY_MS)) continue;
 			const start = day + b.startMin * MINUTE_MS;
 			const end = day + b.endMin * MINUTE_MS;
 			if (end > from && start < to) out.push({ start, end });

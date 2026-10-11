@@ -735,6 +735,11 @@ export function isDuplicate(row: RowLike, sentToday: RowLike[]): boolean {
 	);
 }
 
+/** タスクに結びついた通知を送る意味がなくなったか: 提出済み・取り下げ、または締切を過ぎた(「至急」を締切後に届けない) */
+export function taskClosedForNotify(task: { status: string; dueAt: Ms }, now: Ms): boolean {
+	return task.status === "submitted" || task.status === "dismissed" || task.dueAt <= now;
+}
+
 /** 保留が明けたときの1通にまとめた文面 */
 export function summarizeDeferred(items: { title: string }[], max = 5): { title: string; body: string } {
 	const lines = items.slice(0, max).map((i) => `・${i.title}`);

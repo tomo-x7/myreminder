@@ -22,6 +22,7 @@ import {
 	isStillWorkingRow,
 	type RowLike,
 	summarizeDeferred,
+	taskClosedForNotify,
 } from "./policy";
 
 /** 1回の実行で送る FCM リクエストの上限(無料プランのサブリクエスト 50/回 から、D1 などの分を引いた値) */
@@ -165,7 +166,8 @@ export async function dispatchDueNotifications(
 
 	const out: DispatchedNotification[] = [];
 	for (const n of claimed) {
-		const carried = policy && isDigestKind(n.kind) ? await takeCapped(db, now) : [];
+		// まとめた通知はここでは持ち越し済みにしない(送れなかったら次のダイジェストに残す)
+		const carried = policy && isDigestKind(n.kind) ? await uncarried(db) : [];
 		const message = buildMessage(
 			carried.length > 0
 				? {
@@ -209,6 +211,13 @@ export async function dispatchDueNotifications(
 				} satisfies NotificationPayload,
 			})
 			.where(eq(notifications.id, n.id));
+		if (delivered && carried.length > 0) {
+			await markCarried(
+				db,
+				carried.map((c) => c.id),
+				now,
+			);
+		}
 		out.push({ id: n.id, status, results });
 	}
 	return { configured: true, notifications: out };
@@ -250,6 +259,19 @@ async function setStatus(
 	}
 }
 
+/** 通知を送る意味がなくなったタスクの ID: 提出済み・取り下げ、または締切後 */
+async function loadClosedTaskIds(db: Db, taskIds: string[], now: Ms): Promise<Set<string>> {
+	const closed = new Set<string>();
+	for (let i = 0; i < taskIds.length; i += CHUNK) {
+		const rows = await db
+			.select({ id: tasks.id, status: tasks.status, dueAt: tasks.dueAt })
+			.from(tasks)
+			.where(inArray(tasks.id, taskIds.slice(i, i + CHUNK)));
+		for (const r of rows) if (taskClosedForNotify(r, now)) closed.add(r.id);
+	}
+	return closed;
+}
+
 /** 今日(JST)に送った通知 */
 async function loadSentToday(db: Db, now: Ms): Promise<Row[]> {
 	const dayStart = startOfJstDay(now);
@@ -267,23 +289,14 @@ async function loadSentToday(db: Db, now: Ms): Promise<Row[]> {
 /**
  * 保留が明けたとき(いまのステータスが通常)に、保留中の通知を1通にまとめる。
  * ダイジェストはそのまま送り直す。1件だけならまとめず元の通知を送り直す。
- * 締切に関わるタスクが提出済みなどで閉じていたり、24時間以上前のものは捨てる
+ * 締切に関わるタスクが提出済み・締切後で閉じていたり、24時間以上前のものは捨てる
  */
 async function releaseDeferred(db: Db, now: Ms): Promise<void> {
 	const held = await db.select().from(notifications).where(eq(notifications.status, "deferred"));
 	if (held.length === 0) return;
 
 	const taskIds = [...new Set(held.flatMap((h) => (h.taskId ? [h.taskId] : [])))];
-	const closed = new Set<string>();
-	for (let i = 0; i < taskIds.length; i += CHUNK) {
-		const rows = await db
-			.select({ id: tasks.id })
-			.from(tasks)
-			.where(
-				and(inArray(tasks.id, taskIds.slice(i, i + CHUNK)), inArray(tasks.status, ["submitted", "dismissed"])),
-			);
-		for (const r of rows) closed.add(r.id);
-	}
+	const closed = await loadClosedTaskIds(db, taskIds, now);
 
 	const drop: string[] = [];
 	const digests: Row[] = [];
@@ -349,16 +362,7 @@ async function selectByPolicy(db: Db, now: Ms, due: ReturnType<typeof and>, limi
 	if (candidates.length === 0) return [];
 
 	const taskIds = [...new Set(candidates.flatMap((c) => (c.taskId ? [c.taskId] : [])))];
-	const closed = new Set<string>();
-	for (let i = 0; i < taskIds.length; i += CHUNK) {
-		const rows = await db
-			.select({ id: tasks.id })
-			.from(tasks)
-			.where(
-				and(inArray(tasks.id, taskIds.slice(i, i + CHUNK)), inArray(tasks.status, ["submitted", "dismissed"])),
-			);
-		for (const r of rows) closed.add(r.id);
-	}
+	const closed = await loadClosedTaskIds(db, taskIds, now);
 
 	const sentToday = await loadSentToday(db, now);
 	const sentRows = sentToday.map(asRow);
@@ -440,15 +444,15 @@ async function scheduleCombinedIfNoDigest(db: Db, now: Ms): Promise<void> {
 			cappedCarry: true,
 		},
 	});
-	await db
-		.update(notifications)
-		.set({ payload: sql`json_patch(${notifications.payload}, ${JSON.stringify({ carriedAt: now })})` })
-		.where(
-			sql`json_extract(${notifications.payload}, '$.capped') = 1 AND json_extract(${notifications.payload}, '$.carriedAt') IS NULL`,
-		);
+	// 文面は上のダイジェストの payload に入れたので、すぐ持ち越し済みにしてよい
+	await markCarried(
+		db,
+		capped.map((c) => c.id),
+		now,
+	);
 }
 
-async function uncarried(db: Db): Promise<{ title: string }[]> {
+async function uncarried(db: Db): Promise<{ id: string; title: string }[]> {
 	const rows = await db
 		.select()
 		.from(notifications)
@@ -458,21 +462,15 @@ async function uncarried(db: Db): Promise<{ title: string }[]> {
 				sql`json_extract(${notifications.payload}, '$.capped') = 1 AND json_extract(${notifications.payload}, '$.carriedAt') IS NULL`,
 			),
 		);
-	return rows.map((r) => ({ title: asPayload(r.payload).title ?? DEFAULT_TITLES[r.kind] }));
+	return rows.map((r) => ({ id: r.id, title: asPayload(r.payload).title ?? DEFAULT_TITLES[r.kind] }));
 }
 
-/** ダイジェストに足す、上限でまとめた通知。取ったものは持ち越し済みにする */
-async function takeCapped(db: Db, now: Ms): Promise<{ title: string }[]> {
-	const items = await uncarried(db);
-	if (items.length === 0) return items;
-	await db
-		.update(notifications)
-		.set({ payload: sql`json_patch(${notifications.payload}, ${JSON.stringify({ carriedAt: now })})` })
-		.where(
-			and(
-				eq(notifications.status, "merged"),
-				sql`json_extract(${notifications.payload}, '$.capped') = 1 AND json_extract(${notifications.payload}, '$.carriedAt') IS NULL`,
-			),
-		);
-	return items;
+/** ダイジェストに足した、上限でまとめた通知を持ち越し済みにする(送れたあとに呼ぶ) */
+async function markCarried(db: Db, ids: string[], now: Ms): Promise<void> {
+	for (let i = 0; i < ids.length; i += CHUNK) {
+		await db
+			.update(notifications)
+			.set({ payload: sql`json_patch(${notifications.payload}, ${JSON.stringify({ carriedAt: now })})` })
+			.where(inArray(notifications.id, ids.slice(i, i + CHUNK)));
+	}
 }

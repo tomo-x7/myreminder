@@ -140,10 +140,63 @@ export async function notifySubmitted(db: Db, taskId: string, _now: number): Pro
 	}
 }
 
+export type SummarySession = {
+	startAt: number;
+	endAt: number | null;
+	review: string;
+	taskId: string;
+	title: string;
+	courseName?: string | null;
+};
+
+export type SummaryDecision =
+	| { action: "wait" }
+	| { action: "skip" }
+	| { action: "send"; rows: DailyRow[]; hasUnconfirmed: boolean };
+
+/**
+ * 活動日の中で睡眠が始まる時刻(JST 0時からの分 sleepStartMin)。睡眠なし(起床と同じ分)なら活動日の終わり。
+ * 作業中の記録を待つ期限に使う
+ */
+export function sleepStartOfDay(dayStart: number, wakeMin: number, sleepStartMin: number): number {
+	const offset = (((sleepStartMin - wakeMin) % 1440) + 1440) % 1440;
+	return dayStart + (offset === 0 ? 1440 : offset) * MINUTE;
+}
+
+/**
+ * 1日の報告をいま出すか。dayEnd は min(now, 活動日の終わり)。
+ * - 作業中の記録が残っていれば、終わるまで待つ(giveUpAt = 睡眠の始まりを過ぎたら待たない)
+ * - 確定済みの作業がなければ送らない(skip)
+ */
+export function decideDailySummary(
+	sessions: SummarySession[],
+	t: { now: number; dayStart: number; dayEnd: number; giveUpAt: number },
+): SummaryDecision {
+	if (t.now < t.giveUpAt && sessions.some((r) => r.endAt === null)) return { action: "wait" };
+
+	const perTask = new Map<string, DailyRow>();
+	let hasUnconfirmed = false;
+	for (const r of sessions) {
+		if (r.review !== "confirmed") {
+			hasUnconfirmed = true;
+			continue;
+		}
+		// 作業中は now まで。活動日の範囲に切る
+		const minutes = (Math.min(r.endAt ?? t.now, t.dayEnd) - Math.max(r.startAt, t.dayStart)) / MINUTE;
+		if (minutes <= 0) continue;
+		const row = perTask.get(r.taskId) ?? { title: r.title, courseName: r.courseName, minutes: 0 };
+		row.minutes += minutes;
+		perTask.set(r.taskId, row);
+	}
+	if (perTask.size === 0) return { action: "skip" };
+	return { action: "send", rows: [...perTask.values()], hasUnconfirmed };
+}
+
 /**
  * 1日の終わりの報告。毎分の cron から呼ぶ。
- * 活動日ごとに1回、夜のダイジェストの時刻(settings.digest.eveningMin)以降に送る。
- * その日の確定済みの作業がなければ送らない(送信済みの印も付けず、日が変わるまで毎分見る)
+ * 活動日ごとに1回、夜のダイジェストの時刻(settings.digest.eveningMin)にその日を判定する。
+ * 作業中の記録があれば終わるまで待つ(睡眠の始まりまで)。作業がなければ送らずに、その日は済みの印だけ付ける
+ * (夜の時刻のあとに始めた作業を、始めたばかりの「1m」で報告しないため)
  */
 export async function sendDailySummaryIfDue(db: Db, now: number): Promise<void> {
 	try {
@@ -180,28 +233,22 @@ export async function sendDailySummaryIfDue(db: Db, now: number): Promise<void> 
 				),
 			);
 
-		const perTask = new Map<string, DailyRow>();
-		let hasUnconfirmed = false;
-		for (const r of rows) {
-			if (r.review !== "confirmed") {
-				hasUnconfirmed = true;
-				continue;
-			}
-			// 作業中は now まで。活動日の範囲に切る
-			const minutes = (Math.min(r.endAt ?? now, dayEnd) - Math.max(r.startAt, dayStart)) / MINUTE;
-			if (minutes <= 0) continue;
-			const row = perTask.get(r.taskId) ?? { title: r.title, courseName: r.courseName, minutes: 0 };
-			row.minutes += minutes;
-			perTask.set(r.taskId, row);
-		}
-		if (perTask.size === 0) return;
+		const decision = decideDailySummary(rows, {
+			now,
+			dayStart,
+			dayEnd,
+			giveUpAt: sleepStartOfDay(dayStart, wakeMin, cfg.sleep.startMin),
+		});
+		if (decision.action === "wait") return;
 
 		// 先に印を付ける(cron が重なっても二重に送らない)
 		await db
 			.insert(settings)
 			.values({ key: LAST_DAY_KEY, value: key })
 			.onConflictDoUpdate({ target: settings.key, set: { value: sql`excluded.value` } });
-		await sendToSubscribers(db, "daily_summary", formatDailySummary([...perTask.values()], hasUnconfirmed));
+		if (decision.action === "send") {
+			await sendToSubscribers(db, "daily_summary", formatDailySummary(decision.rows, decision.hasUnconfirmed));
+		}
 	} catch (e) {
 		console.error("sendDailySummaryIfDue failed", e instanceof Error ? e.name : "unknown");
 	}

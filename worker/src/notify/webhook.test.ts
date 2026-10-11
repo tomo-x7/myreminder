@@ -1,7 +1,16 @@
 import * as v from "valibot";
 import { describe, expect, it } from "vitest";
 import { isValidWebhookUrl, maskWebhookUrl, webhookCreateSchema } from "../schemas/webhook";
-import { buildWebhookBody, formatDailySummary, formatDuration, formatSubmitted, truncateText } from "./webhook";
+import {
+	buildWebhookBody,
+	decideDailySummary,
+	formatDailySummary,
+	formatDuration,
+	formatSubmitted,
+	type SummarySession,
+	sleepStartOfDay,
+	truncateText,
+} from "./webhook";
 
 const DISCORD = "https://discord.com/api/webhooks/123456789012345678/AbCdEf-gh_IjKlMn";
 const SLACK = "https://hooks.slack.com/services/T000/B000/XXXXXXXXXXXX";
@@ -86,5 +95,86 @@ describe("URL の検証とマスク", () => {
 		expect(ok.success && ok.output).toMatchObject({ events: ["submitted"], enabled: true });
 		expect(v.safeParse(webhookCreateSchema, { kind: "slack", url: DISCORD, events: [] }).success).toBe(false);
 		expect(v.safeParse(webhookCreateSchema, { kind: "slack", url: SLACK, events: ["x"] }).success).toBe(false);
+	});
+});
+
+describe("1日の報告の判断", () => {
+	const jst = (str: string) => Date.parse(`${str.replace(" ", "T")}:00+09:00`);
+	// 活動日 10/13 8:00〜10/14 8:00、睡眠 1:00 始まり
+	const dayStart = jst("2026-10-13 08:00");
+	const giveUpAt = jst("2026-10-14 01:00");
+	const s = (
+		taskId: string,
+		start: string,
+		end: string | null,
+		over: Partial<SummarySession> = {},
+	): SummarySession => ({
+		startAt: jst(start),
+		endAt: end === null ? null : jst(end),
+		review: "confirmed",
+		taskId,
+		title: taskId,
+		...over,
+	});
+	const decide = (sessions: SummarySession[], now: string) =>
+		decideDailySummary(sessions, { now: jst(now), dayStart, dayEnd: jst(now), giveUpAt });
+
+	it("終わった作業を課題ごとに足して送る", () => {
+		const d = decide(
+			[s("a", "2026-10-13 20:00", "2026-10-13 21:00"), s("a", "2026-10-13 21:10", "2026-10-13 21:40")],
+			"2026-10-13 22:00",
+		);
+		expect(d).toEqual({
+			action: "send",
+			rows: [{ title: "a", courseName: undefined, minutes: 90 }],
+			hasUnconfirmed: false,
+		});
+	});
+
+	it("作業がなければ送らない(skip)。確認待ちだけの日も送らない", () => {
+		expect(decide([], "2026-10-13 22:00")).toEqual({ action: "skip" });
+		expect(
+			decide([s("a", "2026-10-13 20:00", "2026-10-13 21:00", { review: "needs_review" })], "2026-10-13 22:00"),
+		).toEqual({
+			action: "skip",
+		});
+	});
+
+	it("作業中の記録があれば、終わるまで待つ。睡眠の始まりを過ぎたら待たずに now まで数えて送る", () => {
+		const open = [s("a", "2026-10-13 20:00", null)];
+		expect(decide(open, "2026-10-13 22:00")).toEqual({ action: "wait" });
+		expect(decide(open, "2026-10-14 00:59")).toEqual({ action: "wait" });
+		const late = decide(open, "2026-10-14 01:00");
+		expect(late).toMatchObject({ action: "send", rows: [{ minutes: 300 }] });
+		// 終わったら次の分で送れる(終了までの全体を数える)
+		expect(decide([s("a", "2026-10-13 20:00", "2026-10-13 23:30")], "2026-10-13 23:31")).toMatchObject({
+			action: "send",
+			rows: [{ minutes: 210 }],
+		});
+	});
+
+	it("未確定があれば付ける。活動日の範囲に切る", () => {
+		const d = decide(
+			[
+				s("a", "2026-10-13 07:00", "2026-10-13 09:00"), // 起床前の1時間は前の活動日
+				s("b", "2026-10-13 21:00", "2026-10-13 21:30", { review: "needs_review" }),
+			],
+			"2026-10-13 22:00",
+		);
+		expect(d).toMatchObject({ action: "send", hasUnconfirmed: true, rows: [{ title: "a", minutes: 60 }] });
+	});
+});
+
+describe("sleepStartOfDay", () => {
+	const wake = Date.parse("2026-10-13T08:00:00+09:00");
+	it("活動日の中で睡眠が始まる時刻", () => {
+		// 睡眠 1:00〜8:00 → 翌 1:00。23:00〜7:00 の起床 7:00 の日 → 23:00
+		expect(sleepStartOfDay(wake, 480, 60)).toBe(Date.parse("2026-10-14T01:00:00+09:00"));
+		expect(sleepStartOfDay(Date.parse("2026-10-13T07:00:00+09:00"), 420, 1380)).toBe(
+			Date.parse("2026-10-13T23:00:00+09:00"),
+		);
+	});
+	it("睡眠なし(開始=終了)は活動日の終わり", () => {
+		expect(sleepStartOfDay(wake, 480, 480)).toBe(Date.parse("2026-10-14T08:00:00+09:00"));
 	});
 });

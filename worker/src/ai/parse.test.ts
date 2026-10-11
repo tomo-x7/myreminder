@@ -162,6 +162,31 @@ describe("snapToClassStart", () => {
 	});
 });
 
+describe("前の学期の時間割", () => {
+	// 英語: 前期は月曜 9:00(〜9/30)、後期は月曜 13:00(10/1〜)
+	const old = { ...classBlock(1, 540, 630, "英語"), id: "old", dateTo: at("2026-09-30T00:00") };
+	const next = { ...classBlock(1, 780, 870, "英語"), id: "new", dateFrom: at("2026-10-01T00:00") };
+
+	it("「授業前」の補正は、締切の日に有効な授業だけを使う", () => {
+		const r = snapToClassStart(at("2026-10-12T23:59"), "来週月曜の授業前まで", ["英語"], [old, next]);
+		expect(r.dueAt).toBe(at("2026-10-12T13:00"));
+		// 学期の最終日(dateTo の日)はまだ有効、翌日から無効
+		expect(snapToClassStart(at("2026-09-28T23:59"), "授業前まで", ["英語"], [old, next]).dueAt).toBe(
+			at("2026-09-28T09:00"),
+		);
+		// 有効な授業がなければ補正しない
+		expect(snapToClassStart(at("2026-10-05T23:59"), "授業前まで", ["英語"], [old]).dueAt).toBe(
+			at("2026-10-05T23:59"),
+		);
+	});
+
+	it("プロンプトの時間割は今日有効な授業だけ", () => {
+		const [system] = buildMessages("line", "x", { now: NOW, courses: [], busy: [old, next] });
+		expect(system?.content).toContain("月: 13:00-14:30 英語");
+		expect(system?.content).not.toContain("9:00-10:30 英語");
+	});
+});
+
 describe("いつ始める?", () => {
 	it("夕方なら 最短の空き・今日の夜 21:00・明日の夕方 18:00(月曜の授業は避ける必要なし)", () => {
 		const s = computeStartSuggestions({ now: NOW, busy: ctx.busy });
