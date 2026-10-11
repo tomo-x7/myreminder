@@ -6,26 +6,24 @@ import type { ReviewDay } from "./hooks";
 export function WeekBars({ days }: { days: readonly ReviewDay[] }) {
 	const max = Math.max(60, ...days.map((d) => d.workedMin));
 	return (
-		<ul className="grid grid-cols-7 gap-1.5" aria-label="日ごとの作業時間">
+		<ul className="grid grid-cols-7 gap-2" aria-label="日ごとの作業時間">
 			{days.map((d) => {
 				const { day, weekday } = dateKeyParts(d.date);
 				const pct = (d.workedMin / max) * 100;
 				return (
-					<li key={d.date} className="flex flex-col items-center gap-1">
-						<span className="h-4 text-xs tabular-nums text-gray-600">
-							{d.workedMin > 0 ? formatHours(d.workedMin) : ""}
-						</span>
-						<div className="flex h-28 w-full items-end rounded-md bg-gray-100">
+					<li key={d.date} className="flex flex-col items-center">
+						<span className="h-4 text-xs text-sub">{d.workedMin > 0 ? formatHours(d.workedMin) : ""}</span>
+						<div className="flex h-20 w-full items-end justify-center border-b border-line">
 							<div
-								className="w-full rounded-md bg-blue-500"
-								style={{ height: `${pct}%`, minHeight: d.workedMin > 0 ? 4 : 0 }}
+								className="w-2/3 bg-ink"
+								style={{ height: `${pct}%`, minHeight: d.workedMin > 0 ? 2 : 0 }}
 								role="img"
 								aria-label={`${weekday}曜 ${d.workedMin}分`}
 							/>
 						</div>
-						<span className="text-xs font-medium text-gray-700">{weekday}</span>
-						<span className="text-[10px] tabular-nums text-gray-500">{day}</span>
-						<span className="h-3 text-[10px] text-gray-500">{d.allNighter ? "徹夜" : ""}</span>
+						<span className="mt-0.5 text-xs font-medium">{weekday}</span>
+						<span className="text-[10px] leading-3 text-faint">{day}</span>
+						<span className="h-3 text-[10px] leading-3 text-sub">{d.allNighter ? "徹夜" : ""}</span>
 					</li>
 				);
 			})}

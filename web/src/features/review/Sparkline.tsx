@@ -26,15 +26,15 @@ export function Sparkline({ values, label }: { values: readonly (number | null)[
 	const last = values[lastIndex];
 	return (
 		<svg viewBox={`0 0 ${W} ${H}`} className="h-12 w-60 max-w-full" role="img" aria-label={label}>
-			<line x1={PAD} x2={W - PAD} y1={y(1)} y2={y(1)} className="stroke-gray-300" strokeDasharray="3 3" />
+			<line x1={PAD} x2={W - PAD} y1={y(1)} y2={y(1)} className="stroke-faint" strokeDasharray="3 3" />
 			{segments.map((seg) =>
 				seg.length > 1 ? (
 					<polyline
 						key={seg[0]?.[0]}
 						points={seg.map(([px, py]) => `${px},${py}`).join(" ")}
 						fill="none"
-						className="stroke-blue-500"
-						strokeWidth={2}
+						className="stroke-ink"
+						strokeWidth={1.5}
 						strokeLinejoin="round"
 						strokeLinecap="round"
 					/>
@@ -46,8 +46,8 @@ export function Sparkline({ values, label }: { values: readonly (number | null)[
 						key={i}
 						cx={x(i)}
 						cy={y(v)}
-						r={i === lastIndex && last !== null ? 3.5 : 2.5}
-						className="fill-blue-500"
+						r={i === lastIndex && last !== null ? 3 : 2}
+						className="fill-ink"
 					/>
 				),
 			)}

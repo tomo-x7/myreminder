@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "wouter";
-import { PageHeader, QueryState } from "../components/ui";
+import { btnSecondary, PageHeader, QueryState } from "../components/ui";
 import {
 	EstimateCard,
 	FreshStart,
@@ -11,8 +11,8 @@ import {
 	weekLabel,
 } from "../features/review";
 
-const navClass = "rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800";
-const navOff = "rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-300";
+/** 移動できない側(今週より先)。枠だけ残して薄くする */
+const navOff = `${btnSecondary} opacity-40`;
 
 /** 週次のふりかえり(#26)。事実だけを並べる。ストリークや責める言い方は使わない */
 export function ReviewPage() {
@@ -21,22 +21,22 @@ export function ReviewPage() {
 	const review = useReview(week);
 
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex flex-col gap-3">
 			<PageHeader title="ふりかえり" />
 			<FreshStart />
 			<QueryState query={review}>
 				{(r) => (
 					<>
 						<nav className="flex items-center justify-between gap-2" aria-label="週の移動">
-							<Link href={`/review?week=${r.prevWeek}`} className={navClass}>
+							<Link href={`/review?week=${r.prevWeek}`} className={btnSecondary}>
 								← 前の週
 							</Link>
 							<div className="text-center">
-								<p className="text-base font-bold tabular-nums text-gray-900">{weekLabel(r.week)}</p>
-								{r.isCurrentWeek && <p className="text-xs text-gray-500">今週(途中)</p>}
+								<p className="font-bold">{weekLabel(r.week)}</p>
+								{r.isCurrentWeek && <p className="text-xs text-sub">今週(途中)</p>}
 							</div>
 							{r.nextWeek ? (
-								<Link href={`/review?week=${r.nextWeek}`} className={navClass}>
+								<Link href={`/review?week=${r.nextWeek}`} className={btnSecondary}>
 									次の週 →
 								</Link>
 							) : (
@@ -49,7 +49,7 @@ export function ReviewPage() {
 						{r.unconfirmedCount > 0 && (
 							<Link
 								href="/status"
-								className="rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-base font-semibold text-amber-900"
+								className="flex items-center justify-between border-l-2 border-warn py-0.5 pl-2 font-semibold text-warn"
 							>
 								確認待ちの記録が {r.unconfirmedCount} 件あります →
 							</Link>

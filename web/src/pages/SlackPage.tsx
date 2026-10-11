@@ -1,7 +1,16 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { DueLabel } from "../components/DueLabel";
-import { btnPrimary, ErrorNotice, PageHeader, QueryState } from "../components/ui";
+import {
+	btnSecondary,
+	chipClass,
+	Empty,
+	ErrorNotice,
+	listClass,
+	Notice,
+	PageHeader,
+	QueryState,
+} from "../components/ui";
 import { formatShort } from "../features/schedule/format";
 import { type SlackItem, useSlackList } from "../features/schedule/hooks";
 import { errorText, useStartWorking, useStatus } from "../features/status";
@@ -29,19 +38,21 @@ function SlackRow({ item, spareMin, now }: { item: SlackItem; spareMin: number; 
 	const status = useStatus();
 	const workingHere = status.data?.mode === "working" && status.data.taskId === item.id;
 	return (
-		<li className="flex flex-col gap-2 rounded-xl border border-gray-300 bg-white p-4">
-			<Link href={`/tasks/${item.id}`} className="flex flex-col gap-1">
-				<span className="text-lg font-bold text-gray-900">{item.title}</span>
-				<DueLabel dueAt={item.dueAt} now={now} />
-			</Link>
-			<p className="text-base font-semibold text-gray-900">{gainText(item, spareMin)}</p>
-			<p className="text-sm text-gray-600">{REASON_TEXT[item.reason]}</p>
-			{start.isError && <ErrorNotice>{errorText(start.error)}</ErrorNotice>}
+		<li className="flex items-start gap-2 py-2">
+			<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+				<Link href={`/tasks/${item.id}`} className="flex flex-col">
+					<span className="font-semibold">{item.title}</span>
+					<DueLabel dueAt={item.dueAt} now={now} />
+				</Link>
+				<p className="text-xs font-medium">{gainText(item, spareMin)}</p>
+				<p className="text-xs text-sub">{REASON_TEXT[item.reason]}</p>
+				{start.isError && <ErrorNotice>{errorText(start.error)}</ErrorNotice>}
+			</div>
 			<button
 				type="button"
 				disabled={start.isPending || workingHere}
 				onClick={() => start.mutate(item.id)}
-				className={btnPrimary}
+				className={`${btnSecondary} shrink-0`}
 			>
 				{workingHere ? "作業中" : "始める"}
 			</button>
@@ -57,24 +68,23 @@ export function SlackPage() {
 	const shown = spare ?? list.data?.spareMin;
 
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex flex-col gap-3">
 			<PageHeader title="余裕リスト" />
-			<p className="text-sm text-gray-600">
+			<p className="text-xs text-sub">
 				余裕のあるタスクを、次の空き時間にやると生み出せる余裕が大きい順に並べます。
 			</p>
-			<fieldset className="flex flex-wrap items-center gap-2">
-				<legend className="mb-1 text-sm font-medium text-gray-700">空き時間の長さ</legend>
+			<fieldset className="flex flex-wrap items-center gap-1.5">
+				<legend className="sr-only">空き時間の長さ</legend>
+				<span aria-hidden="true" className="text-xs text-sub">
+					空き時間の長さ
+				</span>
 				{SPARE_CHOICES.map((m) => (
 					<button
 						key={m}
 						type="button"
 						aria-pressed={shown === m}
 						onClick={() => setSpare(m)}
-						className={`rounded-full border px-4 py-2 text-base font-medium ${
-							shown === m
-								? "border-blue-600 bg-blue-50 text-blue-900"
-								: "border-gray-300 bg-white text-gray-800"
-						}`}
+						className={chipClass(shown === m)}
 					>
 						{m}分
 					</button>
@@ -83,7 +93,7 @@ export function SlackPage() {
 					<button
 						type="button"
 						onClick={() => setSpare(undefined)}
-						className="text-sm text-gray-600 underline"
+						className="text-xs text-sub underline underline-offset-2"
 					>
 						次の空きに合わせる
 					</button>
@@ -93,11 +103,9 @@ export function SlackPage() {
 			<QueryState query={list}>
 				{(data) =>
 					data.items.length === 0 ? (
-						<p className="rounded-xl border border-gray-300 bg-white p-6 text-center text-gray-700">
-							余裕のあるタスクはありません
-						</p>
+						<Empty>余裕のあるタスクはありません</Empty>
 					) : (
-						<ol className="flex flex-col gap-3">
+						<ol className={`${listClass} border-t`}>
 							{data.items.map((item) => (
 								<SlackRow key={item.id} item={item} spareMin={data.spareMin} now={now} />
 							))}
@@ -106,9 +114,9 @@ export function SlackPage() {
 				}
 			</QueryState>
 
-			<p className="rounded-lg bg-gray-100 px-3 py-2 text-xs leading-relaxed text-gray-600">
+			<Notice>
 				理論上は締切が早いものほど上に来やすい。差がつくのは、まとまった時間が要る・見積もりが読めない・山場の手前、の3つのとき。
-			</p>
+			</Notice>
 		</div>
 	);
 }

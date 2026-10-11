@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Sheet } from "../../components/Sheet";
-import { btnPrimary, btnSecondary, ErrorNotice, inputClass } from "../../components/ui";
+import { btnPrimary, btnSecondary, chipClass, ErrorNotice, inputClass, Notice } from "../../components/ui";
 import { formatJstDate, formatJstDateTime, fromDatetimeLocal, toDatetimeLocal } from "../../lib/date";
 import { useUpdateTask } from "../../lib/queries";
 import { useNow } from "../../lib/use-now";
@@ -10,68 +10,79 @@ import { snoozeOptions } from "./snooze-options";
 
 export type SnoozeTarget = Pick<PlanTask, "id" | "title" | "dueAt" | "latestStartUsual" | "latestStartHard">;
 
-const chip = "rounded-full border border-gray-300 bg-white px-4 py-2.5 text-base font-medium active:bg-gray-100";
-
 /** 選んだ時刻に回した場合の事実(再計画の結果)。評価や煽りは入れず、数字だけ出す */
 function Facts({ target, data }: { target: SnoozeTarget; data: WhatIf }) {
 	const now = useNow();
 	const { before, after } = data;
-	const lines: { text: string; tone?: "warn" }[] = [];
+	// label なしの行は、1文のまま横幅いっぱいに出す
+	const lines: { label?: string; text: string; tone?: "warn"; block?: boolean }[] = [];
+	let notice: string | null = null;
 
 	// 着手デッドラインより後なら、先に事実を知らせる
 	if (target.latestStartHard !== null && data.startAt > target.latestStartHard) {
-		lines.push({
-			text: `この時刻は着手デッドライン(${formatJstDateTime(target.latestStartHard)})より後。睡眠を削らずには間に合わなくなる`,
-			tone: "warn",
-		});
+		notice = `この時刻は着手デッドライン(${formatJstDateTime(target.latestStartHard)})より後。睡眠を削らずには間に合わなくなる`;
 	} else if (target.latestStartUsual !== null && data.startAt > target.latestStartUsual) {
-		lines.push({
-			text: `この時刻は着手デッドライン(${formatJstDateTime(target.latestStartUsual)})より後。普段のペースでは間に合わなくなり、本気が必要になる`,
-			tone: "warn",
-		});
+		notice = `この時刻は着手デッドライン(${formatJstDateTime(target.latestStartUsual)})より後。普段のペースでは間に合わなくなり、本気が必要になる`;
 	}
 
 	const short = data.neededMin - data.availableUsualMin;
 	lines.push({
-		text: `その時刻から締切までの空き: 普段のペースで ${formatHours(data.availableUsualMin)} / 必要 ${formatHours(data.neededMin)}${
+		label: "その時刻から締切までの空き",
+		block: true,
+		text: `普段のペースで ${formatHours(data.availableUsualMin)} / 必要 ${formatHours(data.neededMin)}${
 			short > 0 ? `(${formatHours(short)} 足りない)` : ""
 		}`,
 		tone: short > 0 ? "warn" : undefined,
 	});
 	lines.push({
+		label: "リスク",
 		text:
 			before.risk === after.risk
-				? `リスク: ${RISK_LABEL[after.risk]}(変わらない)`
-				: `リスク: ${RISK_LABEL[before.risk]} → ${RISK_LABEL[after.risk]}`,
+				? `${RISK_LABEL[after.risk]}(変わらない)`
+				: `${RISK_LABEL[before.risk]} → ${RISK_LABEL[after.risk]}`,
 	});
 	const ls = (v: number | null) => (v === null ? "置けない" : formatJstDateTime(v));
 	lines.push({
+		label: "着手デッドライン",
 		text:
 			before.latestStartUsual === after.latestStartUsual
-				? `着手デッドライン: ${ls(after.latestStartUsual)}(変わらない)`
-				: `着手デッドライン: ${ls(before.latestStartUsual)} → ${ls(after.latestStartUsual)}`,
+				? `${ls(after.latestStartUsual)}(変わらない)`
+				: `${ls(before.latestStartUsual)} → ${ls(after.latestStartUsual)}`,
 	});
 	const { before: bb, after: ba } = data.bottleneck;
 	if (bb && ba) {
-		lines.push({
-			text:
-				bb.slackUsual === ba.slackUsual
-					? `${bottleneckText(ba, now)}(変わらない)`
-					: `山場(${formatJstDate(ba.dueAt)})の余裕: ${formatHours(bb.slackUsual)} → ${formatHours(ba.slackUsual)}`,
-		});
+		if (bb.slackUsual === ba.slackUsual) lines.push({ text: `${bottleneckText(ba, now)}(変わらない)` });
+		else
+			lines.push({
+				label: `山場(${formatJstDate(ba.dueAt)})の余裕`,
+				text: `${formatHours(bb.slackUsual)} → ${formatHours(ba.slackUsual)}`,
+			});
 	}
 	for (const o of data.changedOthers) {
-		lines.push({ text: `「${o.title}」: ${RISK_LABEL[o.before]} → ${RISK_LABEL[o.after]}` });
+		lines.push({ label: `「${o.title}」`, text: `${RISK_LABEL[o.before]} → ${RISK_LABEL[o.after]}` });
 	}
 
 	return (
-		<ul className="flex flex-col gap-1.5 rounded-lg bg-gray-50 p-3 text-sm text-gray-800">
-			{lines.map((l) => (
-				<li key={l.text} className={l.tone === "warn" ? "font-semibold text-orange-800" : undefined}>
-					{l.text}
-				</li>
-			))}
-		</ul>
+		<>
+			{notice && <Notice tone="warn">{notice}</Notice>}
+			<dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-0.5 text-xs">
+				{lines.map((l) => {
+					const dd = l.tone === "warn" ? "font-semibold text-warn" : "";
+					if (l.label === undefined)
+						return (
+							<dd key={l.text} className={`col-span-2 ${dd}`}>
+								{l.text}
+							</dd>
+						);
+					return (
+						<div key={l.label} className="contents">
+							<dt className={l.block ? "col-span-2 text-sub" : "text-sub"}>{l.label}</dt>
+							<dd className={`${l.block ? "col-span-2" : ""} ${dd}`}>{l.text}</dd>
+						</div>
+					);
+				})}
+			</dl>
+		</>
 	);
 }
 
@@ -95,10 +106,10 @@ export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose
 
 	return (
 		<Sheet title="いつに回す?" onClose={onClose}>
-			<div className="flex flex-col gap-4">
-				<p className="text-base font-semibold text-gray-900">{target.title}</p>
+			<div className="flex flex-col gap-2">
+				<p className="font-semibold">{target.title}</p>
 				{!saved && (
-					<div className="flex flex-wrap gap-2">
+					<div className="flex flex-wrap gap-1.5">
 						{options.map((o) => (
 							<button
 								key={o.label}
@@ -107,22 +118,18 @@ export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose
 									setCustom(false);
 									choose(o.at);
 								}}
-								className={`${chip} ${startAt === o.at && !custom ? "border-blue-600 bg-blue-50" : ""}`}
+								className={chipClass(startAt === o.at && !custom)}
 							>
 								{o.label}
 							</button>
 						))}
-						<button
-							type="button"
-							onClick={() => setCustom(true)}
-							className={`${chip} ${custom ? "border-blue-600 bg-blue-50" : ""}`}
-						>
+						<button type="button" onClick={() => setCustom(true)} className={chipClass(custom)}>
 							時刻を指定
 						</button>
 					</div>
 				)}
 				{custom && !saved && (
-					<div className="flex gap-2">
+					<div className="flex gap-1.5">
 						<input
 							type="datetime-local"
 							aria-label="着手する時刻"
@@ -142,15 +149,15 @@ export function SnoozeSheet({ target, onClose }: { target: SnoozeTarget; onClose
 				)}
 
 				{startAt !== null && (
-					<section className="flex flex-col gap-3">
-						<p className="text-lg font-bold text-gray-900">{formatJstDateTime(startAt)} に回す</p>
-						{whatIf.isPending && <p className="text-sm text-gray-500">再計画しています…</p>}
+					<section className="flex flex-col gap-2 border-t border-line pt-2">
+						<p className="text-base font-bold">{formatJstDateTime(startAt)} に回す</p>
+						{whatIf.isPending && <p className="text-xs text-faint">再計画しています…</p>}
 						{whatIf.isError && <ErrorNotice>再計画できませんでした: {whatIf.error.message}</ErrorNotice>}
 						{whatIf.data && <Facts target={target} data={whatIf.data} />}
 						{update.isError && <ErrorNotice>保存できませんでした: {update.error.message}</ErrorNotice>}
 						{saved ? (
 							<>
-								<output className="block rounded-md bg-green-100 px-3 py-2 text-sm text-green-800">
+								<output className="block border-l-2 border-ink py-0.5 pl-2 text-sm font-semibold">
 									{formatJstDateTime(startAt)} に回しました
 								</output>
 								<button type="button" onClick={onClose} className={btnPrimary}>

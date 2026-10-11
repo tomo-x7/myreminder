@@ -7,8 +7,8 @@ export function FreshStart() {
 	const now = useNow();
 	const monday = jstParts(now).weekday === 1;
 	return (
-		<section className="rounded-xl border border-blue-300 bg-blue-50 px-4 py-3">
-			<p className="text-base font-semibold text-blue-950">
+		<section className="border-l-2 border-ink py-0.5 pl-2">
+			<p className="font-semibold">
 				{monday ? "新しい週。" : "今週の見通し。"}
 				<BottleneckLine now={now} />
 			</p>
