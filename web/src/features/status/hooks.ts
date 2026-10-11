@@ -142,6 +142,7 @@ const ERROR_TEXT: Record<string, string> = {
 	invalid_task: "タスクが見つかりません",
 	not_working: "作業中ではありません",
 	working: "作業中です。先に作業を終えてください",
+	task_closed: "提出済み・取り下げのタスクでは作業を始められません",
 	invalid_until: "期限が過ぎています",
 	not_found: "見つかりません",
 };
