@@ -242,6 +242,7 @@
 - 睡眠中の致命は、既定では起床時(締切に近すぎるなら寝る前)に回す。設定 `criticalDuringSleep` で睡眠中も送れる
 - 作業中・取り込み中・睡眠中に保留した通知は、明けたら「保留中の通知 N件」の1通にまとめる。上限を超えた分は次のダイジェストに「まとめた通知 N件」として足す
 - 送る予定の通知は、毎時0分と、タスク・予定・設定・ステータス・作業記録の変更後に作り直す(`notify/replan.ts`、冪等)
+- 本人が決めた着手時刻の合図は、リスクが「余裕」でも1回送る(上の表より §2.2-3 を優先。decisions.md #33)
 
 ### 3.9 自動取り込み(承認制・段階的なおまけ)
 
@@ -378,7 +379,7 @@ export default {
 | ビルド | Vite + React 19 | 既存の雛形をそのまま使う |
 | API クライアント | `hc<AppType>` + TanStack Query | `worker` を workspace 依存にして `import type` する。**web の tsconfig にも `strict: true` が必要**(ないと hc の型推論が崩れる) |
 | ルーティング | TanStack Router(または画面が少なければ不要) | 画面: ホーム(次の1件)/ 一覧 / 余裕リスト / 受信箱 / 時間割 / 設定 |
-| スタイル | Tailwind CSS v4 | shared の biome 設定に tailwind 用の override があるため |
+| スタイル | Tailwind CSS v4 | shared の biome 設定に tailwind 用の override があるため。見た目の規則は [specs/ui.md](specs/ui.md) |
 | PWA | Web App Manifest + 自前の Service Worker | FCM の `firebase-messaging-sw.js` と統合する。Share Target もここで |
 | プッシュ | firebase JS SDK(messaging のみ) | 新しい SDK はトークン API が変わっている(`register()` 方式)ので、実装時に確認する |
 
