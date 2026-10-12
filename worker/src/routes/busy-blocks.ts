@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import * as v from "valibot";
 import { getDb } from "../db";
@@ -7,7 +7,7 @@ import type { Env } from "../env";
 import { triggerReplan } from "../notify/replan";
 import { busyBlockCreateSchema, busyBlockUpdateSchema } from "../schemas/busy-block";
 import { ensureCourse } from "../services/courses";
-import { idParamSchema, NOT_FOUND } from "../services/http";
+import { idParamSchema, idsBodySchema, NOT_FOUND } from "../services/http";
 import { formatIssues, validate } from "../services/validate";
 
 export const busyBlocks = new Hono<Env>()
@@ -27,6 +27,16 @@ export const busyBlocks = new Hono<Env>()
 		if (row.kind === "class") await ensureCourse(db, row.label);
 		triggerReplan(c);
 		return c.json(row, 201);
+	})
+	// 学期末にまとめて消す。ない id は無視
+	.post("/bulk-delete", validate("json", idsBodySchema), async (c) => {
+		const { ids } = c.req.valid("json");
+		const rows = await getDb(c.env)
+			.delete(busyBlocksTable)
+			.where(inArray(busyBlocksTable.id, ids))
+			.returning({ id: busyBlocksTable.id });
+		if (rows.length) triggerReplan(c);
+		return c.json({ deleted: rows.length }, 200);
 	})
 	.patch("/:id", validate("param", idParamSchema), validate("json", busyBlockUpdateSchema), async (c) => {
 		const { id } = c.req.valid("param");

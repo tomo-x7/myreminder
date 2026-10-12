@@ -1,9 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useApi } from "../api/context";
 import { unwrap } from "../api/errors";
 import type { CourseInput } from "../api/types";
 import { queryKeys } from "./keys";
-import { useInvalidatingMutation } from "./mutation";
+import { chunks, useInvalidatingMutation } from "./mutation";
 
 export const useCourses = () => {
 	const api = useApi();
@@ -27,6 +27,15 @@ export const useUpdateCourse = () => {
 	}, queryKeys.courses);
 };
 
+// 科目を消すと、タスクと繰り返し(シリーズ)の courseId が null になるので、それらも取り直す
+const invalidateAfterCourseDelete = (qc: QueryClient) =>
+	Promise.all([
+		qc.invalidateQueries({ queryKey: queryKeys.courses }),
+		qc.invalidateQueries({ queryKey: queryKeys.tasks }),
+		qc.invalidateQueries({ queryKey: queryKeys.series }),
+		qc.invalidateQueries({ queryKey: queryKeys.schedule }),
+	]);
+
 /** 科目を消すと、タスクの courseId が null になるのでタスクも更新する */
 export function useDeleteCourse() {
 	const api = useApi();
@@ -35,11 +44,20 @@ export function useDeleteCourse() {
 		mutationFn: async (id: string) => {
 			await unwrap(await api.api.courses[":id"].$delete({ param: { id } }));
 		},
-		onSuccess: () =>
-			Promise.all([
-				qc.invalidateQueries({ queryKey: queryKeys.courses }),
-				qc.invalidateQueries({ queryKey: queryKeys.tasks }),
-				qc.invalidateQueries({ queryKey: queryKeys.schedule }),
-			]),
+		onSuccess: () => invalidateAfterCourseDelete(qc),
+	});
+}
+
+/** まとめて削除。API の上限(100件)ごとに分けて送る */
+export function useDeleteCourses() {
+	const api = useApi();
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: async (ids: readonly string[]) => {
+			for (const chunk of chunks(ids, 100)) {
+				await unwrap(await api.api.courses["bulk-delete"].$post({ json: { ids: [...chunk] } }));
+			}
+		},
+		onSuccess: () => invalidateAfterCourseDelete(qc),
 	});
 }

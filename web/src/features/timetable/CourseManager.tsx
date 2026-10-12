@@ -13,6 +13,7 @@ import {
 	listClass,
 	SectionTitle,
 } from "../../components/ui";
+import { type RowSelection, SelectAllButton, SelectableRow } from "./select";
 
 function CourseForm({ course, onDone }: { course?: Course; onDone: () => void }) {
 	const { form, set, canSave, saving, error, save, remove } = useCourseForm(course, onDone);
@@ -72,8 +73,8 @@ function CourseForm({ course, onDone }: { course?: Course; onDone: () => void })
 	);
 }
 
-/** 科目の一覧と追加・名前/別名の編集・削除 */
-export function CourseManager() {
+/** 科目の一覧と追加・名前/別名の編集・削除。selection が渡されたら選択中(行はチェックボックス、「＋ 追加」は出さない) */
+export function CourseManager({ selection }: { selection?: RowSelection }) {
 	const courses = useCourses();
 	const [editing, setEditing] = useState<Course | "new" | null>(null);
 	const close = () => setEditing(null);
@@ -82,13 +83,17 @@ export function CourseManager() {
 		<section className="flex flex-col">
 			<SectionTitle
 				action={
-					<button
-						type="button"
-						onClick={() => setEditing("new")}
-						className="-mb-0.5 rounded-sm px-1 py-0.5 text-xs text-sub active:bg-wash"
-					>
-						＋ 追加
-					</button>
+					selection ? (
+						<SelectAllButton selection={selection} ids={courses.data?.map((c) => c.id) ?? []} />
+					) : (
+						<button
+							type="button"
+							onClick={() => setEditing("new")}
+							className="-mb-0.5 rounded-sm px-1 py-0.5 text-xs text-sub active:bg-wash"
+						>
+							＋ 追加
+						</button>
+					)
 				}
 			>
 				科目
@@ -98,17 +103,15 @@ export function CourseManager() {
 			<ul className={listClass}>
 				{courses.data?.map((c) => (
 					<li key={c.id}>
-						<button
-							type="button"
-							onClick={() => setEditing(c)}
-							className="flex w-full items-baseline gap-2 py-2 text-left active:bg-wash"
+						<SelectableRow
+							id={c.id}
+							selection={selection}
+							onEdit={() => setEditing(c)}
+							className="flex w-full items-baseline gap-2 py-2 active:bg-wash"
 						>
 							<span className="shrink-0 font-medium">{c.name}</span>
 							<span className="min-w-0 flex-1 truncate text-xs text-sub">{aliasesText(c)}</span>
-							<span aria-hidden="true" className="text-faint">
-								›
-							</span>
-						</button>
+						</SelectableRow>
 					</li>
 				))}
 			</ul>

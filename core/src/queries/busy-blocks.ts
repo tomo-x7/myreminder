@@ -3,7 +3,7 @@ import { useApi } from "../api/context";
 import { unwrap } from "../api/errors";
 import type { BusyBlockInput, BusyBlockPatch } from "../api/types";
 import { queryKeys } from "./keys";
-import { useInvalidatingMutation } from "./mutation";
+import { chunks, useInvalidatingMutation } from "./mutation";
 
 export const useBusyBlocks = () => {
 	const api = useApi();
@@ -40,5 +40,15 @@ export const useDeleteBusyBlock = () => {
 	const api = useApi();
 	return useInvalidatingMutation(async (id: string) => {
 		await unwrap(await api.api["busy-blocks"][":id"].$delete({ param: { id } }));
+	}, queryKeys.busyBlocks);
+};
+
+/** まとめて削除。API の上限(100件)ごとに分けて送る */
+export const useDeleteBusyBlocks = () => {
+	const api = useApi();
+	return useInvalidatingMutation(async (ids: readonly string[]) => {
+		for (const chunk of chunks(ids, 100)) {
+			await unwrap(await api.api["busy-blocks"]["bulk-delete"].$post({ json: { ids: [...chunk] } }));
+		}
 	}, queryKeys.busyBlocks);
 };

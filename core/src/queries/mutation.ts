@@ -19,6 +19,13 @@ export function useInvalidatingMutation<V, R>(
 	});
 }
 
+/** 配列を size 件ずつに分ける */
+export function chunks<T>(items: readonly T[], size: number): T[][] {
+	const out: T[][] = [];
+	for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+	return out;
+}
+
 /** 状態・作業記録が変わったとき。作業記録が変わると計画(残り・今日の作業分)も変わるので、schedule も取り直す */
 export const invalidateWorkLog = (qc: QueryClient) =>
 	Promise.all([

@@ -77,6 +77,10 @@ web 固有の処理が要るところは、`core` が受け口(関数やオプ�
 
 AI の解析の失敗(`/api/parse/*`)はエラーではなく HTTP 200 の `{ candidates: [], error: "<人向けの文>" }` で返る(画面は手入力に切り替える)。この `error` はコードではなく文。
 
+### まとめて削除
+
+`POST /api/busy-blocks/bulk-delete` と `POST /api/courses/bulk-delete` に `{ ids: string[] }`(1〜100件)。応答 `{ deleted: n }`。ない id は無視する(404 にしない)。100件を超えるときはクライアントが分けて送る(`core/queries` のフックがする)。
+
 ### 互換性
 
 アプリは web と違ってデプロイと同時には更新されない(手で APK を入れ直す)ので、**API の変更は足すだけにする**。

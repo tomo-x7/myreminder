@@ -1,4 +1,4 @@
-import type { BusyBlock, BusyBlockInput, Course } from "core/api/types";
+import type { BusyBlock, BusyBlockInput } from "core/api/types";
 import {
 	type BusyKind,
 	KIND_LABEL,
@@ -8,7 +8,7 @@ import {
 	WEEKDAY_ORDER,
 } from "core/domain/timetable";
 import { useBlockForm } from "core/forms/busy-block";
-import { useId, useState } from "react";
+import { useState } from "react";
 import { DateInput, DatetimeInput, TimeInput } from "../../components/DateTimeInputs";
 import { btnDanger, btnPrimary, btnSecondary, chipClass, ErrorNotice, Field, inputClass } from "../../components/ui";
 
@@ -17,7 +17,6 @@ type Props = {
 	block?: BusyBlock;
 	defaultWeekday?: number;
 	periods: readonly Period[];
-	courses: readonly Course[];
 	saving: boolean;
 	error: string | null;
 	onSave: (input: BusyBlockInput) => void;
@@ -25,13 +24,12 @@ type Props = {
 };
 
 /** 時間割(繰り返し)・単発の予定の追加/編集フォーム */
-export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving, error, onSave, onDelete }: Props) {
+export function BlockForm({ block, defaultWeekday = 1, periods, saving, error, onSave, onDelete }: Props) {
 	const { form, set, setShape, setStartAt, pickPeriod, isPeriodSelected, problem, submit } = useBlockForm(
 		block,
 		defaultWeekday,
 	);
 	const [confirming, setConfirming] = useState(false);
-	const listId = useId();
 	const recurring = form.shape === "recurring";
 
 	return (
@@ -80,19 +78,11 @@ export function BlockForm({ block, defaultWeekday = 1, periods, courses, saving,
 				<Field label={form.kind === "class" ? "科目名" : "名前"}>
 					<input
 						type="text"
-						list={listId}
 						value={form.label}
 						maxLength={100}
 						onChange={(e) => set("label", e.target.value)}
 						className={inputClass}
 					/>
-					{form.kind === "class" && (
-						<datalist id={listId}>
-							{courses.map((c) => (
-								<option key={c.id} value={c.name} />
-							))}
-						</datalist>
-					)}
 				</Field>
 			</div>
 
