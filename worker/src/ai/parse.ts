@@ -57,7 +57,11 @@ export function clampEstimate(min: number | null, category: TaskCategory): numbe
 	return Math.min(MAX_ESTIMATE, Math.max(MIN_ESTIMATE, Math.round(min / 5) * 5));
 }
 
-const BEFORE_CLASS_RE = /授業(?:の|が)?(?:開始|始まる|始め)?前|授業開始|授業始め|授業まで/;
+// 「授業の前日まで」は授業開始ではないので、「前日」は除く
+const BEFORE_CLASS_RE =
+	/(?:授業|講義)(?:の|が)?(?:開始|始まる|始め)?前(?!日)|(?:授業|講義)開始|(?:授業|講義)始め|(?:授業|講義)まで/;
+const DAY_AFTER_CLASS_RE = /(?:授業|講義)日?の?翌日/;
+const DAY_AFTER_CLASS_WINDOW = 14;
 
 /**
  * 「授業前」と言っているのに、モデルが授業開始時刻を取り違えたときの補正。
@@ -89,6 +93,43 @@ export function snapToClassStart(
 	return { dueAt: startOfJstDay(dueAt) + Math.min(...starts) * MINUTE_MS, reason: null };
 }
 
+/**
+ * 「講義の翌日まで」と言っているのに、モデルが今日の翌日(明日)などを返したときの補正。
+ * 締切の前日が今日以降の授業日なら、モデルの答えをそのまま使う(特定の回を指している場合)。
+ * そうでなければ、今日以降で最初の授業日の翌日にする(今日に授業があれば今日)
+ */
+export function snapToDayAfterClass(
+	dueAt: number,
+	dueText: string | null,
+	courseNames: readonly string[],
+	busy: readonly BusyBlockRow[],
+	now: number,
+): { dueAt: number; reason: string | null } {
+	if (!dueText || !DAY_AFTER_CLASS_RE.test(dueText) || courseNames.length === 0) return { dueAt, reason: null };
+	const today = startOfJstDay(now);
+	// 今日以降に有効な授業だけ(前の学期の時間割は使わない)
+	const classes = busy.filter(
+		(b) =>
+			b.kind === "class" &&
+			b.weekday != null &&
+			b.startMin != null &&
+			isBlockActive(b, today, Number.POSITIVE_INFINITY) &&
+			labelMatchesCourse(b.label, courseNames),
+	);
+	if (classes.length === 0) return { dueAt, reason: null };
+	const isClassDay = (day: number) => {
+		const weekday = toJstParts(day).weekday;
+		return classes.some((b) => b.weekday === weekday && isBlockActive(b, day, day + DAY_MS));
+	};
+	const due = startOfJstDay(dueAt);
+	if (due - DAY_MS >= today && isClassDay(due - DAY_MS)) return { dueAt, reason: null };
+	for (let i = 0; i < DAY_AFTER_CLASS_WINDOW; i++) {
+		const day = today + i * DAY_MS;
+		if (isClassDay(day)) return { dueAt: day + DAY_MS + (dueAt - due), reason: null };
+	}
+	return { dueAt, reason: `講義の翌日だが${DAY_AFTER_CLASS_WINDOW}日以内に授業なし` };
+}
+
 /** モデルの出力 → 確認カード。純粋関数(テスト対象) */
 export function normalizeCandidates(
 	raw: readonly RawCandidate[],
@@ -107,6 +148,9 @@ export function normalizeCandidates(
 			reasons.push("締切が読み取れない");
 		} else {
 			const names = course ? [course.name, ...course.aliases] : r.courseName ? [r.courseName] : [];
+			const dayAfter = snapToDayAfterClass(dueAt, r.dueText, names, ctx.busy, now);
+			dueAt = dayAfter.dueAt;
+			if (dayAfter.reason) reasons.push(dayAfter.reason);
 			const snapped = snapToClassStart(dueAt, r.dueText, names, ctx.busy);
 			dueAt = snapped.dueAt;
 			if (snapped.reason) reasons.push(snapped.reason);
