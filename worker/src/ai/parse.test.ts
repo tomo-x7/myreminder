@@ -81,6 +81,30 @@ describe("候補のスキーマ", () => {
 		});
 	});
 
+	it("repeat: 読めるものだけ受け、範囲外・壊れた値は null(候補は捨てない)", () => {
+		const repeat = (r: unknown) =>
+			v.parse(candidatesResponseSchema, { candidates: [{ title: "a", repeat: r }] }).candidates[0]?.repeat;
+		expect(repeat({ freq: "weekly", interval: 2 })).toEqual({ freq: "weekly", interval: 2 });
+		expect(repeat({ freq: "Monthly", interval: "1" })).toEqual({ freq: "monthly", interval: 1 });
+		// interval がなければ 1
+		expect(repeat({ freq: "weekly" })).toEqual({ freq: "weekly", interval: 1 });
+		expect(repeat({ freq: "weekly", interval: null })).toEqual({ freq: "weekly", interval: 1 });
+		for (const bad of [
+			{ freq: "weekly", interval: 13 },
+			{ freq: "weekly", interval: 0 },
+			{ freq: "weekly", interval: 1.5 },
+		]) {
+			expect(repeat(bad)).toBeNull();
+		}
+		for (const bad of [{ freq: "daily", interval: 1 }, "weekly", 1, null, undefined, {}]) {
+			expect(repeat(bad)).toBeNull();
+		}
+		// 候補は残る。キーがなくても null
+		expect(v.parse(candidatesResponseSchema, { candidates: [{ title: "a" }] }).candidates).toMatchObject([
+			{ title: "a", repeat: null },
+		]);
+	});
+
 	it("壊れた候補は捨てて、残りは生かす。配列そのもの・1件のオブジェクトも受ける", () => {
 		expect(
 			v.parse(candidatesResponseSchema, { candidates: [{ title: "" }, { title: "ok" }] }).candidates,
@@ -135,6 +159,13 @@ describe("normalizeCandidates", () => {
 		expect(u).toMatchObject({ courseId: null, courseName: "体育" });
 		const [a] = normalizeCandidates(raw({ courseName: "数演" }), ctx, NOW, "line");
 		expect(a).toMatchObject({ courseId: "c-math", courseName: "数学演習" });
+	});
+
+	it("repeat は確認カードの既定値としてそのまま渡す。終わり(count/until)は付けない", () => {
+		const [c] = normalizeCandidates(raw({ repeat: { freq: "weekly", interval: 2 } }), ctx, NOW, "line");
+		expect(c?.repeat).toEqual({ freq: "weekly", interval: 2 });
+		const [none] = normalizeCandidates(raw({}), ctx, NOW, "line");
+		expect(none?.repeat).toBeNull();
 	});
 
 	it("line は1件、text は最大10件", () => {
@@ -235,6 +266,12 @@ describe("プロンプト", () => {
 		expect(system?.content).toContain("月: 10:40-12:10 情報倫理 / 13:00-14:30 数学演習");
 		expect(system?.content).toContain("数学演習(別名: 数演)");
 		expect(user?.content).toContain("来週月曜の授業前までにレポート");
+	});
+
+	it("繰り返し(repeat)の出力形式と、毎週・隔週・毎月の指示を含む", () => {
+		const [system] = buildMessages("text", "x", { now: NOW, courses: [], busy: [] });
+		expect(system?.content).toContain('"repeat":{"freq":"weekly|monthly","interval":1〜12}|null');
+		expect(system?.content).toContain("毎週」「隔週」「毎月");
 	});
 });
 

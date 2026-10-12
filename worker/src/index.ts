@@ -11,6 +11,7 @@ import { parse } from "./routes/parse";
 import { push } from "./routes/push";
 import { review } from "./routes/review";
 import { schedule } from "./routes/schedule";
+import { series } from "./routes/series";
 import { sessions } from "./routes/sessions";
 import { settings } from "./routes/settings";
 import { status } from "./routes/status";
@@ -22,6 +23,7 @@ const app = new Hono<Env>().basePath("/api");
 const routes = app
 	.route("/health", health)
 	.route("/tasks", tasks)
+	.route("/series", series)
 	.route("/courses", courses)
 	.route("/busy-blocks", busyBlocks)
 	.route("/settings", settings)

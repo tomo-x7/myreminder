@@ -69,6 +69,7 @@ web 固有の処理が要るところは、`core` が受け口(関数やオプ�
 | `not_working` | 409 | 作業中ではないので停止できない |
 | `not_pending` | 409 | 受信箱の項目がすでに処理済み |
 | `no_change` | 409 | 受信箱の項目に適用できる締切の変更がない |
+| `already_repeating` | 409 | すでに繰り返し(シリーズ)に属するタスクに `POST /api/tasks/:id/repeat`(仕様は [recurrence.md](recurrence.md)) |
 | `too_large` | 413 | 画像が上限(1.5MB)を超えた(`message` あり) |
 | `unsupported_media_type` | 415 | 画像が JPEG・PNG・WebP ではない(`message` あり) |
 | `internal` | 500 | 想定外の例外 |

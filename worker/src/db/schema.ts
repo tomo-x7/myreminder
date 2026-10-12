@@ -32,12 +32,14 @@ export const PUSH_PLATFORMS = ["web", "android"] as const;
 export const WEBHOOK_KINDS = ["discord", "slack"] as const;
 export const WEBHOOK_EVENTS = ["submitted", "daily_summary", "all_notifications"] as const;
 export const AI_LOG_STATUSES = ["ok", "error"] as const;
+export const REPEAT_FREQS = ["weekly", "monthly"] as const;
 
 export type TaskCategory = (typeof TASK_CATEGORIES)[number];
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type UserMode = (typeof USER_MODES)[number];
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+export type RepeatFreq = (typeof REPEAT_FREQS)[number];
 
 export const courses = sqliteTable("courses", {
 	id: id(),
@@ -45,6 +47,36 @@ export const courses = sqliteTable("courses", {
 	// 取り込み元ごとの表記揺れ
 	aliases: text("aliases", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
 	color: text("color"),
+});
+
+// 繰り返し(仕様: ai-docs/specs/recurrence.md)。回(tasks)は先の分だけ作る
+export const taskSeries = sqliteTable("task_series", {
+	id: id(),
+	// 各回にコピーするひな形
+	title: text("title").notNull(),
+	courseId: text("course_id").references(() => courses.id, { onDelete: "set null" }),
+	category: text("category", { enum: TASK_CATEGORIES }).notNull().default("other"),
+	estimateMin: integer("estimate_min").notNull(),
+	estimateSource: text("estimate_source", { enum: ESTIMATE_SOURCES }).notNull().default("manual"),
+	minBlockMin: integer("min_block_min").notNull().default(30),
+	firstStep: text("first_step"),
+	note: text("note"),
+	freq: text("freq", { enum: REPEAT_FREQS }).notNull(),
+	// 毎週の 2 = 隔週。1〜12
+	interval: integer("interval").notNull().default(1),
+	// 最初の回(番号 0)の締切。以降の回は常にここから計算する
+	anchorDueAt: integer("anchor_due_at").notNull(),
+	// 締切からの差(分)。releaseAt / plannedStartAt = dueAt + offset。なしは null
+	releaseOffsetMin: integer("release_offset_min"),
+	plannedStartOffsetMin: integer("planned_start_offset_min"),
+	// 終わり: count(最初の回を含む回数)か until(JST の日の 0:00。その日の締切まで含む)。どちらも null は無期限
+	count: integer("count"),
+	until: integer("until"),
+	// 次に作る回の番号(消した回は作り直さない)
+	materializedCount: integer("materialized_count").notNull().default(0),
+	stoppedAt: integer("stopped_at"),
+	createdAt: integer("created_at").notNull(),
+	updatedAt: integer("updated_at").notNull(),
 });
 
 export const tasks = sqliteTable(
@@ -66,10 +98,18 @@ export const tasks = sqliteTable(
 		firstStep: text("first_step"),
 		note: text("note"),
 		submittedAt: integer("submitted_at"),
+		// 繰り返しの回。シリーズが消えたら普通のタスクに戻る
+		seriesId: text("series_id").references(() => taskSeries.id, { onDelete: "set null" }),
+		seriesIndex: integer("series_index"),
 		createdAt: integer("created_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
 	},
-	(t) => [index("tasks_status_due_at_idx").on(t.status, t.dueAt), index("tasks_course_id_idx").on(t.courseId)],
+	(t) => [
+		index("tasks_status_due_at_idx").on(t.status, t.dueAt),
+		index("tasks_course_id_idx").on(t.courseId),
+		// 回の作成を冪等にする(series_id が null の行は重複してよい)
+		uniqueIndex("tasks_series_id_index_uq").on(t.seriesId, t.seriesIndex),
+	],
 );
 
 export const taskDueHistory = sqliteTable(

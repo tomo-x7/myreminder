@@ -2,7 +2,7 @@
 // 小さいモデルは null と "" や数値と文字列を取り違えるので、欄ごとに寛容に読む(壊れた欄は fallback)。
 // 壊れたら捨てるのは「候補1件」だけで、全体は落とさない
 import * as v from "valibot";
-import { TASK_CATEGORIES } from "../db/schema";
+import { REPEAT_FREQS, TASK_CATEGORIES } from "../db/schema";
 
 const toText = (x: unknown): string | null => {
 	if (typeof x !== "string") return null;
@@ -23,6 +23,36 @@ const toNumber = (x: unknown): number | null => {
 const optText = v.optional(v.pipe(v.unknown(), v.transform(toText)), null);
 const optNumber = v.optional(v.pipe(v.unknown(), v.transform(toNumber)), null);
 
+// 繰り返し。文に「毎週」「隔週」「毎月」などがあるときだけ。範囲外・読めない値は null(候補ごと捨てない)
+const rawRepeatSchema = v.object({
+	freq: v.pipe(
+		v.unknown(),
+		v.transform((x) => (typeof x === "string" ? x.trim().toLowerCase() : x)),
+		v.picklist(REPEAT_FREQS),
+	),
+	interval: v.optional(
+		v.pipe(
+			v.unknown(),
+			v.transform((x) => toNumber(x) ?? 1),
+			v.integer(),
+			v.minValue(1),
+			v.maxValue(12),
+		),
+		1,
+	),
+});
+export type RawRepeat = v.InferOutput<typeof rawRepeatSchema>;
+const optRepeat = v.optional(
+	v.pipe(
+		v.unknown(),
+		v.transform((x): RawRepeat | null => {
+			const r = v.safeParse(rawRepeatSchema, x);
+			return r.success ? r.output : null;
+		}),
+	),
+	null,
+);
+
 export const rawCandidateSchema = v.object({
 	title: v.pipe(
 		v.unknown(),
@@ -36,6 +66,7 @@ export const rawCandidateSchema = v.object({
 	dueText: optText,
 	estimateMin: optNumber,
 	firstStep: optText,
+	repeat: optRepeat,
 	confidence: optNumber,
 });
 export type RawCandidate = v.InferOutput<typeof rawCandidateSchema>;
@@ -82,6 +113,19 @@ export const candidatesJsonSchema = {
 					dueText: nullable("string"),
 					estimateMin: nullable("number"),
 					firstStep: nullable("string"),
+					repeat: {
+						anyOf: [
+							{
+								type: "object",
+								properties: {
+									freq: { type: "string", enum: [...REPEAT_FREQS] },
+									interval: { type: "number" },
+								},
+								required: ["freq", "interval"],
+							},
+							{ type: "null" },
+						],
+					},
 					confidence: { type: "number" },
 				},
 				required: [
@@ -92,6 +136,7 @@ export const candidatesJsonSchema = {
 					"dueText",
 					"estimateMin",
 					"firstStep",
+					"repeat",
 					"confidence",
 				],
 			},

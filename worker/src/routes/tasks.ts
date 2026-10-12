@@ -7,13 +7,18 @@ import { TASK_STATUSES, taskDueHistory, tasks as tasksTable } from "../db/schema
 import type { Env } from "../env";
 import { triggerReplan } from "../notify/replan";
 import { notifySubmitted } from "../notify/webhook";
-import { taskCreateSchema, taskUpdateSchema } from "../schemas/task";
+import { repeatSchema } from "../schemas/series";
+import { taskCreateWithRepeatSchema, taskUpdateSchema } from "../schemas/task";
 import { courseExists, INVALID_COURSE, idParamSchema, NOT_FOUND } from "../services/http";
+import { createSeriesFromTask, repeatIssues } from "../services/series";
 import { closeWorkOnTask } from "../services/status";
 import { validate } from "../services/validate";
 
 // これらにしたら、そのタスクの作業は終わり
 const CLOSING_STATUSES: readonly string[] = ["done", "submitted", "dismissed"];
+
+/** すでに繰り返しに属するタスクに /repeat したときの 409 の本文 */
+const ALREADY_REPEATING = { error: "already_repeating" } as const;
 
 const epochMsQuery = v.pipe(v.string(), v.regex(/^\d+$/), v.transform(Number));
 
@@ -55,17 +60,35 @@ export const tasks = new Hono<Env>()
 			.where(eq(tasksTable.id, c.req.valid("param").id));
 		return row ? c.json(row, 200) : c.json(NOT_FOUND, 404);
 	})
-	.post("/", validate("json", taskCreateSchema), async (c) => {
-		const input = c.req.valid("json");
+	.post("/", validate("json", taskCreateWithRepeatSchema), async (c) => {
+		const { repeat, ...input } = c.req.valid("json");
 		const db = getDb(c.env);
 		if (input.courseId && !(await courseExists(db, input.courseId))) return c.json(INVALID_COURSE, 400);
+		const issues = repeat ? repeatIssues(input.dueAt, repeat, "repeat.") : [];
+		if (issues.length > 0) return c.json({ error: "invalid_input" as const, issues }, 400);
 		const now = Date.now();
-		const [row] = await db
+		const [created] = await db
 			.insert(tasksTable)
 			.values({ ...input, createdAt: now, updatedAt: now })
 			.returning();
+		// 繰り返しつきなら、このタスクを回 0 にしてシリーズを作る(応答は最初のタスクのまま)
+		const row = repeat ? (await createSeriesFromTask(db, created, repeat, now)).task : created;
 		triggerReplan(c);
 		return c.json(row, 201);
+	})
+	// 既存のタスク(シリーズなし)を回 0 にして繰り返しを付ける
+	.post("/:id/repeat", validate("param", idParamSchema), validate("json", repeatSchema), async (c) => {
+		const { id } = c.req.valid("param");
+		const repeat = c.req.valid("json");
+		const db = getDb(c.env);
+		const [task] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
+		if (!task) return c.json(NOT_FOUND, 404);
+		if (task.seriesId) return c.json(ALREADY_REPEATING, 409);
+		const issues = repeatIssues(task.dueAt, repeat);
+		if (issues.length > 0) return c.json({ error: "invalid_input" as const, issues }, 400);
+		const result = await createSeriesFromTask(db, task, repeat, Date.now());
+		triggerReplan(c);
+		return c.json(result, 200);
 	})
 	.patch("/:id", validate("param", idParamSchema), validate("json", taskUpdateSchema), async (c) => {
 		const { id } = c.req.valid("param");

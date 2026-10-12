@@ -2,7 +2,7 @@
 import { asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 import type { Db } from "../db";
-import { busyBlocks, courses as coursesTable, settings, type TaskCategory } from "../db/schema";
+import { busyBlocks, courses as coursesTable, type RepeatFreq, settings, type TaskCategory } from "../db/schema";
 import type { TaskCreateInput } from "../schemas/task";
 import { type BusyBlockRow, DEFAULT_SLEEP, isBlockActive, type SleepWindow } from "./busy";
 import { type ClientDeps, runJson } from "./client";
@@ -25,6 +25,8 @@ export type ParsedCandidate = Omit<TaskCreateInput, "dueAt"> & {
 	courseName: string | null;
 	/** 締切として解釈した原文の語句 */
 	dueText: string | null;
+	/** 文に「毎週」「隔週」「毎月」などがあったときだけ。確認カードの繰り返しの既定値(終わりは本人が決める) */
+	repeat: { freq: RepeatFreq; interval: number } | null;
 	confidence: number;
 	needsReview: boolean;
 	reviewReasons: string[];
@@ -124,6 +126,7 @@ export function normalizeCandidates(
 			estimateSource: "ai",
 			firstStep: r.firstStep ? r.firstStep.slice(0, 200) : null,
 			plannedStartAt: null,
+			repeat: r.repeat,
 			confidence,
 			needsReview: reasons.length > 0,
 			reviewReasons: reasons,
