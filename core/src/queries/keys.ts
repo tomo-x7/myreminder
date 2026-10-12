@@ -2,6 +2,7 @@
 // 下位のキー(["tasks", id] など)は上位のキーの配下なので、上位を無効化すれば一緒に取り直される
 export const queryKeys = {
 	tasks: ["tasks"],
+	series: ["series"],
 	courses: ["courses"],
 	busyBlocks: ["busy-blocks"],
 	settings: ["settings"],

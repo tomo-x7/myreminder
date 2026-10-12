@@ -9,6 +9,10 @@ export type Task = InferResponseType<A["tasks"]["$get"], 200>[number];
 export type TaskCreate = InferRequestType<A["tasks"]["$post"]>["json"];
 export type TaskPatch = InferRequestType<A["tasks"][":id"]["$patch"]>["json"];
 
+// 繰り返し(シリーズ)。止めたものも含み、nextDueAt は締切が今より後の最初の回
+export type Series = InferResponseType<A["series"]["$get"], 200>[number];
+export type RepeatInput = InferRequestType<A["tasks"][":id"]["repeat"]["$post"]>["json"];
+
 // 科目
 export type Course = InferResponseType<A["courses"]["$get"], 200>[number];
 export type CourseInput = InferRequestType<A["courses"]["$post"]>["json"];

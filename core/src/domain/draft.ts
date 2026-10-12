@@ -1,5 +1,14 @@
 import type { ParsedCandidate, StartSuggestion, TaskCreate } from "../api/types";
 import type { Draft } from "./draft-types";
+import {
+	emptyRepeat,
+	patchRepeat,
+	type RepeatDraft,
+	type RepeatProblems,
+	repeatFromCandidate,
+	repeatToInput,
+	validateRepeat,
+} from "./repeat-draft";
 
 // React の key になるだけ。端末をまたがないので連番でよい(RN の Hermes には crypto.randomUUID がない)
 let keySeq = 0;
@@ -18,6 +27,7 @@ export function emptyDraft(title = ""): Draft {
 		estimateTouched: false,
 		firstStep: "",
 		plannedStartAt: null,
+		repeat: emptyRepeat(),
 		dueText: null,
 		fromAi: false,
 		needsReview: false,
@@ -37,6 +47,7 @@ export function candidateToDraft(c: ParsedCandidate): Draft {
 		estimateTouched: false,
 		firstStep: c.firstStep ?? "",
 		plannedStartAt: null,
+		repeat: repeatFromCandidate(c.repeat),
 		dueText: c.dueText,
 		fromAi: true,
 		needsReview: c.needsReview,
@@ -73,7 +84,7 @@ export function draftTitle(mode: ParseMode, text: string): string {
 	return line.trim().slice(0, TITLE_MAX);
 }
 
-export type DraftProblems = { title?: string; due?: string; estimate?: string; firstStep?: string };
+export type DraftProblems = RepeatProblems & { title?: string; due?: string; estimate?: string; firstStep?: string };
 
 export function validateDraft(d: Draft): DraftProblems {
 	const problems: DraftProblems = {};
@@ -83,13 +94,14 @@ export function validateDraft(d: Draft): DraftProblems {
 	if (d.dueAt === null) problems.due = "締切が未入力";
 	const est = Number(d.estimateMin);
 	if (!Number.isInteger(est) || est < 1) problems.estimate = "1以上の整数";
-	return problems;
+	return { ...problems, ...validateRepeat(d.repeat, d.dueAt) };
 }
 
 export const hasProblems = (p: DraftProblems) => Object.keys(p).length > 0;
 
 /** 検証済みのカード → 保存用の入力。validateDraft が通ったものだけ渡す */
 export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCreate {
+	const repeat = repeatToInput(d.repeat);
 	return {
 		title: d.title.trim(),
 		courseId: resolveCourseId(d, courses),
@@ -99,17 +111,20 @@ export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCr
 		estimateSource: d.fromAi && !d.estimateTouched ? "ai" : "manual",
 		firstStep: d.firstStep.trim() || null,
 		plannedStartAt: d.plannedStartAt,
+		...(repeat ? { repeat } : {}),
 	};
 }
 
 /** 確認カードで直せる項目 */
 export type DraftPatch = Partial<
 	Pick<Draft, "title" | "courseName" | "category" | "dueAt" | "estimateMin" | "firstStep" | "plannedStartAt">
->;
+> & { repeat?: Partial<RepeatDraft> };
 
 /** カードの編集を適用する。直した項目に付随する更新もここでする */
 export function patchDraft(d: Draft, patch: DraftPatch): Draft {
-	const next: Draft = { ...d, ...patch };
+	const { repeat, ...rest } = patch;
+	const next: Draft = { ...d, ...rest };
+	if (repeat) next.repeat = patchRepeat(d.repeat, repeat);
 	// 見積もりを本人が直したら "manual" で保存する
 	if (patch.estimateMin !== undefined) next.estimateTouched = true;
 	// 締切を着手の合図より前にしたら、合図は外す(締切の後に鳴らさない)

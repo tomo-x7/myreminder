@@ -7,6 +7,8 @@ import { btnSecondary, Tag } from "../../components/ui";
 type Props = {
 	task: Task;
 	course: Course | undefined;
+	/** 繰り返しの札(毎週・隔週・毎月…)。繰り返しに属さないタスクは undefined */
+	repeat?: string;
 	now: number;
 	/** 「完了したけど未提出」から 1 タップで提出済みにする */
 	onSubmit?: (task: Task) => void;
@@ -14,17 +16,20 @@ type Props = {
 };
 
 /** 一覧の 1 行。完了(未提出)は左の黄土の線と文字色で目立たせ、提出済み・取り下げは灰色にする */
-export function TaskRow({ task, course, now, onSubmit, busy }: Props) {
+export function TaskRow({ task, course, repeat, now, onSubmit, busy }: Props) {
 	const { awaitingSubmit, finished, statusLabel, closedDue, meta } = taskRowView(task, course);
 	return (
 		<li>
 			<div className={`border-l-2 pl-2 ${awaitingSubmit ? "border-warn" : "border-transparent"}`}>
 				<Link href={`/tasks/${task.id}`} className="flex flex-col gap-0.5 py-2 active:bg-wash">
 					<span className="flex items-center justify-between gap-2">
-						<span
-							className={`min-w-0 truncate font-medium ${awaitingSubmit ? "text-warn" : finished ? "text-sub" : ""}`}
-						>
-							{task.title}
+						<span className="flex min-w-0 items-center gap-1.5">
+							<span
+								className={`min-w-0 truncate font-medium ${awaitingSubmit ? "text-warn" : finished ? "text-sub" : ""}`}
+							>
+								{task.title}
+							</span>
+							{repeat && <Tag>{repeat}</Tag>}
 						</span>
 						{statusLabel && <Tag tone={awaitingSubmit ? "warn" : "plain"}>{statusLabel}</Tag>}
 					</span>

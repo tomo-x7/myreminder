@@ -130,6 +130,7 @@ export function InboxItemCard({ item, courses, tasks, startSuggestions, now }: P
 				<div className="flex flex-col gap-2">
 					<CandidateCard
 						draft={draft}
+						hideRepeat
 						showProblems={f.showProblems}
 						problems={f.problems}
 						courses={courses}

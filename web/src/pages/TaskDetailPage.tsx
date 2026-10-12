@@ -5,6 +5,7 @@ import { useTask } from "core/queries/tasks";
 import { useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { btnDanger, btnGhost, btnSecondary, ErrorNotice, PageHeader, QueryState } from "../components/ui";
+import { SeriesSection } from "../features/tasks/SeriesSection";
 import { TaskForm } from "../features/tasks/TaskForm";
 
 export function TaskDetailPage() {
@@ -41,6 +42,8 @@ export function TaskDetailPage() {
 						{editor.saved && (
 							<output className="block border-l-2 border-ink py-0.5 pl-2 text-xs">保存済み</output>
 						)}
+
+						<SeriesSection key={`series-${t.id}`} task={t} now={now} />
 
 						<section className="mt-1 flex flex-col gap-2 border-t border-line pt-3">
 							{editor.removeError && <ErrorNotice>削除失敗: {editor.removeError}</ErrorNotice>}

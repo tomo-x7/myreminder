@@ -130,7 +130,11 @@ export async function materializeSeries(db: Db, now: Ms, seriesIds?: string[]): 
  * シリーズを止める。締切が now より後で、未着手(todo)かつ作業記録のない回を消す。
  * 戻り値は消した数。シリーズがなければ null。すでに止めてあれば止めた時刻はそのまま
  */
-export async function stopSeries(db: Db, id: string, now: Ms): Promise<number | null> {
+/**
+ * 繰り返しを止める。締切が now より後で、未着手かつ作業記録のない回を消す。
+ * afterIndex を渡すと、その回より後だけを消す(タスクの画面の「以降を止める」で、見ている回は残す)
+ */
+export async function stopSeries(db: Db, id: string, now: Ms, afterIndex?: number): Promise<number | null> {
 	const [current] = await db
 		.select({ stoppedAt: taskSeries.stoppedAt })
 		.from(taskSeries)
@@ -144,7 +148,15 @@ export async function stopSeries(db: Db, id: string, now: Ms): Promise<number | 
 			.where(eq(taskSeries.id, id)),
 		db
 			.delete(tasks)
-			.where(and(eq(tasks.seriesId, id), eq(tasks.status, "todo"), gt(tasks.dueAt, now), notExists(hasSessions)))
+			.where(
+				and(
+					eq(tasks.seriesId, id),
+					eq(tasks.status, "todo"),
+					gt(tasks.dueAt, now),
+					notExists(hasSessions),
+					afterIndex === undefined ? undefined : gt(tasks.seriesIndex, afterIndex),
+				),
+			)
 			.returning({ id: tasks.id }),
 	]);
 	return deleted.length;

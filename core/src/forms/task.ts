@@ -3,7 +3,10 @@ import { useState } from "react";
 import type { Task, TaskPatch } from "../api/types";
 import type { Category } from "../domain/draft-types";
 import { errorText } from "../domain/errors";
+import { seriesLine } from "../domain/recurrence";
+import { emptyRepeat, patchRepeat, type RepeatDraft, repeatToInput, validateRepeat } from "../domain/repeat-draft";
 import type { TaskStatus } from "../domain/task-status";
+import { useRepeatTask, useSeries, useStopSeries } from "../queries/series";
 import { useDeleteTask, useUpdateTask } from "../queries/tasks";
 import { floorToMinute, isValid, type Problems } from "./common";
 
@@ -110,5 +113,59 @@ export function useTaskEditor(taskId: string) {
 		remove(onDone: () => void) {
 			remove.mutate(taskId, { onSuccess: onDone });
 		},
+	};
+}
+
+/**
+ * 編集画面の繰り返し。シリーズに属していれば何回目かの1行と「以降を止める」、
+ * 属していなければ「繰り返す」(確認カードと同じ選択肢で、このタスクを最初の回にして設定する)
+ */
+export function useTaskSeries(task: Task) {
+	const inSeries = task.seriesId !== null;
+	const list = useSeries(inSeries);
+	const stopSeries = useStopSeries();
+	const repeatTask = useRepeatTask();
+	const [open, setOpen] = useState(false);
+	const [draft, setDraft] = useState<RepeatDraft>(emptyRepeat);
+	const [showProblems, setShowProblems] = useState(false);
+
+	const series = inSeries ? list.data?.find((s) => s.id === task.seriesId) : undefined;
+	const problems = validateRepeat(draft, task.dueAt);
+
+	return {
+		inSeries,
+		/** `毎週 ・ 3回目 / 全15回`(止めたら末尾に `・ 止めた`)。シリーズを読み込むまでは null */
+		line: series && task.seriesIndex !== null ? seriesLine(series, task.seriesIndex) : null,
+		stopped: series !== undefined && series.stoppedAt !== null,
+		/** 以降を止める。この回は残し、これより後の未着手の回を消す */
+		stop: () => {
+			if (series) stopSeries.mutate({ id: series.id, afterIndex: task.seriesIndex ?? undefined });
+		},
+		stopping: stopSeries.isPending,
+		stopError: stopSeries.isError ? errorText(stopSeries.error) : null,
+		// 繰り返しを付ける(シリーズに属していないとき)
+		open,
+		/** 開いたときは毎週を選んでおく(なしを選ぶなら閉じればよい) */
+		show: () => {
+			setDraft({ ...emptyRepeat(), freq: "weekly" });
+			setShowProblems(false);
+			repeatTask.reset();
+			setOpen(true);
+		},
+		hide: () => setOpen(false),
+		draft,
+		patch: (patch: Partial<RepeatDraft>) => setDraft((r) => patchRepeat(r, patch)),
+		problems: showProblems ? problems : {},
+		/** 検証を通ったら設定する。できたら閉じる */
+		submit: () => {
+			const input = repeatToInput(draft);
+			if (!input) return;
+			setShowProblems(true);
+			if (!isValid(problems)) return;
+			repeatTask.mutate({ id: task.id, repeat: input }, { onSuccess: () => setOpen(false) });
+		},
+		canSubmit: draft.freq !== "none",
+		setting: repeatTask.isPending,
+		setError: repeatTask.isError ? errorText(repeatTask.error) : null,
 	};
 }

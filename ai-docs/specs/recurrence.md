@@ -40,7 +40,7 @@
 - `POST /api/tasks` に省略可能な `repeat: { freq, interval?, count?, until? }`。付けると、最初のタスクを作ってからシリーズを作り、そのタスクを回 0 として紐付け、先の回を作る。応答は最初のタスク(今までどおり)
 - `POST /api/tasks/:id/repeat` `{ freq, interval?, count?, until? }`: 既存のタスク(シリーズなし)を回 0 にしてシリーズを作る。すでにシリーズに属していれば 409 `already_repeating`
 - `GET /api/series`: シリーズの一覧(止めたものも含む)。一覧・編集画面で「毎週」「隔週」「毎月」と回数を出すのに使う
-- `POST /api/series/:id/stop`: 止める(`stopped_at`)。締切が `now` より後で、未着手(`todo`)かつ作業記録のない回は消す。応答 `{ deleted: n }`
+- `POST /api/series/:id/stop` `{ afterIndex? }`: 止める(`stopped_at`)。締切が `now` より後で、未着手(`todo`)かつ作業記録のない回は消す。`afterIndex` を渡すとその回より後だけを消す(編集画面の「以降を止める」は見ている回の番号を渡し、その回は残す)。応答 `{ deleted: n }`
 - タスクの応答に `seriesId` と `seriesIndex` が増える
 
 ## AI の解析

@@ -1,4 +1,5 @@
 import type { TaskCreate } from "../api/types";
+import type { RepeatDraft } from "./repeat-draft";
 
 export type Category = NonNullable<TaskCreate["category"]>;
 
@@ -26,6 +27,8 @@ export type Draft = {
 	estimateTouched: boolean;
 	firstStep: string;
 	plannedStartAt: number | null;
+	/** 繰り返し。手入力のカードは「なし」、AI は文に書いてあれば既定値に入れる */
+	repeat: RepeatDraft;
 	/** AI の解釈(確認の手がかり)。手入力のカードでは null */
 	dueText: string | null;
 	fromAi: boolean;

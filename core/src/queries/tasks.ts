@@ -52,10 +52,11 @@ export function useCreateTasks() {
 				onSaved?.(i);
 			}
 		},
-		// 途中まで保存できた場合も一覧を取り直す
+		// 途中まで保存できた場合も一覧を取り直す。繰り返し付きなら、シリーズも増える
 		onSettled: () =>
 			Promise.all([
 				qc.invalidateQueries({ queryKey: queryKeys.tasks }),
+				qc.invalidateQueries({ queryKey: queryKeys.series }),
 				qc.invalidateQueries({ queryKey: queryKeys.schedule }),
 			]),
 	});

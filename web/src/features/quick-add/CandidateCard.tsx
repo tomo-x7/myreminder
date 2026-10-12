@@ -12,6 +12,7 @@ import {
 import { CATEGORY_OPTIONS, type Category, type Draft } from "core/domain/draft-types";
 import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
+import { RepeatFields } from "../../components/RepeatFields";
 import { btnGhost, chipClass, Field, inputClass, Notice } from "../../components/ui";
 
 type Props = {
@@ -21,6 +22,8 @@ type Props = {
 	problems: DraftProblems;
 	/** タイトルを締切・見積もりより上に出す(手入力のカード。確認画面は締切から確かめる) */
 	titleFirst?: boolean;
+	/** 繰り返しの欄を出さない(受信箱の追加。取り込み元が毎回別の課題として出すので重複する) */
+	hideRepeat?: boolean;
 	courses: readonly CourseOption[];
 	startSuggestions: readonly StartSuggestion[];
 	now: number;
@@ -43,6 +46,7 @@ export function CandidateCard({
 	showProblems,
 	problems,
 	titleFirst,
+	hideRepeat,
 	courses,
 	startSuggestions,
 	now,
@@ -199,6 +203,17 @@ export function CandidateCard({
 						{chips.length === 0 && <p className="text-xs text-faint">候補なし</p>}
 					</div>
 				</fieldset>
+			)}
+
+			{!hideRepeat && (
+				<RepeatFields
+					repeat={draft.repeat}
+					dueAt={draft.dueAt}
+					now={now}
+					problems={showProblems ? problems : {}}
+					disabled={disabled}
+					onChange={(repeat) => onChange({ repeat })}
+				/>
 			)}
 		</section>
 	);

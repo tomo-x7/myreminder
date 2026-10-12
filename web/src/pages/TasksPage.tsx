@@ -1,9 +1,11 @@
 import type { Course, Task } from "core/api/types";
 import { errorText } from "core/domain/errors";
+import { seriesLabels } from "core/domain/recurrence";
 import { courseById, listTasks, parseStatusFilter } from "core/domain/task-list";
 import { FILTERS, type StatusFilter } from "core/domain/task-status";
 import { useNow } from "core/hooks/use-now";
 import { useCourses } from "core/queries/courses";
+import { useSeries } from "core/queries/series";
 import { useTasks, useUpdateTask } from "core/queries/tasks";
 import { useState } from "react";
 import { useSearchParams } from "wouter";
@@ -15,10 +17,13 @@ import { TaskRow } from "../features/tasks/TaskRow";
 function TaskList({
 	tasks,
 	courses,
+	repeats,
 	filter,
 }: {
 	tasks: readonly Task[];
 	courses: readonly Course[];
+	/** シリーズ id → 繰り返しの札 */
+	repeats: ReadonlyMap<string, string>;
 	filter: StatusFilter;
 }) {
 	const now = useNow();
@@ -36,6 +41,7 @@ function TaskList({
 							key={t.id}
 							task={t}
 							course={courseById(courses, t.courseId)}
+							repeat={t.seriesId ? repeats.get(t.seriesId) : undefined}
 							now={now}
 							busy={update.isPending}
 							onSubmit={(task) => update.mutate({ id: task.id, patch: { status: "submitted" } })}
@@ -52,6 +58,9 @@ export function TasksPage() {
 	const filter = parseStatusFilter(params.get("s"));
 	const tasks = useTasks();
 	const courses = useCourses();
+	// 行ごとに問い合わせず、一覧で1回だけ取る。取れないうちは札を出さない
+	const series = useSeries();
+	const repeats = seriesLabels(series.data ?? []);
 	const [adding, setAdding] = useState(false);
 
 	return (
@@ -80,7 +89,7 @@ export function TasksPage() {
 				))}
 			</div>
 			<QueryState query={tasks}>
-				{(list) => <TaskList tasks={list} courses={courses.data ?? []} filter={filter} />}
+				{(list) => <TaskList tasks={list} courses={courses.data ?? []} repeats={repeats} filter={filter} />}
 			</QueryState>
 			{adding && <AddTaskSheet onClose={() => setAdding(false)} />}
 		</div>
