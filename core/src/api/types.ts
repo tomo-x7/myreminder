@@ -17,6 +17,9 @@ export type RepeatInput = InferRequestType<A["tasks"][":id"]["repeat"]["$post"]>
 export type Course = InferResponseType<A["courses"]["$get"], 200>[number];
 export type CourseInput = InferRequestType<A["courses"]["$post"]>["json"];
 
+// 見積もりの参照(入力欄の「実績」)
+export type EstimateReference = InferResponseType<A["estimates"]["reference"]["$get"], 200>;
+
 // 予定(時間割・バイト・単発)
 export type BusyBlock = InferResponseType<A["busy-blocks"]["$get"], 200>[number];
 export type BusyBlockInput = InferRequestType<A["busy-blocks"]["$post"]>["json"];

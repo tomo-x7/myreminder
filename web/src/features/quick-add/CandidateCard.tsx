@@ -10,6 +10,8 @@ import {
 	toggleStart,
 } from "core/domain/draft";
 import { CATEGORY_OPTIONS, type Category, type Draft } from "core/domain/draft-types";
+import { referenceText } from "core/domain/estimate-reference";
+import { useEstimateReference } from "core/queries/estimates";
 import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
 import { RepeatFields } from "../../components/RepeatFields";
@@ -54,7 +56,11 @@ export function CandidateCard({
 	onChange,
 	onRemove,
 }: Props) {
-	const courseKnown = resolveCourseId(draft, courses) !== null;
+	const courseId = resolveCourseId(draft, courses);
+	const courseKnown = courseId !== null;
+	const reference = useEstimateReference({ category: draft.category, courseId, seriesId: null });
+	const courseName = courses.find((c) => c.id === courseId)?.name ?? null;
+	const refLine = reference.data ? referenceText(reference.data, { category: draft.category, courseName }) : null;
 	const chips = selectableStarts(startSuggestions, now, draft.dueAt);
 	const listId = `courses-${draft.key}`;
 	const titleField = (
@@ -114,7 +120,11 @@ export function CandidateCard({
 						className={inputClass}
 					/>
 				</Field>
-				<Field label="見積もり(分)" error={showProblems ? problems.estimate : undefined}>
+				<Field
+					label="見積もり(分)"
+					error={showProblems ? problems.estimate : undefined}
+					hint={refLine ?? undefined}
+				>
 					<input
 						type="number"
 						inputMode="numeric"

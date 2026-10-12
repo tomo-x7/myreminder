@@ -63,7 +63,8 @@ export function useCreateTasks() {
 }
 
 // タスクを完了・提出済み・取り下げ・削除にすると、サーバーが作業中の記録を閉じる
-const TASK_SIDE_KEYS = [queryKeys.status, queryKeys.sessions] as const;
+// 完了・提出で、入力欄に出す過去の実績も変わる
+const TASK_SIDE_KEYS = [queryKeys.status, queryKeys.sessions, queryKeys.estimateReference] as const;
 
 export const useUpdateTask = () => {
 	const api = useApi();

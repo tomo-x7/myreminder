@@ -5,17 +5,18 @@ import type { Db } from "../db";
 import { busyBlocks, sessions, tasks } from "../db/schema";
 import { expandBusyBlocks } from "../planner/busy";
 import { buildCapacity, type CapacityInput, capacityUntil } from "../planner/capacity";
-import { fitEstimateModel, planningMultiplier, type Sample, uncertainty } from "../planner/estimate";
+import { fitEstimateModel, planningMultiplier, uncertainty } from "../planner/estimate";
 import { type PlanOutput, type PlanTask, plan } from "../planner/schedule";
 import { type SlackGain, slackGain } from "../planner/slack-gain";
 import { DAY, MINUTE, type Minutes, type Ms } from "../planner/types";
 import { learnUsualCapacity } from "../planner/usual-capacity";
 import { getSettings } from "../settings";
+import { buildSampleRows } from "./estimates";
 import {
 	activityDayOf,
-	actualForSample,
 	confirmedMinutes,
 	dailyWorkForLearning,
+	groupByTask,
 	latestProgress,
 	remainingFraction,
 	workedMinutesByActivityDay,
@@ -68,12 +69,7 @@ export async function buildPlanContext(db: Db, now: Ms): Promise<PlanContext> {
 		getSettings(db),
 	]);
 
-	const sessionsByTask = new Map<string, (typeof sessionRows)[number][]>();
-	for (const s of sessionRows) {
-		const list = sessionsByTask.get(s.taskId);
-		if (list) list.push(s);
-		else sessionsByTask.set(s.taskId, [s]);
-	}
+	const sessionsByTask = groupByTask(sessionRows);
 
 	const wakeMin = cfg.sleep.endMin;
 	const today = activityDayOf(now, wakeMin);
@@ -96,13 +92,7 @@ export async function buildPlanContext(db: Db, now: Ms): Promise<PlanContext> {
 	);
 
 	// 見積もりの学習: 提出済み・完了のうち、確認待ちを含まず、確定済みの実績があるタスク
-	const samples: Sample[] = [];
-	for (const t of taskRows) {
-		if (t.status !== "submitted" && t.status !== "done") continue;
-		const actual = actualForSample(sessionsByTask.get(t.id) ?? []);
-		if (actual) samples.push({ category: t.category, estimateMin: t.estimateMin, ...actual });
-	}
-	const model = fitEstimateModel(samples);
+	const model = fitEstimateModel(buildSampleRows(taskRows, sessionsByTask));
 
 	// 計画に載せるタスク: 未完了(todo/doing)で、残りがあるもの。done は作業が終わっているので残り0
 	const open = taskRows.filter((t) => t.status === "todo" || t.status === "doing");
@@ -120,7 +110,8 @@ export async function buildPlanContext(db: Db, now: Ms): Promise<PlanContext> {
 		const confirmed = own.filter((s) => s.review === "confirmed");
 		const nominal = t.estimateMin * remainingFraction(latestProgress(confirmed));
 		if (nominal <= 0) continue;
-		const remainingP80 = nominal * planningMultiplier(model, t.category, t.estimateMin);
+		const estimateKey = { category: t.category, courseId: t.courseId, seriesId: t.seriesId };
+		const remainingP80 = nominal * planningMultiplier(model, estimateKey, t.estimateMin);
 		planTasks.push({
 			id: t.id,
 			dueAt: t.dueAt,
@@ -128,7 +119,7 @@ export async function buildPlanContext(db: Db, now: Ms): Promise<PlanContext> {
 			remainingP80,
 			minBlock: t.minBlockMin,
 			plannedStartAt: t.plannedStartAt ?? undefined,
-			uncertain: own.length === 0 && uncertainty(model, t.category, t.estimateMin) > UNCERTAIN_THRESHOLD,
+			uncertain: own.length === 0 && uncertainty(model, estimateKey) > UNCERTAIN_THRESHOLD,
 		});
 		meta.set(t.id, {
 			id: t.id,
