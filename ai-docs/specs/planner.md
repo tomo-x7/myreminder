@@ -22,55 +22,90 @@ type Interval = { start: Ms; end: Ms };
 type Category = "report" | "exercise" | "quiz" | "presentation" | "other";
 ```
 
-## 1. 見積もり(`estimate.ts`、#13)
+## 1. 見積もり(`estimate.ts`、#13 → #36 で課題ごとに)
+
+#13 では「種類 × サイズ」ごとの一律の倍率だった。#36 で、同じ繰り返し・同じ科目の実績を優先して使い、見積もりの数字をどれだけ信じるかも学習するようにした。
 
 ### 入力
 
 ```ts
 type Sample = {
 	category: Category;
+	courseId: string | null;
+	seriesId: string | null;
 	estimateMin: Minutes; // 登録時の見積もり(> 0)
 	actualMin: Minutes; // 確定済みの作業記録の合計(> 0)
 	completedAt: Ms;
 };
+
+/** 予測したいタスクの属性 */
+type EstimateKey = { category: Category; courseId: string | null; seriesId: string | null };
 
 type Prior = { mu0: number; sigma0: number; kappa0: number; nu0: number };
 const DEFAULT_PRIOR: Prior = { mu0: Math.log(1.3), sigma0: 0.5, kappa0: 3, nu0: 3 };
 
 type EstimateOptions = {
 	halfLife: number; // 既定 15(新しい順に数えて15件で重みが半分)
-	shrinkK: number; // 既定 5(区分ごとの推定を全体に寄せる強さ)
-	clip: [number, number]; // 既定 [0.2, 5](比率の外れ値を切る。止め忘れ対策)
+	shrinkK: number; // 既定 5(下の段階の推定を上の段階に寄せる強さ)
+	clip: [number, number]; // 既定 [0.2, 5](比率の外れ値を切る。止め忘れ対策。倍率もこの範囲に収める)
+	slopePrior: number; // 既定 2·(ln 2)² ≈ 0.96(傾きを 1 に寄せる強さ。「見積もりが2倍違うサンプル2件」ぶん)
 };
 ```
 
+### 段階(似ている順)
+
+| 段階 | キー | 対象のサンプル |
+|---|---|---|
+| `global` | なし | すべて |
+| `category` | 種類 | 同じ種類 |
+| `course` | 種類 × 科目 | 同じ種類で同じ科目(科目なしのタスクはこの段階を飛ばす) |
+| `series` | 繰り返し | 同じシリーズ(繰り返しでないタスクはこの段階を飛ばす) |
+
+上から順に、1つ上の段階の事後分布を事前分布にして更新する。サンプルが0件の段階は飛ばす(上の段階の値をそのまま使う)。サンプルは複数の段階に重ねて数える(入れ子の縮小推定の近似)。
+
 ### 処理
 
-1. 各サンプルの `y = ln(clamp(actual/estimate, clip))`
-2. 重み: 新しい順に並べ、i 番目(0 始まり)の重みを `w_i = 0.5^(i / halfLife)` とする
-3. **全体の事後分布**: 重みつきの正規–逆χ² 更新(BDA3 §3.3 の式で、n の代わりに Σw を使う)
-   - `n = Σw`、`ȳ = Σw·y / n`、`S = Σw·(y − ȳ)²`
-   - `κn = κ0 + n`、`μn = (κ0·μ0 + n·ȳ) / κn`、`νn = ν0 + n`
-   - `νn·σn² = ν0·σ0² + S + (κ0·n / κn)·(ȳ − μ0)²`
-4. **区分ごとの事後分布**: 区分 = 種類 × サイズ
-   - サイズは見積もりで決める: `s`(60分未満)/ `m`(60〜180分)/ `l`(180分以上)
-   - 全体の事後分布の `(μn, σn)` を事前分布にし、`κ0 = ν0 = shrinkK` として同じ更新をかける
-5. **予測分布**: Student-t。自由度 `νn`、位置 `μn`、尺度 `σn·√(1 + 1/κn)`
-   - t 分布の分位点は近似式で求める。自由度 3, 5, 10, 30 で既知の値と ±0.01 以内に入ること
+1. 各サンプル: `x = ln(見積もり)`、`r = ln(clamp(実績/見積もり, clip))`
+2. 重み: `completedAt` の新しい順に並べ、i 番目(0 始まり)の重みを `w_i = 0.5^(i / halfLife)` とする(すべての段階で同じ重み)
+3. **傾き b**(見積もりの数字をどれだけ信じるか): `ln 実績 ≈ 切片 + b · ln 見積もり`
+   - b = 1: 実績は見積もりに比例する(一律の倍率。#13 と同じ)
+   - b = 0: 実績は見積もりの数字によらない(その科目の課題はいつも同じくらい)
+   - 求め方: `course` のキー(種類 × 科目。科目なしは「科目なし」で1つ)でまとめ、まとまりの中の重みつき平均からの差 `dx = x − x̄`、`dy = (x + r) − ȳ` で、`b = (Σw·dx·dy + slopePrior·1) / (Σw·dx² + slopePrior)`。[0, 1] に収める
+   - まとまりの中で見積もりが全部同じ(繰り返しの回など)なら、そのまとまりは b に効かない。データが少ないうちは b ≈ 1
+4. **基準の見積もり** `c` = 全サンプルの x の重みつき平均(サンプルが0件なら `ln 60`)
+5. 各サンプルの値 `z = r − (b − 1)·(x − c)`(基準の見積もり c のときの ln 比率に直したもの。b = 1 なら z = r)
+6. 段階ごとに z の重みつきの正規–逆χ² 更新(BDA3 §3.3 の式で、n の代わりに Σw を使う)
+   - `n = Σw`、`z̄ = Σw·z / n`、`S = Σw·(z − z̄)²`
+   - `κn = κ0 + n`、`μn = (κ0·μ0 + n·z̄) / κn`、`νn = ν0 + n`
+   - `νn·σn² = ν0·σ0² + S + (κ0·n / κn)·(z̄ − μ0)²`
+   - `global` の事前分布は `DEFAULT_PRIOR`。下の段階の事前分布は、上の段階の事後分布の `(μn, σn)` に `κ0 = ν0 = shrinkK`
+7. **予測**: 一番下の段階の事後分布で、Student-t(自由度 νn、位置 μn、尺度 `σn·√(1 + 1/κn)`)
+   - 倍率(分位 q) = `exp(μn + t_νn(q)·尺度 + (b − 1)·(ln 見積もり − c))`。clip の範囲に収める
+   - **下限 ×1.0 はやめた**(#36)。実績が見積もりより短い傾向がはっきりしていれば、見積もりより短く計画する。P80 を使うので、それでも保守的
+
+### 例
+
+科目 A・演習で「見積もり 1h → 実績 30m」が3件。次の課題の見積もりが 30m:
+
+- 3件とも見積もりが同じなので b はデータから決まらず ≈ 1。予測の中心は 30m × 0.5(科目 A の比率)≈ 15m。P80 はそれより長い
+- 科目 A で見積もりを変えても実績がほとんど変わらないことがわかってくると b が下がり、予測は「いつもの 30m」に寄る
 
 ### 出力
 
 ```ts
-type EstimateModel = {
-	/* 全体と区分ごとの事後分布(内部表現は自由) */
-};
 function fitEstimateModel(samples: Sample[], prior?: Prior, opts?: Partial<EstimateOptions>): EstimateModel;
 
-/** 計画に使う倍率(P80 なら q = 0.8)。下限は 1.0 */
-function planningMultiplier(model: EstimateModel, category: Category, estimateMin: Minutes, q?: number): number;
+/** 計画に使う倍率(P80 なら q = 0.8)。clip の範囲 */
+function planningMultiplier(model: EstimateModel, key: EstimateKey, estimateMin: Minutes, q?: number): number;
 
-/** 区分の不確かさ(予測分布の尺度)。余裕リストの理由付けに使う */
-function uncertainty(model: EstimateModel, category: Category, estimateMin: Minutes): number;
+/** 一番下の段階の予測分布の尺度(ln 比率の単位)。余裕リストの「見積もりが不確か」に使う */
+function uncertainty(model: EstimateModel, key: EstimateKey): number;
+
+/** 予測に使った一番下の段階と、その段階のサンプル数。サンプルが0件なら { level: "prior", count: 0 } */
+function estimateBasis(model: EstimateModel, key: EstimateKey): { level: "prior" | "global" | "category" | "course" | "series"; count: number };
+
+/** 入力欄に出す過去の実績: series → course → category の順で、サンプルのある一番下の段階の新しい順 limit 件 */
+function referenceSamples<T extends Sample>(samples: T[], key: EstimateKey, limit: number): { level: "series" | "course" | "category" | null; items: T[] };
 ```
 
 - 残りの P80 = `残りの名目 × planningMultiplier`
@@ -78,22 +113,35 @@ function uncertainty(model: EstimateModel, category: Category, estimateMin: Minu
   - 進捗は作業中を終えたときの 0 / 0.25 / 0.5 / 0.75 / 1
 - 学習に使うのは、`submitted` か `done` になり、見積もりがあり、確認待ちの作業記録を含まないタスクだけ(どのタスクを渡すかは呼び出し側が選ぶ)
 
+### 入力欄の実績(参照クラス)
+
+`GET /api/estimates/reference?category=&courseId=&seriesId=`(courseId・seriesId は省略可)→ `{ level: "series" | "course" | "category" | null, items: [{ taskId, title, estimateMin, actualMin, completedAt }] }`。`referenceSamples(…, 3)` の結果。学習と同じサンプルを使う。
+
+画面は見積もりの欄の下に `実績 1h10m・50m・45m(情報倫理・レポート)` と出す。段階の名前は series = `同じ繰り返し`、course = `科目名・種類`、category = `種類`。サンプルがなければ何も出さない。
+
 ### テストケース
 
-- サンプルが0件 → 事前分布だけで決まる(P80 ≈ 1.3 × exp(t₃(0.8) × 0.5 × √(4/3)) を許容誤差つきで確認)
-- 比率がすべて 1.0 のサンプルが多数 → 倍率は 1.0 に近づき、下限の 1.0 を下回らない
+- サンプルが0件 → 事前分布だけで決まる(P80 ≈ 1.3 × exp(t₃(0.8) × 0.5 × √(4/3)) ≈ 2.29。キーによらない)
+- 比率がすべて 1.0 のサンプルが多数 → 倍率は 1.0 付近
+- 比率がすべて 0.5 のサンプルが多数 → 倍率は 1.0 を下回る(下限 ×1.0 はない)。clip の下限 0.2 は下回らない
 - 比率 20 のサンプル → 5 に切られる
-- サンプルがない区分 → 全体の値になる
-- 新しいサンプルほど効く: 古い比率 2.0 ×10件+新しい比率 1.0 ×10件 → 全体の中心は 1.0 寄り
-- 区分のサンプルが少ないうちは、全体に寄る(shrinkK の効果)
+- サンプルがない段階 → 上の段階の値になる
+- 新しいサンプルほど効く: 古い比率 2.0 ×10件+新しい比率 1.0 ×10件 → 中心は 1.0 寄り
+- 段階のサンプルが少ないうちは上に寄り、増えるにつれてその段階の値に近づく(series・course それぞれ)
+- 科目 A の比率 0.5 と科目 B の比率 2.0 → 同じ種類でも科目で倍率が分かれる
+- 同じシリーズの実績が3件あれば、同じ科目の別の課題より、そのシリーズの値に近い
+- 傾き: 実績が見積もりに比例するデータ → b ≈ 1。見積もりによらず実績が一定のデータ(まとまりの中で見積もりが違う)→ b は 0 に近づく。[0, 1] に収まる
+- 上の「例」: 見積もり 1h → 実績 30m ×3件(同じ科目)のあと、見積もり 30m の予測の中心(q = 0.5)は 30m より短い
+- `estimateBasis` は一番下のサンプルのある段階と件数を返す
+- `referenceSamples` は series → course → category の順に探し、新しい順に limit 件
+- 入力の並びに依らない(completedAt で新旧を決める)。不正なサンプル(0以下・NaN)は無視する。q を上げると倍率が増える
 
 ### 実装で決めた細部(#13)
 
-- サンプルがない区分は、全体の事後分布をそのまま返す(n = 0 で更新すると自由度と尺度が変わってしまうため)
-- 重みは `completedAt` の新しい順で付け、全体と区分の両方で同じ重みを使う
-- サイズの境界: 60分ちょうどは `m`、180分ちょうどは `l`
+- サンプルがない段階は、上の段階の事後分布をそのまま使う(n = 0 で更新すると自由度と尺度が変わってしまうため)
 - 見積もりか実績が有限の正の数でないサンプルは捨てる
 - t 分布の分位点は近似式ではなく、正則化不完全ベータ関数を二分法で解いて求める(非整数の自由度も扱える)
+- #36 でサイズ(s / m / l)の区分はやめた。見積もりの長さによる違いは傾き b で連続的に扱う
 
 ## 2. キャパ(#13 と #14)
 
