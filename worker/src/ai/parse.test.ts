@@ -2,8 +2,15 @@ import * as v from "valibot";
 import { describe, expect, it } from "vitest";
 import type { BusyBlockRow } from "./busy";
 import type { ClientDeps } from "./client";
-import { clampEstimate, normalizeCandidates, type ParseContext, parseTasks, snapToClassStart } from "./parse";
-import { buildMessages } from "./prompts";
+import {
+	clampEstimate,
+	normalizeCandidates,
+	type ParseContext,
+	parseTasks,
+	snapToClassStart,
+	snapToDayAfterClass,
+} from "./parse";
+import { buildClassDates, buildMessages } from "./prompts";
 import { candidatesResponseSchema } from "./schemas";
 import { computeStartSuggestions, findFreeSlot } from "./suggest";
 
@@ -168,6 +175,21 @@ describe("normalizeCandidates", () => {
 		expect(none?.repeat).toBeNull();
 	});
 
+	it("「講義の翌日まで」の締切は時間割から直し、確認対象にしない", () => {
+		const withLinalg: ParseContext = {
+			...ctx,
+			courses: [...ctx.courses, { id: "c-linalg", name: "線形代数", aliases: [] }],
+			busy: [...ctx.busy, classBlock(3, 540, 630, "線形代数")],
+		};
+		const [c] = normalizeCandidates(
+			raw({ courseName: "線形代数", due: "2026-10-12T23:59", dueText: "線形代数 講義の翌日まで" }),
+			withLinalg,
+			NOW,
+			"line",
+		);
+		expect(c).toMatchObject({ courseId: "c-linalg", dueAt: at("2026-10-15T23:59"), needsReview: false });
+	});
+
 	it("line は1件、text は最大10件", () => {
 		const many = Array.from({ length: 15 }, (_, i) => ({ title: `t${i}`, due: "2026-10-20" }));
 		const parsed = v.parse(candidatesResponseSchema, { candidates: many }).candidates;
@@ -191,6 +213,88 @@ describe("snapToClassStart", () => {
 		expect(snapToClassStart(at("2026-10-12T23:59"), "月曜まで", ["情報倫理"], ctx.busy).dueAt).toBe(
 			at("2026-10-12T23:59"),
 		);
+	});
+
+	it("「講義」も「授業」と同じく開始時刻に揃える。「講義の翌日まで」「授業の前日まで」などは触らない", () => {
+		for (const text of ["講義前まで", "講義の前まで", "講義開始まで", "講義まで"]) {
+			expect(snapToClassStart(at("2026-10-12T23:59"), text, ["情報倫理"], ctx.busy).dueAt).toBe(
+				at("2026-10-12T10:40"),
+			);
+		}
+		for (const text of ["講義の翌日まで", "授業の翌日まで", "授業の前日まで", "講義の前日まで"]) {
+			expect(snapToClassStart(at("2026-10-12T23:59"), text, ["情報倫理"], ctx.busy).dueAt).toBe(
+				at("2026-10-12T23:59"),
+			);
+		}
+	});
+});
+
+describe("snapToDayAfterClass", () => {
+	// 線形代数: 水曜 9:00-10:30。NOW は日曜 15:30 なので、次の授業日は 10/14(水)、その次は 10/21(水)
+	const linalg = classBlock(3, 540, 630, "線形代数");
+	const snap = (due: string, dueText: string, now = NOW, busy: BusyBlockRow[] = [linalg]) =>
+		snapToDayAfterClass(at(due), dueText, ["線形代数"], busy, now);
+
+	it("今日に授業がない日は、次の授業日の翌日に直す(時刻はモデルのまま)", () => {
+		expect(snap("2026-10-12T23:59", "線形代数 講義の翌日まで")).toEqual({
+			dueAt: at("2026-10-15T23:59"),
+			reason: null,
+		});
+		expect(snap("2026-10-12T08:00", "授業の翌日まで")).toEqual({ dueAt: at("2026-10-15T08:00"), reason: null });
+	});
+
+	it("今日に授業があれば、開始前でも後でも明日のまま", () => {
+		const beforeClass = at("2026-10-14T08:00");
+		const afterClass = at("2026-10-14T12:00");
+		expect(snap("2026-10-15T23:59", "講義の翌日まで", beforeClass)).toEqual({
+			dueAt: at("2026-10-15T23:59"),
+			reason: null,
+		});
+		expect(snap("2026-10-15T23:59", "講義の翌日まで", afterClass)).toEqual({
+			dueAt: at("2026-10-15T23:59"),
+			reason: null,
+		});
+	});
+
+	it("モデルが次の授業日の翌日を返していれば変えない。14日以内の再来週の授業日の翌日も変えない", () => {
+		expect(snap("2026-10-15T23:59", "講義の翌日まで")).toEqual({ dueAt: at("2026-10-15T23:59"), reason: null });
+		// 10/21(水)の翌日。最初の授業日(10/14)の翌日ではない
+		expect(snap("2026-10-22T23:59", "講義の翌日まで")).toEqual({ dueAt: at("2026-10-22T23:59"), reason: null });
+	});
+
+	it("14日以内に授業がなければモデルの答えのまま確認対象にする。14日より先の授業日の翌日は変えない", () => {
+		// 後期の始まりは 12/1。14日以内(10/11〜10/24)には授業がない
+		const later = { ...linalg, id: "later", dateFrom: at("2026-12-01T00:00") };
+		expect(snap("2026-10-12T23:59", "講義の翌日まで", NOW, [later])).toEqual({
+			dueAt: at("2026-10-12T23:59"),
+			reason: "講義の翌日だが14日以内に授業なし",
+		});
+		// 12/2(水)の翌日を指しているなら、その回を指しているので変えない
+		expect(snap("2026-12-03T23:59", "講義の翌日まで", NOW, [later])).toEqual({
+			dueAt: at("2026-12-03T23:59"),
+			reason: null,
+		});
+	});
+
+	it("「翌日まで」だけ、科目がない、時間割にない、前の学期の授業だけ、は触らない", () => {
+		expect(snap("2026-10-12T23:59", "翌日まで")).toEqual({ dueAt: at("2026-10-12T23:59"), reason: null });
+		expect(snapToDayAfterClass(at("2026-10-12T23:59"), null, ["線形代数"], [linalg], NOW)).toEqual({
+			dueAt: at("2026-10-12T23:59"),
+			reason: null,
+		});
+		expect(snapToDayAfterClass(at("2026-10-12T23:59"), "講義の翌日まで", [], [linalg], NOW)).toEqual({
+			dueAt: at("2026-10-12T23:59"),
+			reason: null,
+		});
+		expect(snapToDayAfterClass(at("2026-10-12T23:59"), "講義の翌日まで", ["英語"], [linalg], NOW)).toEqual({
+			dueAt: at("2026-10-12T23:59"),
+			reason: null,
+		});
+		const old = { ...linalg, id: "old", dateTo: at("2026-09-30T00:00") };
+		expect(snap("2026-10-12T23:59", "講義の翌日まで", NOW, [old])).toEqual({
+			dueAt: at("2026-10-12T23:59"),
+			reason: null,
+		});
 	});
 });
 
@@ -266,6 +370,22 @@ describe("プロンプト", () => {
 		expect(system?.content).toContain("月: 10:40-12:10 情報倫理 / 13:00-14:30 数学演習");
 		expect(system?.content).toContain("数学演習(別名: 数演)");
 		expect(user?.content).toContain("来週月曜の授業前までにレポート");
+	});
+
+	it("科目ごとの授業日を日付で渡す。今日の授業には印を付ける", () => {
+		const mon = at("2026-10-12T11:00");
+		const [system] = buildMessages("line", "x", { now: mon, courses: ctx.courses, busy: ctx.busy });
+		expect(system?.content).toContain("情報倫理: 2026-10-12(月) 10:40(今日・開始済み)、2026-10-19(月) 10:40");
+		expect(system?.content).toContain(
+			"数学演習: 2026-10-12(月) 13:00(今日)、2026-10-13(火) 9:00、2026-10-19(月) 13:00",
+		);
+		expect(buildClassDates([], mon)).toBe("(登録なし)");
+	});
+
+	it("タイトルは「科目名 + 中身」、「講義の翌日」は授業日の翌日という指示を含む", () => {
+		const [system] = buildMessages("line", "x", { now: NOW, courses: [], busy: [] });
+		expect(system?.content).toContain("「科目名 + 中身」");
+		expect(system?.content).toContain("「講義の翌日」「授業の翌日」は、その科目の授業日の翌日");
 	});
 
 	it("繰り返し(repeat)の出力形式と、毎週・隔週・毎月の指示を含む", () => {
