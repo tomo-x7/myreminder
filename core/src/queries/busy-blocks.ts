@@ -13,18 +13,27 @@ export const useBusyBlocks = () => {
 	});
 };
 
+// 授業を入れると同じ名前の科目が作られるので、科目も取り直す
 export const useCreateBusyBlock = () => {
 	const api = useApi();
-	return useInvalidatingMutation(async (json: BusyBlockInput) => {
-		await unwrap(await api.api["busy-blocks"].$post({ json }));
-	}, queryKeys.busyBlocks);
+	return useInvalidatingMutation(
+		async (json: BusyBlockInput) => {
+			await unwrap(await api.api["busy-blocks"].$post({ json }));
+		},
+		queryKeys.busyBlocks,
+		[queryKeys.courses],
+	);
 };
 
 export const useUpdateBusyBlock = () => {
 	const api = useApi();
-	return useInvalidatingMutation(async ({ id, patch }: { id: string; patch: BusyBlockPatch }) => {
-		await unwrap(await api.api["busy-blocks"][":id"].$patch({ param: { id }, json: patch }));
-	}, queryKeys.busyBlocks);
+	return useInvalidatingMutation(
+		async ({ id, patch }: { id: string; patch: BusyBlockPatch }) => {
+			await unwrap(await api.api["busy-blocks"][":id"].$patch({ param: { id }, json: patch }));
+		},
+		queryKeys.busyBlocks,
+		[queryKeys.courses],
+	);
 };
 
 export const useDeleteBusyBlock = () => {
