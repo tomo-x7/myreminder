@@ -1,13 +1,19 @@
 // 見積もりの学習(仕様: ai-docs/specs/planner.md §1)
-// y = ln(実績/見積もり) を正規分布とみなし、正規–逆χ² の共役更新で全体と区分ごとの事後分布を求める
+// 実績が見積もりにどれだけ比例するかを傾き b で表し、基準の見積もり c のときの ln 比率 z を、
+// 全体 → 種類 → 科目 → 繰り返しの順に、正規–逆χ² の共役更新で縮小推定する
 import type { Category, Minutes, Ms } from "./types";
 
 export type Sample = {
 	category: Category;
+	courseId: string | null;
+	seriesId: string | null;
 	estimateMin: Minutes; // 登録時の見積もり(> 0)
 	actualMin: Minutes; // 確定済みの作業記録の合計(> 0)
 	completedAt: Ms;
 };
+
+/** 予測したいタスクの属性 */
+export type EstimateKey = { category: Category; courseId: string | null; seriesId: string | null };
 
 export type Prior = { mu0: number; sigma0: number; kappa0: number; nu0: number };
 
@@ -16,34 +22,45 @@ export const DEFAULT_PRIOR: Prior = { mu0: Math.log(1.3), sigma0: 0.5, kappa0: 3
 export type EstimateOptions = {
 	/** 新しい順に数えて、この件数で重みが半分になる */
 	halfLife: number;
-	/** 区分ごとの推定を全体に寄せる強さ(区分の事前分布の κ0 = ν0) */
+	/** 下の段階の推定を上の段階に寄せる強さ(下の段階の事前分布の κ0 = ν0) */
 	shrinkK: number;
-	/** 比率 actual/estimate をこの範囲に切る(止め忘れ対策) */
+	/** 比率 actual/estimate をこの範囲に切る(止め忘れ対策)。倍率もこの範囲に収める */
 	clip: [number, number];
+	/** 傾きを 1 に寄せる強さ。既定は「見積もりが2倍違うサンプル2件」ぶん */
+	slopePrior: number;
 };
 
-export const DEFAULT_ESTIMATE_OPTIONS: EstimateOptions = { halfLife: 15, shrinkK: 5, clip: [0.2, 5] };
+export const DEFAULT_ESTIMATE_OPTIONS: EstimateOptions = {
+	halfLife: 15,
+	shrinkK: 5,
+	clip: [0.2, 5],
+	slopePrior: 2 * Math.LN2 ** 2,
+};
 
-export type Size = "s" | "m" | "l";
+/** 事後分布(z = 補正後の ln 比率 の (μ, σ, κ, ν)) */
+type Posterior = { mu: number; sigma: number; kappa: number; nu: number };
 
-/** 事後分布(y = ln 比率 の (μ, σ², κ, ν) と、更新に使った重みの合計) */
-type Posterior = { mu: number; sigma: number; kappa: number; nu: number; weight: number };
+/** 段階ごとのサンプルの要約。n = Σw、mean = z の重みつき平均、ss = 重みつき平方和、count = 件数 */
+type Summary = { n: number; mean: number; ss: number; count: number };
 
 export type EstimateModel = {
-	global: Posterior;
-	/** サンプルのある区分だけ。キーは `${category}:${size}` */
-	buckets: ReadonlyMap<string, Posterior>;
+	prior: Prior;
+	shrinkK: number;
+	clip: [number, number];
+	/** 傾き b(0〜1)。1 = 実績は見積もりに比例、0 = 見積もりによらない */
+	slope: number;
+	/** 基準の見積もり c(ln 分)。全サンプルの ln 見積もりの重みつき平均 */
+	baseLogEstimate: number;
+	global: Summary;
+	/** 以下はサンプルのあるキーだけ。科目は `courseKeyOf`、繰り返しは seriesId */
+	categories: ReadonlyMap<Category, Summary>;
+	courses: ReadonlyMap<string, Summary>;
+	series: ReadonlyMap<string, Summary>;
 };
 
-/** 見積もりの長さで決めるサイズ: 60分未満 s / 60〜180分未満 m / 180分以上 l */
-export function sizeOf(estimateMin: Minutes): Size {
-	if (estimateMin < 60) return "s";
-	if (estimateMin < 180) return "m";
-	return "l";
-}
-
-function bucketKey(category: Category, size: Size): string {
-	return `${category}:${size}`;
+/** 種類 × 科目。科目なしは種類ごとに1つのまとまりとする */
+function courseKeyOf(category: Category, courseId: string | null): string {
+	return courseId === null ? category : `${category}\u0000${courseId}`;
 }
 
 /**
@@ -53,28 +70,103 @@ function bucketKey(category: Category, size: Size): string {
  * @param ss 重みつき平方和 Σw(y − ȳ)²
  */
 function update(prior: Prior, n: number, ybar: number, ss: number): Posterior {
+	// n = 0 で更新すると自由度と尺度が変わってしまうので、事前分布をそのまま返す
+	if (n === 0) return { mu: prior.mu0, sigma: prior.sigma0, kappa: prior.kappa0, nu: prior.nu0 };
 	const kappa = prior.kappa0 + n;
 	const nu = prior.nu0 + n;
 	const mu = (prior.kappa0 * prior.mu0 + n * ybar) / kappa;
 	// νn·σn² = ν0·σ0² + S + κ0·n/κn·(ȳ − μ0)²
 	const nuSigma2 = prior.nu0 * prior.sigma0 ** 2 + ss + ((prior.kappa0 * n) / kappa) * (ybar - prior.mu0) ** 2;
-	return { mu, sigma: Math.sqrt(nuSigma2 / nu), kappa, nu, weight: n };
+	return { mu, sigma: Math.sqrt(nuSigma2 / nu), kappa, nu };
 }
 
 type Weighted = { y: number; w: number };
 
-function summarize(items: Weighted[]): { n: number; ybar: number; ss: number } {
+function summarize(items: Weighted[]): Summary {
 	let n = 0;
 	let sy = 0;
 	for (const { y, w } of items) {
 		n += w;
 		sy += w * y;
 	}
-	if (n === 0) return { n: 0, ybar: 0, ss: 0 };
-	const ybar = sy / n;
+	if (n === 0) return { n: 0, mean: 0, ss: 0, count: items.length };
+	const mean = sy / n;
 	let ss = 0;
-	for (const { y, w } of items) ss += w * (y - ybar) ** 2;
-	return { n, ybar, ss };
+	for (const { y, w } of items) ss += w * (y - mean) ** 2;
+	return { n, mean, ss, count: items.length };
+}
+
+function isValid(s: Sample): boolean {
+	return (
+		Number.isFinite(s.estimateMin) &&
+		Number.isFinite(s.actualMin) &&
+		Number.isFinite(s.completedAt) &&
+		s.estimateMin > 0 &&
+		s.actualMin > 0
+	);
+}
+
+const compare = (a: string | number, b: string | number): number => (a < b ? -1 : a > b ? 1 : 0);
+const compareNullable = (a: string | null, b: string | null): number =>
+	a === b ? 0 : a === null ? -1 : b === null ? 1 : compare(a, b);
+
+/**
+ * 新しい順。同時刻のサンプルも入力の並びに依らず同じ順になるよう、残りの項目で決める
+ * (順位が重みになるので、並びが変わると結果が変わってしまう)
+ */
+function newestFirst(a: Sample, b: Sample): number {
+	return (
+		compare(b.completedAt, a.completedAt) ||
+		compare(a.category, b.category) ||
+		compareNullable(a.courseId, b.courseId) ||
+		compareNullable(a.seriesId, b.seriesId) ||
+		compare(a.estimateMin, b.estimateMin) ||
+		compare(a.actualMin, b.actualMin)
+	);
+}
+
+type Point = { courseKey: string; x: number; r: number; w: number };
+
+/**
+ * 傾き b。course のキーでまとめた重みつきの群内回帰(群ごとの平均からの差で最小二乗)を、
+ * 仮想的な「傾き 1・重み slopePrior」の観測で 1 に寄せ、[0, 1] に収める。
+ * まとまりの中で見積もりが全部同じなら、そのまとまりは何も寄与しない
+ */
+function fitSlope(points: Point[], slopePrior: number): number {
+	const groups = new Map<string, Point[]>();
+	for (const p of points) {
+		const list = groups.get(p.courseKey);
+		if (list) list.push(p);
+		else groups.set(p.courseKey, [p]);
+	}
+	let sxy = 0;
+	let sxx = 0;
+	for (const list of groups.values()) {
+		let n = 0;
+		let sx = 0;
+		let sy = 0;
+		for (const { x, r, w } of list) {
+			n += w;
+			sx += w * x;
+			sy += w * (x + r);
+		}
+		const xbar = sx / n;
+		const ybar = sy / n;
+		for (const { x, r, w } of list) {
+			const dx = x - xbar;
+			sxy += w * dx * (x + r - ybar);
+			sxx += w * dx * dx;
+		}
+	}
+	const denominator = sxx + slopePrior;
+	if (!(denominator > 0)) return 1;
+	return Math.min(1, Math.max(0, (sxy + slopePrior) / denominator));
+}
+
+function pushTo<K>(map: Map<K, Weighted[]>, key: K, item: Weighted): void {
+	const list = map.get(key);
+	if (list) list.push(item);
+	else map.set(key, [item]);
 }
 
 export function fitEstimateModel(
@@ -82,45 +174,77 @@ export function fitEstimateModel(
 	prior: Prior = DEFAULT_PRIOR,
 	opts: Partial<EstimateOptions> = {},
 ): EstimateModel {
-	const { halfLife, shrinkK, clip } = { ...DEFAULT_ESTIMATE_OPTIONS, ...opts };
+	const { halfLife, shrinkK, clip, slopePrior } = { ...DEFAULT_ESTIMATE_OPTIONS, ...opts };
 	const [lo, hi] = clip;
 
-	// 不正な値(0以下・非有限)のサンプルは捨てる。新しい順に並べる(同時刻は入力順)
-	const valid = samples
-		.filter(
-			(s) =>
-				Number.isFinite(s.estimateMin) && Number.isFinite(s.actualMin) && s.estimateMin > 0 && s.actualMin > 0,
-		)
-		.sort((a, b) => b.completedAt - a.completedAt);
+	// 不正な値(0以下・非有限)のサンプルは捨てる。重みはすべての段階で共通(新しい順の順位で決まる)
+	const valid = samples.filter(isValid).sort(newestFirst);
+	const points = valid.map((s, i) => ({
+		courseKey: courseKeyOf(s.category, s.courseId),
+		x: Math.log(s.estimateMin),
+		r: Math.log(Math.min(hi, Math.max(lo, s.actualMin / s.estimateMin))),
+		w: 0.5 ** (i / halfLife),
+	}));
 
-	const all: Weighted[] = [];
-	const byBucket = new Map<string, Weighted[]>();
-	valid.forEach((s, i) => {
-		const ratio = Math.min(hi, Math.max(lo, s.actualMin / s.estimateMin));
-		const item = { y: Math.log(ratio), w: 0.5 ** (i / halfLife) };
-		all.push(item);
-		const key = bucketKey(s.category, sizeOf(s.estimateMin));
-		const list = byBucket.get(key);
-		if (list) list.push(item);
-		else byBucket.set(key, [item]);
-	});
+	const slope = fitSlope(points, slopePrior);
 
-	const g = summarize(all);
-	const global = update(prior, g.n, g.ybar, g.ss);
-
-	// 区分の事前分布は全体の事後分布(μn, σn)。κ0 = ν0 = shrinkK
-	const bucketPrior: Prior = { mu0: global.mu, sigma0: global.sigma, kappa0: shrinkK, nu0: shrinkK };
-	const buckets = new Map<string, Posterior>();
-	for (const [key, items] of byBucket) {
-		const b = summarize(items);
-		buckets.set(key, update(bucketPrior, b.n, b.ybar, b.ss));
+	let wSum = 0;
+	let wxSum = 0;
+	for (const { x, w } of points) {
+		wSum += w;
+		wxSum += w * x;
 	}
-	return { global, buckets };
+	const baseLogEstimate = wSum > 0 ? wxSum / wSum : Math.log(60);
+
+	// 基準の見積もり c のときの ln 比率に直した値 z を、段階ごとに集める
+	const all: Weighted[] = [];
+	const byCategory = new Map<Category, Weighted[]>();
+	const byCourse = new Map<string, Weighted[]>();
+	const bySeries = new Map<string, Weighted[]>();
+	valid.forEach((s, i) => {
+		const p = points[i] as Point;
+		const item = { y: p.r - (slope - 1) * (p.x - baseLogEstimate), w: p.w };
+		all.push(item);
+		pushTo(byCategory, s.category, item);
+		if (s.courseId !== null) pushTo(byCourse, p.courseKey, item);
+		if (s.seriesId !== null) pushTo(bySeries, s.seriesId, item);
+	});
+	const summaries = <K>(m: Map<K, Weighted[]>): Map<K, Summary> =>
+		new Map([...m].map(([k, items]) => [k, summarize(items)]));
+
+	return {
+		prior,
+		shrinkK,
+		clip: [lo, hi],
+		slope,
+		baseLogEstimate,
+		global: summarize(all),
+		categories: summaries(byCategory),
+		courses: summaries(byCourse),
+		series: summaries(bySeries),
+	};
 }
 
-/** サンプルのない区分は全体の事後分布をそのまま使う */
-function posteriorFor(model: EstimateModel, category: Category, estimateMin: Minutes): Posterior {
-	return model.buckets.get(bucketKey(category, sizeOf(estimateMin))) ?? model.global;
+type Basis = { level: "prior" | "global" | "category" | "course" | "series"; count: number };
+
+/**
+ * key の段階を上から順にたどって、一番下の段階の事後分布を求める。
+ * サンプルのない段階は飛ばす(上の段階の事後分布をそのまま使う)
+ */
+function posteriorFor(model: EstimateModel, key: EstimateKey): { posterior: Posterior; basis: Basis } {
+	const g = model.global;
+	let posterior = update(model.prior, g.n, g.mean, g.ss);
+	let basis: Basis = g.count > 0 ? { level: "global", count: g.count } : { level: "prior", count: 0 };
+	const descend = (s: Summary | undefined, level: "category" | "course" | "series") => {
+		if (!s) return;
+		const k = model.shrinkK;
+		posterior = update({ mu0: posterior.mu, sigma0: posterior.sigma, kappa0: k, nu0: k }, s.n, s.mean, s.ss);
+		basis = { level, count: s.count };
+	};
+	descend(model.categories.get(key.category), "category");
+	if (key.courseId !== null) descend(model.courses.get(courseKeyOf(key.category, key.courseId)), "course");
+	if (key.seriesId !== null) descend(model.series.get(key.seriesId), "series");
+	return { posterior, basis };
 }
 
 /** 予測分布(Student-t)の尺度 σn·√(1 + 1/κn) */
@@ -128,16 +252,52 @@ function predictiveScale(p: Posterior): number {
 	return p.sigma * Math.sqrt(1 + 1 / p.kappa);
 }
 
-/** 計画に使う倍率(P80 なら q = 0.8)。下限は 1.0 */
-export function planningMultiplier(model: EstimateModel, category: Category, estimateMin: Minutes, q = 0.8): number {
-	const p = posteriorFor(model, category, estimateMin);
-	const logRatio = p.mu + tQuantile(q, p.nu) * predictiveScale(p);
-	return Math.max(1, Math.exp(logRatio));
+/** 計画に使う倍率(P80 なら q = 0.8)。clip の範囲に収める(下限 1.0 はない) */
+export function planningMultiplier(model: EstimateModel, key: EstimateKey, estimateMin: Minutes, q = 0.8): number {
+	const { posterior: p } = posteriorFor(model, key);
+	// 基準の見積もり c から離れるぶんは、傾き b で補正する
+	const dx = estimateMin > 0 ? Math.log(estimateMin) - model.baseLogEstimate : 0;
+	const logRatio = p.mu + tQuantile(q, p.nu) * predictiveScale(p) + (model.slope - 1) * dx;
+	const [lo, hi] = model.clip;
+	return Math.min(hi, Math.max(lo, Math.exp(logRatio)));
 }
 
-/** 区分の不確かさ(予測分布の尺度。y = ln 比率 の単位) */
-export function uncertainty(model: EstimateModel, category: Category, estimateMin: Minutes): number {
-	return predictiveScale(posteriorFor(model, category, estimateMin));
+/** 一番下の段階の予測分布の尺度(ln 比率の単位) */
+export function uncertainty(model: EstimateModel, key: EstimateKey): number {
+	return predictiveScale(posteriorFor(model, key).posterior);
+}
+
+/** 予測に使った一番下の段階と、その段階のサンプル数。サンプルが0件なら { level: "prior", count: 0 } */
+export function estimateBasis(model: EstimateModel, key: EstimateKey): Basis {
+	return posteriorFor(model, key).basis;
+}
+
+/**
+ * 入力欄に出す過去の実績。series → course → category の順に探し、サンプルのある一番下の段階の新しい順 limit 件。
+ * 学習と同じく、不正なサンプルは使わない
+ */
+export function referenceSamples<T extends Sample>(
+	samples: T[],
+	key: EstimateKey,
+	limit: number,
+): { level: "series" | "course" | "category" | null; items: T[] } {
+	const sorted = samples.filter(isValid).sort(newestFirst);
+	const levels = [
+		{
+			level: "series",
+			match: (s: T) => key.seriesId !== null && s.seriesId === key.seriesId,
+		},
+		{
+			level: "course",
+			match: (s: T) => key.courseId !== null && s.category === key.category && s.courseId === key.courseId,
+		},
+		{ level: "category", match: (s: T) => s.category === key.category },
+	] as const;
+	for (const { level, match } of levels) {
+		const items = sorted.filter(match);
+		if (items.length > 0) return { level, items: items.slice(0, Math.max(0, limit)) };
+	}
+	return { level: null, items: [] };
 }
 
 // ---- Student-t の分位点 ----

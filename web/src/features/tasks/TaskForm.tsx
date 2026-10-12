@@ -1,8 +1,10 @@
 import type { Course, Task, TaskPatch } from "core/api/types";
 import { FIRST_STEP_MAX, TITLE_MAX } from "core/domain/draft";
 import { CATEGORY_OPTIONS } from "core/domain/draft-types";
+import { referenceText } from "core/domain/estimate-reference";
 import { STATUS_LABEL, STATUS_ORDER, type TaskStatus } from "core/domain/task-status";
 import { NOTE_MAX, useTaskForm } from "core/forms/task";
+import { useEstimateReference } from "core/queries/estimates";
 import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, ErrorNotice, Field, inputClass, Notice } from "../../components/ui";
@@ -19,6 +21,15 @@ type Props = {
 /** タスクの全項目の編集フォーム */
 export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 	const { form, set, problems, notice, submit } = useTaskForm(task);
+	const courseName = courses.find((c) => c.id === form.courseId)?.name ?? null;
+	const reference = useEstimateReference({
+		category: form.category,
+		courseId: form.courseId,
+		seriesId: task.seriesId,
+	});
+	const refLine = reference.data ? referenceText(reference.data, { category: form.category, courseName }) : null;
+	const estimateHint =
+		[task.estimateSource === "ai" ? "AI の見積もり" : null, refLine].filter(Boolean).join(" ・ ") || undefined;
 
 	return (
 		<form
@@ -90,11 +101,7 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 			</div>
 
 			<div className="grid grid-cols-2 gap-2">
-				<Field
-					label="見積もり(分)"
-					error={problems.estimateMin}
-					hint={task.estimateSource === "ai" ? "AI の見積もり" : undefined}
-				>
+				<Field label="見積もり(分)" error={problems.estimateMin} hint={estimateHint}>
 					<input
 						type="number"
 						inputMode="numeric"

@@ -99,6 +99,17 @@ export function latestProgress(sessions: ProgressSession[]): number | null {
 
 export type FinishedSession = { startAt: Ms; endAt: Ms | null; review: string };
 
+/** taskId ごとにまとめる(元の並びは保つ) */
+export function groupByTask<T extends { taskId: string }>(rows: readonly T[]): Map<string, T[]> {
+	const out = new Map<string, T[]>();
+	for (const r of rows) {
+		const list = out.get(r.taskId);
+		if (list) list.push(r);
+		else out.set(r.taskId, [r]);
+	}
+	return out;
+}
+
 /**
  * 見積もりの学習サンプルの実績(分)と完了時刻。
  * 確認待ちを含むタスク・確定済みの記録が1つもないタスクは null(学習に使わない)。

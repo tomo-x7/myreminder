@@ -4,6 +4,7 @@ import { runScheduled } from "./cron";
 import type { Bindings, Env } from "./env";
 import { busyBlocks } from "./routes/busy-blocks";
 import { courses } from "./routes/courses";
+import { estimates } from "./routes/estimates";
 import { health } from "./routes/health";
 import { inbox } from "./routes/inbox";
 import { ingest } from "./routes/ingest";
@@ -35,7 +36,8 @@ const routes = app
 	.route("/webhooks", webhooks)
 	.route("/ingest", ingest)
 	.route("/inbox", inbox)
-	.route("/review", review);
+	.route("/review", review)
+	.route("/estimates", estimates);
 
 app.notFound((c) => c.json({ error: "not_found" }, 404));
 // 想定外の例外は 500 internal。中身は返さずログにだけ残す。

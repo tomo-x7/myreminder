@@ -4,6 +4,8 @@ export const queryKeys = {
 	tasks: ["tasks"],
 	series: ["series"],
 	courses: ["courses"],
+	/** 入力欄の下の「実績」(見積もりの参照クラス) */
+	estimateReference: ["estimate-reference"],
 	busyBlocks: ["busy-blocks"],
 	settings: ["settings"],
 	/** 計画。タスク・予定・設定のどれが変わっても変わる */
