@@ -1,7 +1,7 @@
 import type { InputMode } from "core/domain/draft";
 import { useQuickAddFlow } from "core/forms/quick-add";
 import { useNow } from "core/hooks/use-now";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { btnGhost, btnPrimary, btnSecondary, chipClass, ErrorNotice, inputClass, Notice } from "../../components/ui";
 import { CandidateCard } from "./CandidateCard";
 import { prepareParseImage } from "./image";
@@ -44,46 +44,78 @@ const MODES: readonly (readonly [InputMode, string])[] = [
 
 type Flow = ReturnType<typeof useQuickAddFlow<Blob>>;
 
-/** 入力方法のチップ。写真は選んだ時点で解析に進むので、タブではなくボタン */
+/** 入力方法のチップと、写真の選択・撮影。選択が完了した時点で解析に進む */
 function ModeChips({ flow }: { flow: Flow }) {
 	const fileInput = useRef<HTMLInputElement>(null);
+	const cameraInput = useRef<HTMLInputElement>(null);
+	const [photosOpen, setPhotosOpen] = useState(false);
+	const photoOptionsId = useId();
+	const pickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		e.target.value = "";
+		if (file) flow.submitImage(file);
+	};
 	return (
-		<div className="flex gap-1.5">
-			<div role="tablist" aria-label="入力方法" className="flex gap-1.5">
-				{MODES.map(([m, label]) => (
-					<button
-						key={m}
-						type="button"
-						role="tab"
-						aria-selected={flow.mode === m}
-						disabled={flow.parsing}
-						onClick={() => flow.setMode(m)}
-						className={chipClass(flow.mode === m)}
-					>
-						{label}
-					</button>
-				))}
+		<div className="flex flex-col gap-2">
+			<div className="flex flex-wrap gap-1.5">
+				<div role="tablist" aria-label="入力方法" className="flex gap-1.5">
+					{MODES.map(([m, label]) => (
+						<button
+							key={m}
+							type="button"
+							role="tab"
+							aria-selected={flow.mode === m}
+							disabled={flow.parsing}
+							onClick={() => {
+								setPhotosOpen(false);
+								flow.setMode(m);
+							}}
+							className={chipClass(flow.mode === m)}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+				<button
+					type="button"
+					disabled={flow.parsing}
+					aria-expanded={photosOpen}
+					aria-controls={photoOptionsId}
+					onClick={() => setPhotosOpen((open) => !open)}
+					className={chipClass(photosOpen)}
+				>
+					写真
+				</button>
 			</div>
-			<button
-				type="button"
-				disabled={flow.parsing}
-				onClick={() => fileInput.current?.click()}
-				className={chipClass(false)}
-			>
-				写真
-			</button>
+			<div id={photoOptionsId} hidden={!photosOpen}>
+				<div className="flex flex-wrap gap-2">
+					<button
+						type="button"
+						disabled={flow.parsing}
+						onClick={() => fileInput.current?.click()}
+						className={btnSecondary}
+					>
+						写真を選ぶ
+					</button>
+					<button
+						type="button"
+						disabled={flow.parsing}
+						onClick={() => cameraInput.current?.click()}
+						className={btnSecondary}
+					>
+						撮影
+					</button>
+				</div>
+			</div>
+			<input ref={fileInput} type="file" accept="image/*" hidden aria-label="写真を選ぶ" onChange={pickImage} />
 			<input
-				ref={fileInput}
+				ref={cameraInput}
 				type="file"
 				accept="image/*"
 				capture="environment"
 				hidden
-				aria-label="写真を選ぶ"
-				onChange={(e) => {
-					const file = e.target.files?.[0];
-					e.target.value = "";
-					if (file) flow.submitImage(file);
-				}}
+				aria-label="写真を撮影"
+				onChange={pickImage}
 			/>
 		</div>
 	);
