@@ -92,18 +92,20 @@ export const tasks = new Hono<Env>()
 	})
 	.patch("/:id", validate("param", idParamSchema), validate("json", taskUpdateSchema), async (c) => {
 		const { id } = c.req.valid("param");
-		const patch = c.req.valid("json");
+		const input = c.req.valid("json");
+		const patch = { ...input, ...(input.status === "submitted" ? { status: "done" as const } : {}) };
 		const db = getDb(c.env);
 		const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
 		if (!current) return c.json(NOT_FOUND, 404);
 		if (patch.courseId && !(await courseExists(db, patch.courseId))) return c.json(INVALID_COURSE, 400);
 
 		const now = Date.now();
-		// 提出済みにした時刻を記録し、提出済みから戻したら消す
+		// submittedAt は互換名として保持し、完了時刻を記録する
 		let submittedAt: number | null | undefined;
 		if (patch.status && patch.status !== current.status) {
-			if (patch.status === "submitted") submittedAt = now;
-			else if (current.status === "submitted") submittedAt = null;
+			if (patch.status === "done" && current.status !== "submitted") submittedAt = now;
+			else if (patch.status !== "done" && (current.status === "done" || current.status === "submitted"))
+				submittedAt = null;
 		}
 		const update = db
 			.update(tasksTable)
@@ -131,7 +133,7 @@ export const tasks = new Hono<Env>()
 		}
 		const [[row]] = await db.batch([update, ...extra]);
 		triggerReplan(c);
-		// 提出済みにしたら Discord / Slack に報告する(レスポンスは待たせない)
+		// 完了へ遷移したときだけ Discord / Slack に報告する(再送はしない)
 		if (submittedAt === now) c.executionCtx.waitUntil(notifySubmitted(db, id, now));
 		return c.json(row, 200);
 	})

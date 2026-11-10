@@ -30,12 +30,12 @@ describe("formatDuration", () => {
 describe("formatSubmitted", () => {
 	it("科目名・作業時間・見積もりを並べる", () => {
 		expect(formatSubmitted({ title: "レポート", courseName: "情報倫理" }, 130, 90)).toBe(
-			"✅ 情報倫理 レポート 提出(作業 2h10m / 見積もり 1h30m)",
+			"✅ 情報倫理 レポート 完了(作業 2h10m / 見積もり 1h30m)",
 		);
 	});
 	it("作業記録がなければ作業の部分を省く。科目がなければタイトルだけ", () => {
-		expect(formatSubmitted({ title: "レポート" }, null, 90)).toBe("✅ レポート 提出(見積もり 1h30m)");
-		expect(formatSubmitted({ title: "レポート" }, 0, 90)).toBe("✅ レポート 提出(見積もり 1h30m)");
+		expect(formatSubmitted({ title: "レポート" }, null, 90)).toBe("✅ レポート 完了(見積もり 1h30m)");
+		expect(formatSubmitted({ title: "レポート" }, 0, 90)).toBe("✅ レポート 完了(見積もり 1h30m)");
 	});
 });
 

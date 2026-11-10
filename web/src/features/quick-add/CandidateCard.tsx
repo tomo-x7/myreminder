@@ -3,19 +3,18 @@ import {
 	type CourseOption,
 	type DraftPatch,
 	type DraftProblems,
-	FIRST_STEP_MAX,
 	resolveCourseId,
 	selectableStarts,
 	TITLE_MAX,
 	toggleStart,
 } from "core/domain/draft";
 import { CATEGORY_OPTIONS, type Category, type Draft } from "core/domain/draft-types";
-import { referenceText } from "core/domain/estimate-reference";
 import { useEstimateReference } from "core/queries/estimates";
 import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
 import { RepeatFields } from "../../components/RepeatFields";
 import { btnGhost, chipClass, Field, inputClass, Notice } from "../../components/ui";
+import { EstimateHistory } from "../tasks/EstimateHistory";
 
 type Props = {
 	draft: Draft;
@@ -59,8 +58,6 @@ export function CandidateCard({
 	const courseId = resolveCourseId(draft, courses);
 	const courseKnown = courseId !== null;
 	const reference = useEstimateReference({ category: draft.category, courseId, seriesId: null });
-	const courseName = courses.find((c) => c.id === courseId)?.name ?? null;
-	const refLine = reference.data ? referenceText(reference.data, { category: draft.category, courseName }) : null;
 	const chips = selectableStarts(startSuggestions, now, draft.dueAt);
 	const listId = `courses-${draft.key}`;
 	const titleField = (
@@ -83,7 +80,6 @@ export function CandidateCard({
 			<header className="flex items-start justify-between gap-2">
 				<div className="flex flex-col gap-0.5">
 					<DuePreview dueAt={draft.dueAt} now={now} error={showProblems ? problems.due : undefined} />
-					{draft.dueText && <p className="text-xs text-sub">AI の解釈: 「{draft.dueText}」</p>}
 				</div>
 				{onRemove && (
 					<button
@@ -120,11 +116,7 @@ export function CandidateCard({
 						className={inputClass}
 					/>
 				</Field>
-				<Field
-					label="見積もり(分)"
-					error={showProblems ? problems.estimate : undefined}
-					hint={refLine ?? undefined}
-				>
+				<Field label="見積もり(分)" error={showProblems ? problems.estimate : undefined}>
 					<input
 						type="number"
 						inputMode="numeric"
@@ -137,16 +129,12 @@ export function CandidateCard({
 				</Field>
 			</div>
 
+			{reference.data && <EstimateHistory reference={reference.data} />}
+
 			{!titleFirst && titleField}
 
 			<div className="grid grid-cols-2 gap-2">
-				<Field
-					label="科目"
-					hint={
-						draft.courseName.trim() !== "" &&
-						!courseKnown && <span className="text-warn">未登録(科目なしで保存)</span>
-					}
-				>
+				<Field label="科目" error={draft.courseName.trim() !== "" && !courseKnown ? "未登録の科目" : undefined}>
 					<input
 						type="text"
 						list={listId}
@@ -176,17 +164,6 @@ export function CandidateCard({
 					</select>
 				</Field>
 			</div>
-
-			<Field label="最初の一歩" error={showProblems ? problems.firstStep : undefined}>
-				<input
-					type="text"
-					value={draft.firstStep}
-					maxLength={FIRST_STEP_MAX}
-					disabled={disabled}
-					onChange={(e) => onChange({ firstStep: e.target.value })}
-					className={inputClass}
-				/>
-			</Field>
 
 			{/* 候補が取れていない(読み込み前・失敗)ときは欄ごと出さない */}
 			{startSuggestions.length > 0 && (

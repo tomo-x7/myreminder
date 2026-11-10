@@ -31,7 +31,12 @@ export const openSourceLabel = (source: string): string =>
 
 /** 重複の候補の補足 `10/14(水) 0:00 ・ 2日後 ・ 提出済み ・ 科目 ・ 同じタイトル` */
 export function candidateMeta(c: InboxCandidate, now: number): string {
-	return [formatDue(c.dueAt, now), c.status === "submitted" ? "提出済み" : null, c.courseName, REASON_LABEL[c.reason]]
+	return [
+		formatDue(c.dueAt, now),
+		c.status === "done" || c.status === "submitted" ? "完了" : null,
+		c.courseName,
+		REASON_LABEL[c.reason],
+	]
 		.filter(Boolean)
 		.join(" ・ ");
 }

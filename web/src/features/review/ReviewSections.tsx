@@ -38,7 +38,7 @@ export function NoAllNighterCard({ review }: { review: Review }) {
 export function SubmittedList({ submitted }: { submitted: Review["submitted"] }) {
 	return (
 		<section className="flex flex-col">
-			<SectionTitle>提出したもの</SectionTitle>
+			<SectionTitle>完了した課題</SectionTitle>
 			{submitted.length === 0 ? (
 				<p className="py-2 text-xs text-faint">なし</p>
 			) : (

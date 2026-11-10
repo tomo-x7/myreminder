@@ -22,7 +22,7 @@ function EveningRow({
 	onDone: () => void;
 	onSnooze: () => void;
 }) {
-	const { finish, submit, pending, error, submitted } = useEveningTask(task, onDone);
+	const { finish, pending, error } = useEveningTask(task, onDone);
 	return (
 		<li className="flex flex-col gap-1 py-2">
 			<Link href={`/tasks/${task.id}`} className="flex flex-col gap-0.5">
@@ -33,14 +33,7 @@ function EveningRow({
 			<div className="flex items-center justify-between gap-2">
 				<span className="text-xs text-sub">{plannedText(task)}</span>
 				{done ? (
-					<div className="flex items-center gap-2">
-						<span className="text-sm font-semibold">{submitted ? "提出済み" : "完了"}</span>
-						{!submitted && (
-							<button type="button" disabled={pending} onClick={submit} className={btnSecondary}>
-								提出済み
-							</button>
-						)}
-					</div>
+					<span className="text-sm font-semibold">完了</span>
 				) : (
 					<div className="flex shrink-0 gap-1.5">
 						<button type="button" disabled={pending} onClick={finish} className={btnPrimary}>

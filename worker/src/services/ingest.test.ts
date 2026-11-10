@@ -276,9 +276,7 @@ describe("紐付け済みの変化", () => {
 
 	it("TURNED_IN になったら、タスクを submitted にして webhook の対象にする", () => {
 		const p = run([linkedRow()], [item({ remoteState: "TURNED_IN" })], [task({ status: "doing" })]);
-		expect(p.taskChanges).toEqual([
-			{ taskId: "t1", set: { status: "submitted", submittedAt: NOW }, dueHistory: [] },
-		]);
+		expect(p.taskChanges).toEqual([{ taskId: "t1", set: { status: "done", submittedAt: NOW }, dueHistory: [] }]);
 		expect(p.submittedTaskIds).toEqual(["t1"]);
 		expect(p.notifications).toEqual([]);
 	});
@@ -287,6 +285,21 @@ describe("紐付け済みの変化", () => {
 		const p = run([linkedRow()], [item({ remoteState: "TURNED_IN" })], [task({ status: "submitted" })]);
 		expect(p.taskChanges).toEqual([]);
 		expect(p.submittedTaskIds).toEqual([]);
+	});
+
+	it("完了済みの課題へTURNED_INが届いても再通知しない", () => {
+		const p = run([linkedRow()], [item({ remoteState: "TURNED_IN" })], [task({ status: "done" })]);
+		expect(p.taskChanges).toEqual([]);
+		expect(p.submittedTaskIds).toEqual([]);
+	});
+
+	it("完了した課題も提出取消なら未着手に戻す", () => {
+		const p = run(
+			[linkedRow({ remoteState: "TURNED_IN" })],
+			[item({ remoteState: "RECLAIMED_BY_STUDENT" })],
+			[task({ status: "done" })],
+		);
+		expect(p.taskChanges[0].set).toEqual({ status: "todo", submittedAt: null });
 	});
 
 	it("前回も TURNED_IN なら、他の項目が変わっても再び提出済みにしない", () => {

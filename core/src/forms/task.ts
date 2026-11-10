@@ -22,7 +22,6 @@ export type TaskForm = {
 	plannedStartAt: number | null;
 	estimateMin: string;
 	minBlockMin: string;
-	firstStep: string;
 	note: string;
 	status: TaskStatus;
 };
@@ -40,9 +39,8 @@ export const taskToForm = (t: Task): TaskForm => ({
 	plannedStartAt: optMinute(t.plannedStartAt),
 	estimateMin: String(t.estimateMin),
 	minBlockMin: String(t.minBlockMin),
-	firstStep: t.firstStep ?? "",
 	note: t.note ?? "",
-	status: t.status,
+	status: t.status === "submitted" ? "done" : t.status,
 });
 
 const isPositiveInt = (s: string) => Number.isInteger(Number(s)) && Number(s) >= 1;
@@ -70,14 +68,11 @@ export function toTaskPatch(f: TaskForm, task: Task): TaskPatch {
 		// 本人が見積もりを直したら手入力扱いにする
 		...(estimateMin !== task.estimateMin ? { estimateSource: "manual" as const } : {}),
 		minBlockMin: Number(f.minBlockMin),
-		firstStep: f.firstStep.trim() || null,
+		firstStep: null,
 		note: f.note.trim() || null,
 		status: f.status,
 	};
 }
-
-/** 状態の補足。完了は提出するまで終わりではないので、未提出と示す */
-export const statusNotice = (status: TaskStatus): string | null => (status === "done" ? "未提出" : null);
 
 /** 全項目の編集フォームの状態。submit は検証を通ったときだけ onSave を呼ぶ */
 export function useTaskForm(task: Task) {
@@ -91,7 +86,7 @@ export function useTaskForm(task: Task) {
 		if (isValid(found)) onSave(toTaskPatch(form, task));
 	}
 
-	return { form, set, problems, notice: statusNotice(form.status), submit };
+	return { form, set, problems, submit };
 }
 
 /** 詳細画面の保存と削除。保存したあとの「保存済み」の表示もここで持つ */

@@ -18,6 +18,7 @@ import {
 	type HistoryItem,
 	type PolicyTask,
 } from "./policy";
+import { loadTimingModel } from "./timing-service";
 
 const HISTORY_WINDOW = 14 * DAY;
 const LONG_GAP = 3 * DAY;
@@ -40,13 +41,13 @@ const asPayload = (p: unknown): StoredPayload => (p && typeof p === "object" ? (
 export type ReplanResult = { inserted: number; updated: number; deleted: number };
 
 export async function replanNotifications(db: Db, now: Ms): Promise<ReplanResult> {
-	const [cfg, plan, taskRows, blockRows, histRows, lastDigest, inbox] = await Promise.all([
+	const [cfg, plan, taskRows, blockRows, histRows, lastDigest, inbox, timing] = await Promise.all([
 		getSettings(db),
 		computePlan(db, now),
 		db
 			.select()
 			.from(tasks)
-			.where(inArray(tasks.status, ["todo", "doing", "done"])),
+			.where(inArray(tasks.status, ["todo", "doing"])),
 		db.select().from(busyBlocks),
 		db
 			.select()
@@ -71,6 +72,7 @@ export async function replanNotifications(db: Db, now: Ms): Promise<ReplanResult
 					),
 				),
 			),
+		loadTimingModel(db, now),
 	]);
 
 	const planById = new Map(plan.tasks.map((t) => [t.id, t]));
@@ -125,6 +127,7 @@ export async function replanNotifications(db: Db, now: Ms): Promise<ReplanResult
 		history,
 		longGap: lastDigestAt !== null && now - lastDigestAt >= LONG_GAP,
 		inboxPending: inbox[0]?.n ?? 0,
+		timing,
 	});
 
 	return reconcile(db, now, desired, new Set(history.map((h) => h.dedupeKey).filter((k): k is string => !!k)));

@@ -25,7 +25,7 @@ export { formatDuration };
 export const taskLabel = (task: { title: string; courseName?: string | null }): string =>
 	task.courseName ? `${task.courseName} ${task.title}` : task.title;
 
-/** `✅ 情報倫理 レポート 提出(作業 2h10m / 見積もり 1h30m)`。作業記録がなければ作業の部分を省く */
+/** `✅ 情報倫理 レポート 完了(作業 2h10m / 見積もり 1h30m)`。作業記録がなければ作業の部分を省く */
 export function formatSubmitted(
 	task: { title: string; courseName?: string | null },
 	actualMin: number | null,
@@ -34,7 +34,7 @@ export function formatSubmitted(
 	const parts: string[] = [];
 	if (actualMin !== null && actualMin > 0) parts.push(`作業 ${formatDuration(actualMin)}`);
 	parts.push(`見積もり ${formatDuration(estimateMin)}`);
-	return `✅ ${taskLabel(task)} 提出(${parts.join(" / ")})`;
+	return `✅ ${taskLabel(task)} 完了(${parts.join(" / ")})`;
 }
 
 export type DailyRow = { title: string; courseName?: string | null; minutes: number };

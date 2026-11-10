@@ -10,28 +10,28 @@ type Props = {
 	/** 繰り返しの札(毎週・隔週・毎月…)。繰り返しに属さないタスクは undefined */
 	repeat?: string;
 	now: number;
-	/** 「完了したけど未提出」から 1 タップで提出済みにする */
-	onSubmit?: (task: Task) => void;
+	/** 一覧から開始・完了を操作する */
+	onStart?: (task: Task) => void;
+	onComplete?: (task: Task) => void;
+	working?: boolean;
 	busy?: boolean;
 };
 
-/** 一覧の 1 行。完了(未提出)は左の黄土の線と文字色で目立たせ、提出済み・取り下げは灰色にする */
-export function TaskRow({ task, course, repeat, now, onSubmit, busy }: Props) {
-	const { awaitingSubmit, finished, statusLabel, closedDue, meta } = taskRowView(task, course);
+/** 一覧の 1 行。完了・取り下げは控えめに表示する */
+export function TaskRow({ task, course, repeat, now, onStart, onComplete, working, busy }: Props) {
+	const { finished, statusLabel, closedDue, meta } = taskRowView(task, course);
 	return (
 		<li>
-			<div className={`border-l-2 pl-2 ${awaitingSubmit ? "border-warn" : "border-transparent"}`}>
+			<div className={"border-l-2 border-transparent pl-2"}>
 				<Link href={`/tasks/${task.id}`} className="flex flex-col gap-0.5 py-2 active:bg-wash">
 					<span className="flex items-center justify-between gap-2">
 						<span className="flex min-w-0 items-center gap-1.5">
-							<span
-								className={`min-w-0 truncate font-medium ${awaitingSubmit ? "text-warn" : finished ? "text-sub" : ""}`}
-							>
+							<span className={`min-w-0 truncate font-medium ${finished ? "text-sub" : ""}`}>
 								{task.title}
 							</span>
 							{repeat && <Tag>{repeat}</Tag>}
 						</span>
-						{statusLabel && <Tag tone={awaitingSubmit ? "warn" : "plain"}>{statusLabel}</Tag>}
+						{statusLabel && <Tag tone="plain">{statusLabel}</Tag>}
 					</span>
 					<span className="flex flex-wrap items-baseline justify-between gap-x-3">
 						{closedDue ? (
@@ -42,16 +42,25 @@ export function TaskRow({ task, course, repeat, now, onSubmit, busy }: Props) {
 						<span className={`text-xs ${finished ? "text-faint" : "text-sub"}`}>{meta}</span>
 					</span>
 				</Link>
-				{awaitingSubmit && onSubmit && (
-					<div className="flex items-center gap-2 pb-2">
-						<span className="text-xs text-warn">提出した?</span>
+				{!finished && (
+					<div className="flex gap-2 pb-2">
+						<button
+							type="button"
+							disabled={busy || working}
+							onClick={() => onStart?.(task)}
+							className={btnSecondary}
+							aria-label={`${task.title}を開始`}
+						>
+							{working ? "作業中" : "開始"}
+						</button>
 						<button
 							type="button"
 							disabled={busy}
-							onClick={() => onSubmit(task)}
-							className={`${btnSecondary} py-1 text-xs`}
+							onClick={() => onComplete?.(task)}
+							className={btnSecondary}
+							aria-label={`${task.title}を完了`}
 						>
-							提出済み
+							完了
 						</button>
 					</div>
 				)}

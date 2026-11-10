@@ -168,7 +168,8 @@ export function normalizeCandidates(
 			dueText: r.dueText,
 			estimateMin: clampEstimate(r.estimateMin, r.category),
 			estimateSource: "ai",
-			firstStep: r.firstStep ? r.firstStep.slice(0, 200) : null,
+			// 旧モデルが返す firstStep は互換性のため読めても利用しない。
+			firstStep: null,
 			plannedStartAt: null,
 			repeat: r.repeat,
 			confidence,

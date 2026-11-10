@@ -74,7 +74,7 @@ export type PlannedUpdate = {
 
 export type PlannedTaskChange = {
 	taskId: string;
-	set: { dueAt?: Ms; status?: "todo" | "submitted"; submittedAt?: Ms | null };
+	set: { dueAt?: Ms; status?: "todo" | "done"; submittedAt?: Ms | null };
 	/** 締切を変えた順の履歴(cause は ingest) */
 	dueHistory: { oldDueAt: Ms; newDueAt: Ms }[];
 };
@@ -283,13 +283,16 @@ export function planIngest({ now, existing, snapshot, tasks }: PlanInput): Inges
 			}
 
 			if (prev.remoteState !== next.remoteState) {
-				if (next.remoteState === "TURNED_IN" && state.status !== "submitted") {
+				if (next.remoteState === "TURNED_IN" && state.status !== "done" && state.status !== "submitted") {
 					const c = changeFor(state.id);
-					c.set.status = "submitted";
+					c.set.status = "done";
 					c.set.submittedAt = now;
-					state.status = "submitted";
+					state.status = "done";
 					plan.submittedTaskIds.push(state.id);
-				} else if (next.remoteState === "RECLAIMED_BY_STUDENT" && state.status === "submitted") {
+				} else if (
+					next.remoteState === "RECLAIMED_BY_STUDENT" &&
+					(state.status === "done" || state.status === "submitted")
+				) {
 					const c = changeFor(state.id);
 					c.set.status = "todo";
 					c.set.submittedAt = null;

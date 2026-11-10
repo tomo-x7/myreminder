@@ -147,7 +147,7 @@ export const inbox = new Hono<Env>()
 				.values({
 					...input,
 					id: taskId,
-					...(submitted ? { status: "submitted" as const, submittedAt: now } : {}),
+					...(submitted ? { status: "done" as const, submittedAt: now } : {}),
 					createdAt: now,
 					updatedAt: now,
 				})

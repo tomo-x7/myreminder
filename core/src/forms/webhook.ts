@@ -14,7 +14,7 @@ export const WEBHOOK_URL_HINT: Record<WebhookKind, string> = {
 };
 
 export const WEBHOOK_EVENTS: { value: WebhookEvent; label: string }[] = [
-	{ value: "submitted", label: "提出済み" },
+	{ value: "submitted", label: "完了" },
 	{ value: "daily_summary", label: "1日の課題時間" },
 	{ value: "all_notifications", label: "すべての通知" },
 ];

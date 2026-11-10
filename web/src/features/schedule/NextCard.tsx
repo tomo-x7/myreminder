@@ -48,12 +48,6 @@ export function NextCard({ task, course, now }: { task: PlanTask; course: Course
 			</div>
 			{task.needsFullEffort && <Notice tone="danger">普段のペースでは間に合わない</Notice>}
 			<StartDeadline task={task} now={now} />
-			{task.firstStep && (
-				<p>
-					<span className="mr-1.5 text-xs text-sub">まず</span>
-					{task.firstStep}
-				</p>
-			)}
 			{actions.error && <ErrorNotice>{actions.error}</ErrorNotice>}
 			<div className="flex gap-1.5">
 				<button
@@ -71,14 +65,6 @@ export function NextCard({ task, course, now }: { task: PlanTask; course: Course
 					className={btnSecondary}
 				>
 					完了
-				</button>
-				<button
-					type="button"
-					disabled={actions.updating}
-					onClick={() => actions.setStatus("submitted")}
-					className={btnSecondary}
-				>
-					提出済み
 				</button>
 				<button type="button" onClick={() => setSnoozing(true)} className={btnSecondary}>
 					いつに回す?

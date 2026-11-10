@@ -11,7 +11,7 @@ import {
 	snapToDayAfterClass,
 } from "./parse";
 import { buildClassDates, buildMessages } from "./prompts";
-import { candidatesResponseSchema } from "./schemas";
+import { candidatesJsonSchema, candidatesResponseSchema } from "./schemas";
 import { computeStartSuggestions, findFreeSlot } from "./suggest";
 
 const at = (s: string) => new Date(`${s}:00+09:00`).getTime();
@@ -123,6 +123,11 @@ describe("候補のスキーマ", () => {
 });
 
 describe("normalizeCandidates", () => {
+	it("旧モデルが返す最初の一歩は候補に引き継がない", () => {
+		const [c] = normalizeCandidates(raw({ firstStep: "見出しを書く" }), ctx, NOW, "line");
+		expect(c?.firstStep).toBeNull();
+	});
+
 	it("例: 『情報倫理 来週月曜の授業前までにレポート2000字』", () => {
 		const [c] = normalizeCandidates(raw({}), ctx, NOW, "line");
 		expect(c).toMatchObject({
@@ -359,6 +364,13 @@ describe("いつ始める?", () => {
 });
 
 describe("プロンプト", () => {
+	it("最初の一歩の生成を要求しない", () => {
+		const [system] = buildMessages("line", "x", { now: NOW, courses: [], busy: [] });
+		expect(system?.content).not.toContain("firstStep");
+		expect(candidatesJsonSchema.properties.candidates.items.properties).not.toHaveProperty("firstStep");
+		expect(candidatesJsonSchema.properties.candidates.items.required).not.toContain("firstStep");
+	});
+
 	it("現在日時・暦・時間割・科目を含む", () => {
 		const [system, user] = buildMessages("line", "情報倫理 来週月曜の授業前までにレポート", {
 			now: NOW,

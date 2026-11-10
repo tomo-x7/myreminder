@@ -25,7 +25,6 @@ export function emptyDraft(title = ""): Draft {
 		dueAt: null,
 		estimateMin: "60",
 		estimateTouched: false,
-		firstStep: "",
 		plannedStartAt: null,
 		repeat: emptyRepeat(),
 		dueText: null,
@@ -45,7 +44,6 @@ export function candidateToDraft(c: ParsedCandidate): Draft {
 		dueAt: c.dueAt,
 		estimateMin: String(c.estimateMin),
 		estimateTouched: false,
-		firstStep: c.firstStep ?? "",
 		plannedStartAt: null,
 		repeat: repeatFromCandidate(c.repeat),
 		dueText: c.dueText,
@@ -70,7 +68,6 @@ export function resolveCourseId(draft: Draft, courses: readonly CourseOption[]):
 
 /** worker の taskCreateSchema の上限 */
 export const TITLE_MAX = 200;
-export const FIRST_STEP_MAX = 200;
 
 /** AI で解析する入力方法。line=1行、text=告知文の貼り付け */
 export type ParseMode = "line" | "text";
@@ -84,13 +81,12 @@ export function draftTitle(mode: ParseMode, text: string): string {
 	return line.trim().slice(0, TITLE_MAX);
 }
 
-export type DraftProblems = RepeatProblems & { title?: string; due?: string; estimate?: string; firstStep?: string };
+export type DraftProblems = RepeatProblems & { title?: string; due?: string; estimate?: string };
 
 export function validateDraft(d: Draft): DraftProblems {
 	const problems: DraftProblems = {};
 	if (!d.title.trim()) problems.title = "タイトルが未入力";
 	else if (d.title.trim().length > TITLE_MAX) problems.title = `${TITLE_MAX}字まで`;
-	if (d.firstStep.trim().length > FIRST_STEP_MAX) problems.firstStep = `${FIRST_STEP_MAX}字まで`;
 	if (d.dueAt === null) problems.due = "締切が未入力";
 	const est = Number(d.estimateMin);
 	if (!Number.isInteger(est) || est < 1) problems.estimate = "1以上の整数";
@@ -109,7 +105,7 @@ export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCr
 		dueAt: d.dueAt as number,
 		estimateMin: Number(d.estimateMin),
 		estimateSource: d.fromAi && !d.estimateTouched ? "ai" : "manual",
-		firstStep: d.firstStep.trim() || null,
+		firstStep: null,
 		plannedStartAt: d.plannedStartAt,
 		...(repeat ? { repeat } : {}),
 	};
@@ -117,7 +113,7 @@ export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCr
 
 /** 確認カードで直せる項目 */
 export type DraftPatch = Partial<
-	Pick<Draft, "title" | "courseName" | "category" | "dueAt" | "estimateMin" | "firstStep" | "plannedStartAt">
+	Pick<Draft, "title" | "courseName" | "category" | "dueAt" | "estimateMin" | "plannedStartAt">
 > & { repeat?: Partial<RepeatDraft> };
 
 /** カードの編集を適用する。直した項目に付随する更新もここでする */

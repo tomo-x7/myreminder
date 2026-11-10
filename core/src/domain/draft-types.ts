@@ -25,7 +25,6 @@ export type Draft = {
 	estimateMin: string;
 	/** 本人が見積もりを直したら "manual" で保存する */
 	estimateTouched: boolean;
-	firstStep: string;
 	plannedStartAt: number | null;
 	/** 繰り返し。手入力のカードは「なし」、AI は文に書いてあれば既定値に入れる */
 	repeat: RepeatDraft;

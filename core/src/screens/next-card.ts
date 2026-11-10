@@ -1,4 +1,4 @@
-// ホームの「次の1件」の操作: 始める・完了・提出済み
+// ホームの「次の1件」の操作: 始める・完了
 import type { PlanTask } from "../api/types";
 import { errorText } from "../domain/errors";
 import { useUpdateTask } from "../queries/tasks";
@@ -12,7 +12,7 @@ export function useNextActions(task: PlanTask) {
 		start: start.start,
 		working: start.working,
 		startDisabled: start.disabled,
-		setStatus: (status: "done" | "submitted") => update.mutate({ id: task.id, patch: { status } }),
+		setStatus: (status: "done") => update.mutate({ id: task.id, patch: { status } }),
 		updating: update.isPending,
 		error: update.error ? errorText(update.error) : start.error,
 	};
