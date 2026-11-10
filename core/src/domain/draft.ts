@@ -22,6 +22,7 @@ export function emptyDraft(title = ""): Draft {
 		courseName: "",
 		aiCourse: null,
 		category: "other",
+		completionNotify: true,
 		dueAt: null,
 		estimateMin: "60",
 		estimateTouched: false,
@@ -41,6 +42,7 @@ export function candidateToDraft(c: ParsedCandidate): Draft {
 		courseName: c.courseName ?? "",
 		aiCourse: c.courseId && c.courseName ? { id: c.courseId, name: c.courseName } : null,
 		category: c.category ?? "other",
+		completionNotify: true,
 		dueAt: c.dueAt,
 		estimateMin: String(c.estimateMin),
 		estimateTouched: false,
@@ -102,6 +104,7 @@ export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCr
 		title: d.title.trim(),
 		courseId: resolveCourseId(d, courses),
 		category: d.category,
+		completionNotify: d.completionNotify,
 		dueAt: d.dueAt as number,
 		estimateMin: Number(d.estimateMin),
 		estimateSource: d.fromAi && !d.estimateTouched ? "ai" : "manual",
@@ -113,7 +116,7 @@ export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCr
 
 /** 確認カードで直せる項目 */
 export type DraftPatch = Partial<
-	Pick<Draft, "title" | "courseName" | "category" | "dueAt" | "estimateMin" | "plannedStartAt">
+	Pick<Draft, "title" | "courseName" | "category" | "completionNotify" | "dueAt" | "estimateMin" | "plannedStartAt">
 > & { repeat?: Partial<RepeatDraft> };
 
 /** カードの編集を適用する。直した項目に付随する更新もここでする */

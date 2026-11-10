@@ -12,7 +12,7 @@ export function useNextActions(task: PlanTask) {
 		start: start.start,
 		working: start.working,
 		startDisabled: start.disabled,
-		setStatus: (status: "done") => update.mutate({ id: task.id, patch: { status } }),
+		setStatus: (status: "done", silent = false) => update.mutate({ id: task.id, patch: { status, silent } }),
 		updating: update.isPending,
 		error: update.error ? errorText(update.error) : start.error,
 	};

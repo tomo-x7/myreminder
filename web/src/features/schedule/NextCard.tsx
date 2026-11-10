@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, btnSecondary, ErrorNotice, Notice } from "../../components/ui";
+import { QuietCompleteAction } from "../tasks/QuietCompleteAction";
 import { RISK_STYLE } from "./risk-style";
 import { SnoozeSheet } from "./SnoozeSheet";
 
@@ -70,6 +71,11 @@ export function NextCard({ task, course, now }: { task: PlanTask; course: Course
 					いつに回す?
 				</button>
 			</div>
+			<QuietCompleteAction
+				title={task.title}
+				disabled={actions.updating}
+				onComplete={() => actions.setStatus("done", true)}
+			/>
 			{snoozing && <SnoozeSheet target={task} onClose={() => setSnoozing(false)} />}
 		</section>
 	);

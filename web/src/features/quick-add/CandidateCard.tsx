@@ -192,6 +192,16 @@ export function CandidateCard({
 				</fieldset>
 			)}
 
+			<label className="flex items-center gap-2">
+				<input
+					type="checkbox"
+					checked={draft.completionNotify}
+					disabled={disabled}
+					onChange={(e) => onChange({ completionNotify: e.target.checked })}
+				/>
+				完了を通知
+			</label>
+
 			{!hideRepeat && (
 				<RepeatFields
 					repeat={draft.repeat}

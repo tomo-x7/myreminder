@@ -50,7 +50,9 @@ function TaskList({
 							busy={update.isPending || start.isPending}
 							working={status.data?.mode === "working" && status.data.taskId === t.id}
 							onStart={(task) => start.mutate(task.id)}
-							onComplete={(task) => update.mutate({ id: task.id, patch: { status: "done" } })}
+							onComplete={(task, silent = false) =>
+								update.mutate({ id: task.id, patch: { status: "done", silent } })
+							}
 						/>
 					))}
 				</ul>

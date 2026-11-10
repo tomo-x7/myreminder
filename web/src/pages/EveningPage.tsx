@@ -8,6 +8,7 @@ import { Link } from "wouter";
 import { DueLabel } from "../components/DueLabel";
 import { btnPrimary, btnSecondary, Empty, ErrorNotice, listClass, PageHeader, QueryState } from "../components/ui";
 import { SnoozeSheet } from "../features/schedule";
+import { QuietCompleteAction } from "../features/tasks/QuietCompleteAction";
 
 function EveningRow({
 	task,
@@ -36,7 +37,7 @@ function EveningRow({
 					<span className="text-sm font-semibold">完了</span>
 				) : (
 					<div className="flex shrink-0 gap-1.5">
-						<button type="button" disabled={pending} onClick={finish} className={btnPrimary}>
+						<button type="button" disabled={pending} onClick={() => finish()} className={btnPrimary}>
 							終わった
 						</button>
 						<button type="button" onClick={onSnooze} className={btnSecondary}>
@@ -45,6 +46,7 @@ function EveningRow({
 					</div>
 				)}
 			</div>
+			{!done && <QuietCompleteAction title={task.title} disabled={pending} onComplete={() => finish(true)} />}
 		</li>
 	);
 }

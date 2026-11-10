@@ -21,7 +21,8 @@ export function useEveningList(tasks: readonly PlanTask[], now: number) {
 export function useEveningTask(task: PlanTask, onDone: () => void) {
 	const update = useUpdateTask();
 	return {
-		finish: () => update.mutate({ id: task.id, patch: { status: "done" } }, { onSuccess: onDone }),
+		finish: (silent = false) =>
+			update.mutate({ id: task.id, patch: { status: "done", silent } }, { onSuccess: onDone }),
 		pending: update.isPending,
 		error: update.isError ? errorText(update.error) : null,
 	};

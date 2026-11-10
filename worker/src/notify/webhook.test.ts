@@ -9,6 +9,7 @@ import {
 	formatNotificationForWebhook,
 	formatSubmitted,
 	type SummarySession,
+	shouldNotifyCompletion,
 	sleepStartOfDay,
 	truncateText,
 } from "./webhook";
@@ -191,5 +192,26 @@ describe("すべての通知の文面", () => {
 		expect(formatNotificationForWebhook({ title: "今日", body: "", url: "/" }, origin)).toBe(
 			"今日\nhttps://reminder.tomo-x.win/",
 		);
+	});
+});
+
+describe("完了通知の設定と一回の非通知", () => {
+	it("既存の完了は通知し、永続の非通知設定は互換状態にも適用する", () => {
+		expect(shouldNotifyCompletion({ status: "done" })).toBe(true);
+		expect(shouldNotifyCompletion({ status: "done", completionNotify: true })).toBe(true);
+		expect(shouldNotifyCompletion({ status: "submitted", completionNotify: false })).toBe(false);
+		expect(shouldNotifyCompletion({ status: "done", completionNotify: false })).toBe(false);
+	});
+	it("一回だけ非通知は設定を変えず、再完了時は通常の設定に従う", () => {
+		const task = { status: "done", completionNotify: true };
+		expect(shouldNotifyCompletion(task, true)).toBe(false);
+		expect(task.completionNotify).toBe(true);
+		expect(shouldNotifyCompletion({ ...task, status: "todo" })).toBe(false);
+		expect(shouldNotifyCompletion(task)).toBe(true);
+	});
+	it("未完了・作業中・取り下げは送らない", () => {
+		for (const status of ["todo", "doing", "dismissed"]) {
+			expect(shouldNotifyCompletion({ status, completionNotify: true })).toBe(false);
+		}
 	});
 });

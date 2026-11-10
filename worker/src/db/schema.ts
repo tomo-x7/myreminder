@@ -60,6 +60,7 @@ export const taskSeries = sqliteTable("task_series", {
 	estimateSource: text("estimate_source", { enum: ESTIMATE_SOURCES }).notNull().default("manual"),
 	minBlockMin: integer("min_block_min").notNull().default(30),
 	firstStep: text("first_step"),
+	completionNotify: integer("completion_notify", { mode: "boolean" }).notNull().default(true),
 	note: text("note"),
 	freq: text("freq", { enum: REPEAT_FREQS }).notNull(),
 	// 毎週の 2 = 隔週。1〜12
@@ -96,6 +97,7 @@ export const tasks = sqliteTable(
 		// 本人が決めた着手時刻
 		plannedStartAt: integer("planned_start_at"),
 		firstStep: text("first_step"),
+		completionNotify: integer("completion_notify", { mode: "boolean" }).notNull().default(true),
 		note: text("note"),
 		submittedAt: integer("submitted_at"),
 		// 繰り返しの回。シリーズが消えたら普通のタスクに戻る

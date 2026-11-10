@@ -3,6 +3,7 @@ import { taskRowView } from "core/domain/task-list";
 import { Link } from "wouter";
 import { DueLabel } from "../../components/DueLabel";
 import { btnSecondary, Tag } from "../../components/ui";
+import { QuietCompleteAction } from "./QuietCompleteAction";
 
 type Props = {
 	task: Task;
@@ -12,7 +13,7 @@ type Props = {
 	now: number;
 	/** 一覧から開始・完了を操作する */
 	onStart?: (task: Task) => void;
-	onComplete?: (task: Task) => void;
+	onComplete?: (task: Task, silent?: boolean) => void;
 	working?: boolean;
 	busy?: boolean;
 };
@@ -43,7 +44,7 @@ export function TaskRow({ task, course, repeat, now, onStart, onComplete, workin
 					</span>
 				</Link>
 				{!finished && (
-					<div className="flex gap-2 pb-2">
+					<div className="flex flex-wrap items-start gap-2 pb-2">
 						<button
 							type="button"
 							disabled={busy || working}
@@ -62,6 +63,13 @@ export function TaskRow({ task, course, repeat, now, onStart, onComplete, workin
 						>
 							完了
 						</button>
+						{onComplete && (
+							<QuietCompleteAction
+								title={task.title}
+								disabled={busy}
+								onComplete={() => onComplete(task, true)}
+							/>
+						)}
 					</div>
 				)}
 			</div>

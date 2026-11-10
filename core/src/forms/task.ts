@@ -17,6 +17,7 @@ export type TaskForm = {
 	/** null=科目なし */
 	courseId: string | null;
 	category: Category;
+	completionNotify: boolean;
 	dueAt: number | null;
 	releaseAt: number | null;
 	plannedStartAt: number | null;
@@ -34,6 +35,7 @@ export const taskToForm = (t: Task): TaskForm => ({
 	title: t.title,
 	courseId: t.courseId,
 	category: t.category,
+	completionNotify: t.completionNotify ?? true,
 	dueAt: floorToMinute(t.dueAt),
 	releaseAt: optMinute(t.releaseAt),
 	plannedStartAt: optMinute(t.plannedStartAt),
@@ -61,6 +63,7 @@ export function toTaskPatch(f: TaskForm, task: Task): TaskPatch {
 		title: f.title.trim(),
 		courseId: f.courseId,
 		category: f.category,
+		completionNotify: f.completionNotify,
 		dueAt: f.dueAt as number,
 		releaseAt: f.releaseAt,
 		plannedStartAt: f.plannedStartAt,

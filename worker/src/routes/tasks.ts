@@ -92,7 +92,7 @@ export const tasks = new Hono<Env>()
 	})
 	.patch("/:id", validate("param", idParamSchema), validate("json", taskUpdateSchema), async (c) => {
 		const { id } = c.req.valid("param");
-		const input = c.req.valid("json");
+		const { silent = false, ...input } = c.req.valid("json");
 		const patch = { ...input, ...(input.status === "submitted" ? { status: "done" as const } : {}) };
 		const db = getDb(c.env);
 		const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
@@ -134,7 +134,7 @@ export const tasks = new Hono<Env>()
 		const [[row]] = await db.batch([update, ...extra]);
 		triggerReplan(c);
 		// 完了へ遷移したときだけ Discord / Slack に報告する(再送はしない)
-		if (submittedAt === now) c.executionCtx.waitUntil(notifySubmitted(db, id, now));
+		if (submittedAt === now) c.executionCtx.waitUntil(notifySubmitted(db, id, now, silent));
 		return c.json(row, 200);
 	})
 	.delete("/:id", validate("param", idParamSchema), async (c) => {

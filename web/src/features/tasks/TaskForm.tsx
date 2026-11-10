@@ -138,6 +138,16 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				</Field>
 			</div>
 
+			<label className="flex items-center gap-2">
+				<input
+					type="checkbox"
+					checked={form.completionNotify}
+					disabled={saving}
+					onChange={(e) => set("completionNotify", e.target.checked)}
+				/>
+				完了を通知
+			</label>
+
 			<Field label="メモ">
 				<textarea
 					rows={3}

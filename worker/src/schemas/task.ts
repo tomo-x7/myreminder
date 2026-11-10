@@ -17,6 +17,7 @@ export const taskCreateSchema = v.object({
 	minBlockMin: v.optional(minutes, 30),
 	plannedStartAt: v.optional(v.nullable(epochMs)),
 	firstStep: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(200)))),
+	completionNotify: v.optional(v.boolean(), true),
 	note: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(2000)))),
 });
 export type TaskCreateInput = v.InferInput<typeof taskCreateSchema>;
@@ -27,10 +28,22 @@ export const taskCreateWithRepeatSchema = v.object({
 	repeat: v.optional(v.nullable(repeatSchema)),
 });
 
-export const taskUpdateSchema = v.partial(
-	v.object({
-		...taskCreateSchema.entries,
-		status: v.picklist(TASK_STATUSES),
-	}),
+export const taskUpdateSchema = v.pipe(
+	v.partial(
+		v.object({
+			...taskCreateSchema.entries,
+			status: v.picklist(TASK_STATUSES),
+			// この完了操作だけ通知しない。DBへは保存しない。
+			silent: v.boolean(),
+		}),
+	),
+	v.forward(
+		v.partialCheck(
+			[["silent"], ["status"]],
+			(input) => !input.silent || input.status === "done" || input.status === "submitted",
+			"silent は完了時のみ指定できる",
+		),
+		["silent"],
+	),
 );
 export type TaskUpdateInput = v.InferInput<typeof taskUpdateSchema>;
