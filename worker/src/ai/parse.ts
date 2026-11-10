@@ -8,6 +8,7 @@ import { type BusyBlockRow, DEFAULT_SLEEP, isBlockActive, type SleepWindow } fro
 import { type ClientDeps, runJson } from "./client";
 import { type CourseRef, labelMatchesCourse, matchCourse } from "./courses";
 import { DAY_MS, MINUTE_MS, parseJstDateTime, startOfJstDay, toJstParts, WEEKDAYS_JA } from "./jst";
+import { noteTitleFromLine } from "./note-line";
 import { buildMessages, MAX_TEXT_CANDIDATES, type ParseMode } from "./prompts";
 import { type CandidatesResponse, candidatesJsonSchema, candidatesResponseSchema, type RawCandidate } from "./schemas";
 import { computeStartSuggestions, type StartSuggestion } from "./suggest";
@@ -212,6 +213,39 @@ export async function parseTasks(
 	deps?: ClientDeps,
 ): Promise<ParseResult> {
 	const now = input.now ?? Date.now();
+	if (input.mode === "line") {
+		const title = noteTitleFromLine(input.text);
+		if (title !== null) {
+			return {
+				candidates: title
+					? [
+							{
+								title,
+								taskKind: "note",
+								category: "other",
+								courseName: null,
+								courseId: null,
+								dueAt: null,
+								dueText: null,
+								estimateMin: 0,
+								estimateSource: "manual",
+								minBlockMin: 1,
+								firstStep: null,
+								completionNotify: false,
+								plannedStartAt: null,
+								repeat: null,
+								confidence: 1,
+								needsReview: true,
+								reviewReasons: ["締切が未入力"],
+							},
+						]
+					: [],
+				startSuggestions: [],
+				now,
+				error: title ? null : "メモの内容が未入力",
+			};
+		}
+	}
 	const startSuggestions = computeStartSuggestions({ now, busy: ctx.busy, sleep: ctx.sleep });
 	const messages = buildMessages(input.mode, input.text, { now, courses: ctx.courses, busy: ctx.busy });
 

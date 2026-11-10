@@ -45,15 +45,17 @@ export function TaskRow({ task, course, repeat, now, onStart, onComplete, workin
 				</Link>
 				{!finished && (
 					<div className="flex flex-wrap items-start gap-2 pb-2">
-						<button
-							type="button"
-							disabled={busy || working}
-							onClick={() => onStart?.(task)}
-							className={btnSecondary}
-							aria-label={`${task.title}を開始`}
-						>
-							{working ? "作業中" : "開始"}
-						</button>
+						{task.taskKind !== "note" && (
+							<button
+								type="button"
+								disabled={busy || working}
+								onClick={() => onStart?.(task)}
+								className={btnSecondary}
+								aria-label={`${task.title}を開始`}
+							>
+								{working ? "作業中" : "開始"}
+							</button>
+						)}
 						<button
 							type="button"
 							disabled={busy}
@@ -63,7 +65,7 @@ export function TaskRow({ task, course, repeat, now, onStart, onComplete, workin
 						>
 							完了
 						</button>
-						{onComplete && (
+						{onComplete && task.taskKind !== "note" && (
 							<QuietCompleteAction
 								title={task.title}
 								disabled={busy}

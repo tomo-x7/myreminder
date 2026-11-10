@@ -216,9 +216,17 @@ export type StartWorkingResult =
  * 完了・取り下げの課題では始められない。再開する場合は未着手に戻す
  */
 export async function startWorking(db: Db, taskId: string, now: Ms): Promise<StartWorkingResult> {
-	const [task] = await db.select({ id: tasks.id, status: tasks.status }).from(tasks).where(eq(tasks.id, taskId));
+	const [task] = await db
+		.select({ id: tasks.id, status: tasks.status, taskKind: tasks.taskKind })
+		.from(tasks)
+		.where(eq(tasks.id, taskId));
 	if (!task) return { ok: false, error: "task_not_found" };
-	if (task.status === "done" || task.status === "submitted" || task.status === "dismissed")
+	if (
+		task.taskKind === "note" ||
+		task.status === "done" ||
+		task.status === "submitted" ||
+		task.status === "dismissed"
+	)
 		return { ok: false, error: "task_closed" };
 	const sessionId = crypto.randomUUID();
 	await db.batch([

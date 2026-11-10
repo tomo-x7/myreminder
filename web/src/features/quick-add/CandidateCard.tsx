@@ -8,7 +8,7 @@ import {
 	TITLE_MAX,
 	toggleStart,
 } from "core/domain/draft";
-import { CATEGORY_OPTIONS, type Category, type Draft } from "core/domain/draft-types";
+import { CATEGORY_OPTIONS, type Category, type Draft, type TaskKind } from "core/domain/draft-types";
 import { useEstimateReference } from "core/queries/estimates";
 import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
@@ -105,9 +105,22 @@ export function CandidateCard({
 				</Notice>
 			)}
 
+			<Field label="項目">
+				<select
+					aria-label="項目"
+					value={draft.taskKind}
+					disabled={disabled}
+					onChange={(e) => onChange({ taskKind: e.target.value as TaskKind })}
+					className={inputClass}
+				>
+					<option value="work">課題</option>
+					<option value="note">メモ</option>
+				</select>
+			</Field>
+
 			{titleFirst && titleField}
 
-			<div className="grid grid-cols-[1fr_6rem] gap-2">
+			<div className={draft.taskKind === "note" ? "grid gap-2" : "grid grid-cols-[1fr_6rem] gap-2"}>
 				<Field label="締切">
 					<DatetimeInput
 						value={draft.dueAt}
@@ -116,20 +129,22 @@ export function CandidateCard({
 						className={inputClass}
 					/>
 				</Field>
-				<Field label="見積もり(分)" error={showProblems ? problems.estimate : undefined}>
-					<input
-						type="number"
-						inputMode="numeric"
-						min={1}
-						value={draft.estimateMin}
-						disabled={disabled}
-						onChange={(e) => onChange({ estimateMin: e.target.value })}
-						className={inputClass}
-					/>
-				</Field>
+				{draft.taskKind !== "note" && (
+					<Field label="見積もり(分)" error={showProblems ? problems.estimate : undefined}>
+						<input
+							type="number"
+							inputMode="numeric"
+							min={1}
+							value={draft.estimateMin}
+							disabled={disabled}
+							onChange={(e) => onChange({ estimateMin: e.target.value })}
+							className={inputClass}
+						/>
+					</Field>
+				)}
 			</div>
 
-			{reference.data && <EstimateHistory reference={reference.data} />}
+			{draft.taskKind !== "note" && reference.data && <EstimateHistory reference={reference.data} />}
 
 			{!titleFirst && titleField}
 
@@ -166,7 +181,7 @@ export function CandidateCard({
 			</div>
 
 			{/* 候補が取れていない(読み込み前・失敗)ときは欄ごと出さない */}
-			{startSuggestions.length > 0 && (
+			{draft.taskKind !== "note" && startSuggestions.length > 0 && (
 				<fieldset className="flex flex-col gap-1">
 					<legend className="mb-1 text-xs text-sub">いつ始める?</legend>
 					<div className="flex flex-wrap gap-1.5">
@@ -192,15 +207,17 @@ export function CandidateCard({
 				</fieldset>
 			)}
 
-			<label className="flex items-center gap-2">
-				<input
-					type="checkbox"
-					checked={draft.completionNotify}
-					disabled={disabled}
-					onChange={(e) => onChange({ completionNotify: e.target.checked })}
-				/>
-				完了を通知
-			</label>
+			{draft.taskKind !== "note" && (
+				<label className="flex items-center gap-2">
+					<input
+						type="checkbox"
+						checked={draft.completionNotify}
+						disabled={disabled}
+						onChange={(e) => onChange({ completionNotify: e.target.checked })}
+					/>
+					完了を通知
+				</label>
+			)}
 
 			{!hideRepeat && (
 				<RepeatFields

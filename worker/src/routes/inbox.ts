@@ -12,6 +12,7 @@ import { taskCreateSchema } from "../schemas/task";
 import { courseExists, INVALID_COURSE, idParamSchema, NOT_FOUND } from "../services/http";
 import { readPayload, readPendingChange } from "../services/ingest";
 import { type CandidateReason, findCandidates } from "../services/ingest-candidates";
+import { normalizeTaskKind } from "../services/task-kind";
 import { validate } from "../services/validate";
 
 const NOT_PENDING = { error: "not_pending" } as const;
@@ -130,7 +131,7 @@ export const inbox = new Hono<Env>()
 	})
 	.post("/:id/accept", validate("param", idParamSchema), validate("json", taskCreateSchema), async (c) => {
 		const { id } = c.req.valid("param");
-		const input = c.req.valid("json");
+		const input = normalizeTaskKind(c.req.valid("json"));
 		const db = getDb(c.env);
 		const [item] = await db.select().from(ingestItems).where(eq(ingestItems.id, id));
 		if (!item) return c.json(NOT_FOUND, 404);

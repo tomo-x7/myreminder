@@ -47,7 +47,7 @@ export async function replanNotifications(db: Db, now: Ms): Promise<ReplanResult
 		db
 			.select()
 			.from(tasks)
-			.where(inArray(tasks.status, ["todo", "doing"])),
+			.where(and(inArray(tasks.status, ["todo", "doing"]), eq(tasks.taskKind, "work"))),
 		db.select().from(busyBlocks),
 		db
 			.select()

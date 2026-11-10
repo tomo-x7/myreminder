@@ -8,6 +8,8 @@ const id = () =>
 		.primaryKey()
 		.$defaultFn(() => crypto.randomUUID());
 
+export const TASK_KINDS = ["work", "note"] as const;
+
 export const TASK_CATEGORIES = ["report", "exercise", "quiz", "presentation", "other"] as const;
 export const TASK_STATUSES = ["todo", "doing", "done", "submitted", "dismissed"] as const;
 export const ESTIMATE_SOURCES = ["ai", "manual"] as const;
@@ -56,6 +58,7 @@ export const taskSeries = sqliteTable("task_series", {
 	title: text("title").notNull(),
 	courseId: text("course_id").references(() => courses.id, { onDelete: "set null" }),
 	category: text("category", { enum: TASK_CATEGORIES }).notNull().default("other"),
+	taskKind: text("task_kind", { enum: TASK_KINDS }).notNull().default("work"),
 	estimateMin: integer("estimate_min").notNull(),
 	estimateSource: text("estimate_source", { enum: ESTIMATE_SOURCES }).notNull().default("manual"),
 	minBlockMin: integer("min_block_min").notNull().default(30),
@@ -87,6 +90,7 @@ export const tasks = sqliteTable(
 		courseId: text("course_id").references(() => courses.id, { onDelete: "set null" }),
 		title: text("title").notNull(),
 		category: text("category", { enum: TASK_CATEGORIES }).notNull().default("other"),
+		taskKind: text("task_kind", { enum: TASK_KINDS }).notNull().default("work"),
 		dueAt: integer("due_at").notNull(),
 		// これより前は着手できない
 		releaseAt: integer("release_at"),

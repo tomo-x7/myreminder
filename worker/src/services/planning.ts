@@ -1,6 +1,6 @@
 // 計画サービス: DB の内容を planner の入力に組み立てて、plan() / slackGain() を呼ぶ。
 // 仕様: ai-docs/plan.md §3.3〜§3.6、ai-docs/specs/planner.md
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Db } from "../db";
 import { busyBlocks, sessions, tasks } from "../db/schema";
 import { expandBusyBlocks } from "../planner/busy";
@@ -59,16 +59,16 @@ export type PlanContext = {
 
 /** DB を読んで、計画の入力を組み立てる。select は固定回数(タスクごとのクエリはない) */
 export async function buildPlanContext(db: Db, now: Ms): Promise<PlanContext> {
-	const [taskRows, sessionRows, busyRows, cfg] = await Promise.all([
-		db
-			.select()
-			.from(tasks)
-			.where(inArray(tasks.status, ["todo", "doing", "done", "submitted"])),
+	const [allTaskRows, allSessionRows, busyRows, cfg] = await Promise.all([
+		db.select().from(tasks),
 		db.select().from(sessions).where(eq(sessions.kind, "actual")),
 		db.select().from(busyBlocks),
 		getSettings(db),
 	]);
 
+	const noteIds = new Set(allTaskRows.filter((t) => t.taskKind === "note").map((t) => t.id));
+	const taskRows = allTaskRows.filter((t) => t.taskKind !== "note" && t.status !== "dismissed");
+	const sessionRows = allSessionRows.filter((s) => !noteIds.has(s.taskId));
 	const sessionsByTask = groupByTask(sessionRows);
 
 	const wakeMin = cfg.sleep.endMin;

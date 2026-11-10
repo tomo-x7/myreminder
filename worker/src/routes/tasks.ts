@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { getDb } from "../db";
 import { TASK_STATUSES, taskDueHistory, tasks as tasksTable } from "../db/schema";
 import type { Env } from "../env";
+import { clearNoteReminders } from "../notify/note-reminders";
 import { triggerReplan } from "../notify/replan";
 import { notifySubmitted } from "../notify/webhook";
 import { repeatSchema } from "../schemas/series";
@@ -12,6 +13,7 @@ import { taskCreateWithRepeatSchema, taskUpdateSchema } from "../schemas/task";
 import { courseExists, INVALID_COURSE, idParamSchema, NOT_FOUND } from "../services/http";
 import { createSeriesFromTask, repeatIssues } from "../services/series";
 import { closeWorkOnTask } from "../services/status";
+import { normalizeTaskKind } from "../services/task-kind";
 import { validate } from "../services/validate";
 
 // これらにしたら、そのタスクの作業は終わり
@@ -61,7 +63,8 @@ export const tasks = new Hono<Env>()
 		return row ? c.json(row, 200) : c.json(NOT_FOUND, 404);
 	})
 	.post("/", validate("json", taskCreateWithRepeatSchema), async (c) => {
-		const { repeat, ...input } = c.req.valid("json");
+		const { repeat, ...rawInput } = c.req.valid("json");
+		const input = normalizeTaskKind(rawInput);
 		const db = getDb(c.env);
 		if (input.courseId && !(await courseExists(db, input.courseId))) return c.json(INVALID_COURSE, 400);
 		const issues = repeat ? repeatIssues(input.dueAt, repeat, "repeat.") : [];
@@ -93,10 +96,28 @@ export const tasks = new Hono<Env>()
 	.patch("/:id", validate("param", idParamSchema), validate("json", taskUpdateSchema), async (c) => {
 		const { id } = c.req.valid("param");
 		const { silent = false, ...input } = c.req.valid("json");
-		const patch = { ...input, ...(input.status === "submitted" ? { status: "done" as const } : {}) };
+		const rawPatch = { ...input, ...(input.status === "submitted" ? { status: "done" as const } : {}) };
 		const db = getDb(c.env);
 		const [current] = await db.select().from(tasksTable).where(eq(tasksTable.id, id));
 		if (!current) return c.json(NOT_FOUND, 404);
+		const taskKind = rawPatch.taskKind ?? current.taskKind;
+		const estimateMin = rawPatch.estimateMin ?? current.estimateMin;
+		if (taskKind === "work" && estimateMin < 1) {
+			return c.json({ error: "invalid_input" as const, issues: ["estimateMin: 1以上の整数"] }, 400);
+		}
+		if (taskKind === "note" && rawPatch.status === "doing") {
+			return c.json({ error: "invalid_input" as const, issues: ["status: メモは作業開始できない"] }, 400);
+		}
+		const becomingNote = taskKind === "note" && current.taskKind !== "note";
+		const patch = normalizeTaskKind({
+			...rawPatch,
+			taskKind,
+			estimateMin,
+			...(taskKind === "note" ? { releaseAt: null, minBlockMin: 1 } : {}),
+			...(becomingNote && current.status === "doing" && rawPatch.status === undefined
+				? { status: "todo" as const }
+				: {}),
+		});
 		if (patch.courseId && !(await courseExists(db, patch.courseId))) return c.json(INVALID_COURSE, 400);
 
 		const now = Date.now();
@@ -128,10 +149,14 @@ export const tasks = new Hono<Env>()
 				}),
 			);
 		}
-		if (patch.status && patch.status !== current.status && CLOSING_STATUSES.includes(patch.status)) {
+		if (
+			becomingNote ||
+			(patch.status && patch.status !== current.status && CLOSING_STATUSES.includes(patch.status))
+		) {
 			extra.push(...closeWorkOnTask(db, id, now));
 		}
 		const [[row]] = await db.batch([update, ...extra]);
+		if (becomingNote) await clearNoteReminders(db, id);
 		triggerReplan(c);
 		// 完了へ遷移したときだけ Discord / Slack に報告する(再送はしない)
 		if (submittedAt === now) c.executionCtx.waitUntil(notifySubmitted(db, id, now, silent));

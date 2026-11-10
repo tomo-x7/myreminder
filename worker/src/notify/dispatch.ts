@@ -278,7 +278,7 @@ async function loadClosedTaskIds(db: Db, taskIds: string[], now: Ms): Promise<Se
 	const closed = new Set<string>();
 	for (let i = 0; i < taskIds.length; i += CHUNK) {
 		const rows = await db
-			.select({ id: tasks.id, status: tasks.status, dueAt: tasks.dueAt })
+			.select({ id: tasks.id, status: tasks.status, dueAt: tasks.dueAt, taskKind: tasks.taskKind })
 			.from(tasks)
 			.where(inArray(tasks.id, taskIds.slice(i, i + CHUNK)));
 		for (const r of rows) if (taskClosedForNotify(r, now)) closed.add(r.id);
@@ -474,6 +474,7 @@ async function uncarried(db: Db): Promise<{ id: string; title: string }[]> {
 			and(
 				eq(notifications.status, "merged"),
 				sql`json_extract(${notifications.payload}, '$.capped') = 1 AND json_extract(${notifications.payload}, '$.carriedAt') IS NULL`,
+				sql`NOT EXISTS (SELECT 1 FROM tasks WHERE tasks.id = ${notifications.taskId} AND tasks.task_kind = 'note')`,
 			),
 		);
 	return rows.map((r) => ({ id: r.id, title: asPayload(r.payload).title ?? DEFAULT_TITLES[r.kind] }));

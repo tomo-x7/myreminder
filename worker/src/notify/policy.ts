@@ -32,6 +32,7 @@ export type PolicyTask = {
 	dueAt: Ms;
 	/** 完了・取り下げは渡さない。done は旧呼び出しとの互換用 */
 	status: "todo" | "doing" | "done";
+	taskKind?: "work" | "note";
 	plannedStartAt: Ms | null;
 	firstStep: string | null;
 	createdAt: Ms;
@@ -239,7 +240,7 @@ const taskUrl = (id: string) => `/tasks/${id}`;
 // ---------- 本体 ----------
 
 export function generateNotifications(input: PolicyInput): DesiredNotification[] {
-	input = { ...input, tasks: input.tasks.filter((t) => t.status !== "done") };
+	input = { ...input, tasks: input.tasks.filter((t) => t.status !== "done" && t.taskKind !== "note") };
 	const { now } = input;
 	const horizonEnd = now + (input.horizonMs ?? DEFAULT_HORIZON);
 	const cal = makeCalendar(input.busy, input.sleep);
@@ -650,8 +651,14 @@ export function isDuplicate(row: RowLike, sentToday: RowLike[]): boolean {
 }
 
 /** タスクに結びついた通知を送る意味がなくなったか: 提出済み・取り下げ、または締切を過ぎた(「至急」を締切後に届けない) */
-export function taskClosedForNotify(task: { status: string; dueAt: Ms }, now: Ms): boolean {
-	return task.status === "done" || task.status === "submitted" || task.status === "dismissed" || task.dueAt <= now;
+export function taskClosedForNotify(task: { status: string; dueAt: Ms; taskKind?: "work" | "note" }, now: Ms): boolean {
+	return (
+		task.taskKind === "note" ||
+		task.status === "done" ||
+		task.status === "submitted" ||
+		task.status === "dismissed" ||
+		task.dueAt <= now
+	);
 }
 
 /** 保留が明けたときの1通にまとめた文面。タイトルは「保留 N件」(label で変える)、本文は通知のタイトルを並べる */

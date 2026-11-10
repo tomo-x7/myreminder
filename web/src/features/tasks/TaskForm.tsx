@@ -1,6 +1,6 @@
 import type { Course, Task, TaskPatch } from "core/api/types";
 import { TITLE_MAX } from "core/domain/draft";
-import { CATEGORY_OPTIONS } from "core/domain/draft-types";
+import { CATEGORY_OPTIONS, type TaskKind } from "core/domain/draft-types";
 import { STATUS_LABEL, STATUS_ORDER, type TaskStatus } from "core/domain/task-status";
 import { NOTE_MAX, useTaskForm } from "core/forms/task";
 import { useEstimateReference } from "core/queries/estimates";
@@ -37,13 +37,25 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 		>
 			{form.dueAt !== null && <DueLabel dueAt={form.dueAt} now={now} size="lg" />}
 
+			<Field label="項目">
+				<select
+					aria-label="項目"
+					value={form.taskKind}
+					onChange={(e) => set("taskKind", e.target.value as TaskKind)}
+					className={inputClass}
+				>
+					<option value="work">課題</option>
+					<option value="note">メモ</option>
+				</select>
+			</Field>
+
 			<Field label="状態">
 				<select
 					value={form.status}
 					onChange={(e) => set("status", e.target.value as TaskStatus)}
 					className={inputClass}
 				>
-					{STATUS_ORDER.map((s) => (
+					{STATUS_ORDER.filter((s) => form.taskKind !== "note" || s !== "doing").map((s) => (
 						<option key={s} value={s}>
 							{STATUS_LABEL[s]}
 						</option>
@@ -95,60 +107,64 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 				</Field>
 			</div>
 
-			<div className="grid grid-cols-2 gap-2">
-				<Field label="見積もり(分)" error={problems.estimateMin}>
-					<input
-						type="number"
-						inputMode="numeric"
-						min={1}
-						value={form.estimateMin}
-						onChange={(e) => set("estimateMin", e.target.value)}
-						className={inputClass}
-					/>
-				</Field>
-				<Field label="最小単位(分)" error={problems.minBlockMin}>
-					<input
-						type="number"
-						inputMode="numeric"
-						min={1}
-						value={form.minBlockMin}
-						onChange={(e) => set("minBlockMin", e.target.value)}
-						className={inputClass}
-					/>
-				</Field>
-			</div>
+			{form.taskKind !== "note" && (
+				<>
+					<div className="grid grid-cols-2 gap-2">
+						<Field label="見積もり(分)" error={problems.estimateMin}>
+							<input
+								type="number"
+								inputMode="numeric"
+								min={1}
+								value={form.estimateMin}
+								onChange={(e) => set("estimateMin", e.target.value)}
+								className={inputClass}
+							/>
+						</Field>
+						<Field label="最小単位(分)" error={problems.minBlockMin}>
+							<input
+								type="number"
+								inputMode="numeric"
+								min={1}
+								value={form.minBlockMin}
+								onChange={(e) => set("minBlockMin", e.target.value)}
+								className={inputClass}
+							/>
+						</Field>
+					</div>
 
-			{reference.data && <EstimateHistory reference={reference.data} />}
+					{reference.data && <EstimateHistory reference={reference.data} />}
 
-			<div className="grid grid-cols-2 gap-2">
-				<Field label="着手時刻">
-					<DatetimeInput
-						value={form.plannedStartAt}
-						onChange={(v) => set("plannedStartAt", v)}
-						className={inputClass}
-					/>
-				</Field>
+					<div className="grid grid-cols-2 gap-2">
+						<Field label="着手時刻">
+							<DatetimeInput
+								value={form.plannedStartAt}
+								onChange={(v) => set("plannedStartAt", v)}
+								className={inputClass}
+							/>
+						</Field>
 
-				<Field label="公開日時">
-					<DatetimeInput
-						value={form.releaseAt}
-						onChange={(v) => set("releaseAt", v)}
-						className={inputClass}
-					/>
-				</Field>
-			</div>
+						<Field label="公開日時">
+							<DatetimeInput
+								value={form.releaseAt}
+								onChange={(v) => set("releaseAt", v)}
+								className={inputClass}
+							/>
+						</Field>
+					</div>
 
-			<label className="flex items-center gap-2">
-				<input
-					type="checkbox"
-					checked={form.completionNotify}
-					disabled={saving}
-					onChange={(e) => set("completionNotify", e.target.checked)}
-				/>
-				完了を通知
-			</label>
+					<label className="flex items-center gap-2">
+						<input
+							type="checkbox"
+							checked={form.completionNotify}
+							disabled={saving}
+							onChange={(e) => set("completionNotify", e.target.checked)}
+						/>
+						完了を通知
+					</label>
+				</>
+			)}
 
-			<Field label="メモ">
+			<Field label="備考">
 				<textarea
 					rows={3}
 					value={form.note}

@@ -71,8 +71,11 @@ export async function createSession(
 	input: { taskId: string; startAt: Ms; endAt: Ms; progress?: number | null },
 ): Promise<{ ok: true; id: string } | { ok: false; error: SessionWriteError }> {
 	if (input.endAt < input.startAt) return { ok: false, error: "invalid_range" };
-	const [task] = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, input.taskId));
-	if (!task) return { ok: false, error: "task_not_found" };
+	const [task] = await db
+		.select({ id: tasks.id, taskKind: tasks.taskKind })
+		.from(tasks)
+		.where(eq(tasks.id, input.taskId));
+	if (!task || task.taskKind === "note") return { ok: false, error: "task_not_found" };
 	if (await hasOverlap(db, input)) return { ok: false, error: "overlap" };
 	const [row] = await db
 		.insert(sessions)

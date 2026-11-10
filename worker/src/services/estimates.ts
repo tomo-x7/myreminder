@@ -19,6 +19,7 @@ export type SampleTask = {
 	seriesId: string | null;
 	estimateMin: Minutes;
 	status: string;
+	taskKind?: "work" | "note";
 };
 
 /**
@@ -31,6 +32,7 @@ export function buildSampleRows(
 ): SampleRow[] {
 	const rows: SampleRow[] = [];
 	for (const t of taskRows) {
+		if (t.taskKind === "note") continue;
 		if (t.status !== "submitted" && t.status !== "done") continue;
 		const actual = actualForSample(sessionsByTask.get(t.id) ?? []);
 		if (!actual) continue;

@@ -138,8 +138,16 @@ export function formatNotificationForWebhook(
  * 提出済みの報告。fire-and-forget で呼んでよい(例外は投げない)。
  * 作業時間は確定済みの actual 記録の合計(終了していないものは数えない)
  */
-export function shouldNotifyCompletion(task: { status: string; completionNotify?: boolean }, silent = false): boolean {
-	return (task.status === "done" || task.status === "submitted") && !silent && task.completionNotify !== false;
+export function shouldNotifyCompletion(
+	task: { status: string; completionNotify?: boolean; taskKind?: "work" | "note" },
+	silent = false,
+): boolean {
+	return (
+		(task.status === "done" || task.status === "submitted") &&
+		!silent &&
+		task.completionNotify !== false &&
+		task.taskKind !== "note"
+	);
 }
 
 export async function notifySubmitted(db: Db, taskId: string, _now: number, silent = false): Promise<void> {
@@ -151,6 +159,7 @@ export async function notifySubmitted(db: Db, taskId: string, _now: number, sile
 				estimateMin: tasks.estimateMin,
 				courseName: courses.name,
 				completionNotify: tasks.completionNotify,
+				taskKind: tasks.taskKind,
 				status: tasks.status,
 			})
 			.from(tasks)

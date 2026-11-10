@@ -22,6 +22,7 @@ export function emptyDraft(title = ""): Draft {
 		courseName: "",
 		aiCourse: null,
 		category: "other",
+		taskKind: "work",
 		completionNotify: true,
 		dueAt: null,
 		estimateMin: "60",
@@ -42,7 +43,8 @@ export function candidateToDraft(c: ParsedCandidate): Draft {
 		courseName: c.courseName ?? "",
 		aiCourse: c.courseId && c.courseName ? { id: c.courseId, name: c.courseName } : null,
 		category: c.category ?? "other",
-		completionNotify: true,
+		taskKind: c.taskKind ?? "work",
+		completionNotify: c.completionNotify ?? true,
 		dueAt: c.dueAt,
 		estimateMin: String(c.estimateMin),
 		estimateTouched: false,
@@ -91,7 +93,7 @@ export function validateDraft(d: Draft): DraftProblems {
 	else if (d.title.trim().length > TITLE_MAX) problems.title = `${TITLE_MAX}字まで`;
 	if (d.dueAt === null) problems.due = "締切が未入力";
 	const est = Number(d.estimateMin);
-	if (!Number.isInteger(est) || est < 1) problems.estimate = "1以上の整数";
+	if (d.taskKind !== "note" && (!Number.isInteger(est) || est < 1)) problems.estimate = "1以上の整数";
 	return { ...problems, ...validateRepeat(d.repeat, d.dueAt) };
 }
 
@@ -104,19 +106,31 @@ export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCr
 		title: d.title.trim(),
 		courseId: resolveCourseId(d, courses),
 		category: d.category,
-		completionNotify: d.completionNotify,
+		taskKind: d.taskKind,
+		completionNotify: d.taskKind === "note" ? false : d.completionNotify,
 		dueAt: d.dueAt as number,
-		estimateMin: Number(d.estimateMin),
-		estimateSource: d.fromAi && !d.estimateTouched ? "ai" : "manual",
+		estimateMin: d.taskKind === "note" ? 0 : Number(d.estimateMin),
+		...(d.taskKind === "note" ? { minBlockMin: 1 } : {}),
+		estimateSource: d.taskKind !== "note" && d.fromAi && !d.estimateTouched ? "ai" : "manual",
 		firstStep: null,
-		plannedStartAt: d.plannedStartAt,
+		plannedStartAt: d.taskKind === "note" ? null : d.plannedStartAt,
 		...(repeat ? { repeat } : {}),
 	};
 }
 
 /** 確認カードで直せる項目 */
 export type DraftPatch = Partial<
-	Pick<Draft, "title" | "courseName" | "category" | "completionNotify" | "dueAt" | "estimateMin" | "plannedStartAt">
+	Pick<
+		Draft,
+		| "title"
+		| "courseName"
+		| "category"
+		| "taskKind"
+		| "completionNotify"
+		| "dueAt"
+		| "estimateMin"
+		| "plannedStartAt"
+	>
 > & { repeat?: Partial<RepeatDraft> };
 
 /** カードの編集を適用する。直した項目に付随する更新もここでする */
@@ -124,6 +138,11 @@ export function patchDraft(d: Draft, patch: DraftPatch): Draft {
 	const { repeat, ...rest } = patch;
 	const next: Draft = { ...d, ...rest };
 	if (repeat) next.repeat = patchRepeat(d.repeat, repeat);
+	// 既存メモを課題へ変更したら通常の入力値へ戻す。切替前に入力した値は保持する。
+	if (patch.taskKind === "work" && d.taskKind === "note" && Number(d.estimateMin) === 0) {
+		next.estimateMin = "60";
+		next.completionNotify = true;
+	}
 	// 見積もりを本人が直したら "manual" で保存する
 	if (patch.estimateMin !== undefined) next.estimateTouched = true;
 	// 締切を着手の合図より前にしたら、合図は外す(締切の後に鳴らさない)

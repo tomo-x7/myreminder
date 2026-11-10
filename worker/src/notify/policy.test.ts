@@ -677,3 +677,27 @@ describe("送信時の判断", () => {
 		expect(summarizeDeferred(Array.from({ length: 7 }, (_, i) => ({ title: `T${i}` }))).body).toContain("ほか2件");
 	});
 });
+
+describe("メモの催促除外", () => {
+	it("通常課題へ送る通知やまとめを保ち、メモを個別・まとめ通知へ入れない", () => {
+		const ordinary = task({
+			id: "work",
+			dueAt: jst("2026-10-14 23:59"),
+			plannedStartAt: jst("2026-10-13 13:00"),
+			plan: plan({ risk: "danger", latestStartUsual: jst("2026-10-14 12:00") }),
+		});
+		const note = task({
+			id: "note",
+			title: "通知しないメモ",
+			taskKind: "note",
+			plannedStartAt: jst("2026-10-14 12:00"),
+			plan: plan({ risk: "danger", latestStartUsual: jst("2026-10-15 12:00") }),
+		});
+		const expected = gen({ tasks: [ordinary] });
+		expect(expected.length).toBeGreaterThan(0);
+		expect(gen({ tasks: [ordinary, note] })).toEqual(expected);
+		expect(
+			taskClosedForNotify({ status: "todo", dueAt: note.dueAt, taskKind: "note" }, jst("2026-10-13 12:00")),
+		).toBe(true);
+	});
+});

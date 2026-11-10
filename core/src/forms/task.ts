@@ -1,7 +1,7 @@
 // タスクの編集フォーム。日時は epoch ms か null で持つ(datetime-local の文字列との変換は画面の層)
 import { useState } from "react";
 import type { Task, TaskPatch } from "../api/types";
-import type { Category } from "../domain/draft-types";
+import type { Category, TaskKind } from "../domain/draft-types";
 import { errorText } from "../domain/errors";
 import { seriesLine } from "../domain/recurrence";
 import { emptyRepeat, patchRepeat, type RepeatDraft, repeatToInput, validateRepeat } from "../domain/repeat-draft";
@@ -17,6 +17,7 @@ export type TaskForm = {
 	/** null=科目なし */
 	courseId: string | null;
 	category: Category;
+	taskKind: TaskKind;
 	completionNotify: boolean;
 	dueAt: number | null;
 	releaseAt: number | null;
@@ -35,6 +36,7 @@ export const taskToForm = (t: Task): TaskForm => ({
 	title: t.title,
 	courseId: t.courseId,
 	category: t.category,
+	taskKind: t.taskKind ?? "work",
 	completionNotify: t.completionNotify ?? true,
 	dueAt: floorToMinute(t.dueAt),
 	releaseAt: optMinute(t.releaseAt),
@@ -51,26 +53,27 @@ export function validateTaskForm(f: TaskForm): TaskFormProblems {
 	const problems: TaskFormProblems = {};
 	if (!f.title.trim()) problems.title = "タイトルが未入力";
 	if (f.dueAt === null) problems.dueAt = "締切が未入力";
-	if (!isPositiveInt(f.estimateMin)) problems.estimateMin = "1以上の整数";
-	if (!isPositiveInt(f.minBlockMin)) problems.minBlockMin = "1以上の整数";
+	if (f.taskKind !== "note" && !isPositiveInt(f.estimateMin)) problems.estimateMin = "1以上の整数";
+	if (f.taskKind !== "note" && !isPositiveInt(f.minBlockMin)) problems.minBlockMin = "1以上の整数";
 	return problems;
 }
 
 /** 検証済みの入力 → 更新内容。validateTaskForm が通ったものだけ渡す */
 export function toTaskPatch(f: TaskForm, task: Task): TaskPatch {
-	const estimateMin = Number(f.estimateMin);
+	const estimateMin = f.taskKind === "note" ? 0 : Number(f.estimateMin);
 	return {
 		title: f.title.trim(),
 		courseId: f.courseId,
 		category: f.category,
-		completionNotify: f.completionNotify,
+		taskKind: f.taskKind,
+		completionNotify: f.taskKind === "note" ? false : f.completionNotify,
 		dueAt: f.dueAt as number,
-		releaseAt: f.releaseAt,
-		plannedStartAt: f.plannedStartAt,
+		releaseAt: f.taskKind === "note" ? null : f.releaseAt,
+		plannedStartAt: f.taskKind === "note" ? null : f.plannedStartAt,
 		estimateMin,
 		// 本人が見積もりを直したら手入力扱いにする
 		...(estimateMin !== task.estimateMin ? { estimateSource: "manual" as const } : {}),
-		minBlockMin: Number(f.minBlockMin),
+		minBlockMin: f.taskKind === "note" ? 1 : Number(f.minBlockMin),
 		firstStep: null,
 		note: f.note.trim() || null,
 		status: f.status,
@@ -81,7 +84,17 @@ export function toTaskPatch(f: TaskForm, task: Task): TaskPatch {
 export function useTaskForm(task: Task) {
 	const [form, setForm] = useState<TaskForm>(() => taskToForm(task));
 	const [problems, setProblems] = useState<TaskFormProblems>({});
-	const set = <K extends keyof TaskForm>(key: K, value: TaskForm[K]) => setForm((f) => ({ ...f, [key]: value }));
+	const set = <K extends keyof TaskForm>(key: K, value: TaskForm[K]) =>
+		setForm((f) => {
+			const next = { ...f, [key]: value };
+			if (key === "taskKind" && value === "note" && f.status === "doing") next.status = "todo";
+			if (key === "taskKind" && value === "work" && f.taskKind === "note" && Number(f.estimateMin) === 0) {
+				next.estimateMin = "60";
+				next.minBlockMin = "30";
+				next.completionNotify = true;
+			}
+			return next;
+		});
 
 	function submit(onSave: (patch: TaskPatch) => void) {
 		const found = validateTaskForm(form);

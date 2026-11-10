@@ -35,6 +35,8 @@ export function taskRowView(task: Task, course: Course | undefined): TaskRowView
 		finished,
 		statusLabel: task.status === "todo" ? null : STATUS_LABEL[task.status],
 		closedDue: finished ? `締切 ${formatJstDateTime(task.dueAt)}` : null,
-		meta: [course?.name, formatDuration(task.estimateMin)].filter(Boolean).join(" ・ "),
+		meta: [course?.name, task.taskKind === "note" ? null : formatDuration(task.estimateMin)]
+			.filter(Boolean)
+			.join(" ・ "),
 	};
 }
