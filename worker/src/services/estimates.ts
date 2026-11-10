@@ -52,7 +52,7 @@ export type EstimateReference = {
 	items: { taskId: string; title: string; estimateMin: Minutes; actualMin: Minutes; completedAt: Ms }[];
 };
 
-/** 同じ繰り返し・科目・種類の、直近の実績。サンプルがなければ level は null */
+/** 同じ科目を最優先にした、直近の実績。サンプルがなければ level は null */
 export async function computeReference(db: Db, key: EstimateKey): Promise<EstimateReference> {
 	const [taskRows, sessionRows] = await Promise.all([
 		db

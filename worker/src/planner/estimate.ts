@@ -1,6 +1,6 @@
 // 見積もりの学習(仕様: ai-docs/specs/planner.md §1)
 // 実績が見積もりにどれだけ比例するかを傾き b で表し、基準の見積もり c のときの ln 比率 z を、
-// 全体 → 種類 → 科目 → 繰り返しの順に、正規–逆χ² の共役更新で縮小推定する
+// 科目ごとに学習し、同一科目の実績がなければ種類・全体へフォールバックする。仕様: course-estimates.md
 import type { Category, Minutes, Ms } from "./types";
 
 export type Sample = {
@@ -52,15 +52,15 @@ export type EstimateModel = {
 	/** 基準の見積もり c(ln 分)。全サンプルの ln 見積もりの重みつき平均 */
 	baseLogEstimate: number;
 	global: Summary;
-	/** 以下はサンプルのあるキーだけ。科目は `courseKeyOf`、繰り返しは seriesId */
+	/** サンプルのあるキーだけ。科目は独立したモデル、繰り返しは科目なしの実績のみ */
 	categories: ReadonlyMap<Category, Summary>;
-	courses: ReadonlyMap<string, Summary>;
+	courses: ReadonlyMap<string, EstimateModel>;
 	series: ReadonlyMap<string, Summary>;
 };
 
-/** 種類 × 科目。科目なしは種類ごとに1つのまとまりとする */
+/** 回帰の群。科目は種類をまたいでまとめ、科目なしは種類ごとにまとめる */
 function courseKeyOf(category: Category, courseId: string | null): string {
-	return courseId === null ? category : `${category}\u0000${courseId}`;
+	return courseId === null ? `category\u0000${category}` : `course\u0000${courseId}`;
 }
 
 /**
@@ -199,15 +199,19 @@ export function fitEstimateModel(
 	// 基準の見積もり c のときの ln 比率に直した値 z を、段階ごとに集める
 	const all: Weighted[] = [];
 	const byCategory = new Map<Category, Weighted[]>();
-	const byCourse = new Map<string, Weighted[]>();
+	const byCourse = new Map<string, Sample[]>();
 	const bySeries = new Map<string, Weighted[]>();
 	valid.forEach((s, i) => {
 		const p = points[i] as Point;
 		const item = { y: p.r - (slope - 1) * (p.x - baseLogEstimate), w: p.w };
 		all.push(item);
 		pushTo(byCategory, s.category, item);
-		if (s.courseId !== null) pushTo(byCourse, p.courseKey, item);
-		if (s.seriesId !== null) pushTo(bySeries, s.seriesId, item);
+		if (s.courseId !== null) {
+			const group = byCourse.get(s.courseId);
+			if (group) group.push(s);
+			else byCourse.set(s.courseId, [s]);
+		}
+		if (s.courseId === null && s.seriesId !== null) pushTo(bySeries, s.seriesId, item);
 	});
 	const summaries = <K>(m: Map<K, Weighted[]>): Map<K, Summary> =>
 		new Map([...m].map(([k, items]) => [k, summarize(items)]));
@@ -220,7 +224,17 @@ export function fitEstimateModel(
 		baseLogEstimate,
 		global: summarize(all),
 		categories: summaries(byCategory),
-		courses: summaries(byCourse),
+		// 科目内で重み・傾き・基準見積もりを計算し直す。他科目の増加で古い実績を減衰させない。
+		courses: new Map(
+			[...byCourse].map(([id, group]) => [
+				id,
+				fitEstimateModel(
+					group.map((s) => ({ ...s, category: "other" as const, courseId: null, seriesId: null })),
+					prior,
+					opts,
+				),
+			]),
+		),
 		series: summaries(bySeries),
 	};
 }
@@ -232,6 +246,14 @@ type Basis = { level: "prior" | "global" | "category" | "course" | "series"; cou
  * サンプルのない段階は飛ばす(上の段階の事後分布をそのまま使う)
  */
 function posteriorFor(model: EstimateModel, key: EstimateKey): { posterior: Posterior; basis: Basis } {
+	const course = key.courseId !== null ? model.courses.get(key.courseId) : undefined;
+	if (course) {
+		const g = course.global;
+		return {
+			posterior: update(course.prior, g.n, g.mean, g.ss),
+			basis: { level: "course", count: g.count },
+		};
+	}
 	const g = model.global;
 	let posterior = update(model.prior, g.n, g.mean, g.ss);
 	let basis: Basis = g.count > 0 ? { level: "global", count: g.count } : { level: "prior", count: 0 };
@@ -242,8 +264,7 @@ function posteriorFor(model: EstimateModel, key: EstimateKey): { posterior: Post
 		basis = { level, count: s.count };
 	};
 	descend(model.categories.get(key.category), "category");
-	if (key.courseId !== null) descend(model.courses.get(courseKeyOf(key.category, key.courseId)), "course");
-	if (key.seriesId !== null) descend(model.series.get(key.seriesId), "series");
+	if (key.courseId === null && key.seriesId !== null) descend(model.series.get(key.seriesId), "series");
 	return { posterior, basis };
 }
 
@@ -256,8 +277,9 @@ function predictiveScale(p: Posterior): number {
 export function planningMultiplier(model: EstimateModel, key: EstimateKey, estimateMin: Minutes, q = 0.8): number {
 	const { posterior: p } = posteriorFor(model, key);
 	// 基準の見積もり c から離れるぶんは、傾き b で補正する
-	const dx = estimateMin > 0 ? Math.log(estimateMin) - model.baseLogEstimate : 0;
-	const logRatio = p.mu + tQuantile(q, p.nu) * predictiveScale(p) + (model.slope - 1) * dx;
+	const regression = (key.courseId !== null ? model.courses.get(key.courseId) : undefined) ?? model;
+	const dx = estimateMin > 0 ? Math.log(estimateMin) - regression.baseLogEstimate : 0;
+	const logRatio = p.mu + tQuantile(q, p.nu) * predictiveScale(p) + (regression.slope - 1) * dx;
 	const [lo, hi] = model.clip;
 	return Math.min(hi, Math.max(lo, Math.exp(logRatio)));
 }
@@ -273,7 +295,7 @@ export function estimateBasis(model: EstimateModel, key: EstimateKey): Basis {
 }
 
 /**
- * 入力欄に出す過去の実績。series → course → category の順に探し、サンプルのある一番下の段階の新しい順 limit 件。
+ * 入力欄に出す過去の実績。course → 科目なしの series → category の順で、新しい順 limit 件。
  * 学習と同じく、不正なサンプルは使わない
  */
 export function referenceSamples<T extends Sample>(
@@ -284,12 +306,13 @@ export function referenceSamples<T extends Sample>(
 	const sorted = samples.filter(isValid).sort(newestFirst);
 	const levels = [
 		{
-			level: "series",
-			match: (s: T) => key.seriesId !== null && s.seriesId === key.seriesId,
+			level: "course",
+			match: (s: T) => key.courseId !== null && s.courseId === key.courseId,
 		},
 		{
-			level: "course",
-			match: (s: T) => key.courseId !== null && s.category === key.category && s.courseId === key.courseId,
+			level: "series",
+			match: (s: T) =>
+				key.courseId === null && s.courseId === null && key.seriesId !== null && s.seriesId === key.seriesId,
 		},
 		{ level: "category", match: (s: T) => s.category === key.category },
 	] as const;
