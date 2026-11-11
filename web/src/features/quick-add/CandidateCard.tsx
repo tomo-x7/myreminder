@@ -8,13 +8,15 @@ import {
 	TITLE_MAX,
 	toggleStart,
 } from "core/domain/draft";
-import { CATEGORY_OPTIONS, type Category, type Draft, type TaskKind } from "core/domain/draft-types";
+import { type Draft, taskTypePatch, taskTypeValue } from "core/domain/draft-types";
 import { useEstimateReference } from "core/queries/estimates";
 import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
 import { RepeatFields } from "../../components/RepeatFields";
 import { btnGhost, chipClass, Field, inputClass, Notice } from "../../components/ui";
+import { CoursePicker } from "../tasks/CoursePicker";
 import { EstimateHistory } from "../tasks/EstimateHistory";
+import { TaskTypeSelect } from "../tasks/TaskTypeSelect";
 
 type Props = {
 	draft: Draft;
@@ -59,7 +61,6 @@ export function CandidateCard({
 	const courseKnown = courseId !== null;
 	const reference = useEstimateReference({ category: draft.category, courseId, seriesId: null });
 	const chips = selectableStarts(startSuggestions, now, draft.dueAt);
-	const listId = `courses-${draft.key}`;
 	const titleField = (
 		<Field label="タイトル" error={showProblems ? problems.title : undefined}>
 			<input
@@ -105,19 +106,6 @@ export function CandidateCard({
 				</Notice>
 			)}
 
-			<Field label="項目">
-				<select
-					aria-label="項目"
-					value={draft.taskKind}
-					disabled={disabled}
-					onChange={(e) => onChange({ taskKind: e.target.value as TaskKind })}
-					className={inputClass}
-				>
-					<option value="work">課題</option>
-					<option value="note">メモ</option>
-				</select>
-			</Field>
-
 			{titleFirst && titleField}
 
 			<div className={draft.taskKind === "note" ? "grid gap-2" : "grid grid-cols-[1fr_6rem] gap-2"}>
@@ -149,35 +137,19 @@ export function CandidateCard({
 			{!titleFirst && titleField}
 
 			<div className="grid grid-cols-2 gap-2">
-				<Field label="科目" error={draft.courseName.trim() !== "" && !courseKnown ? "未登録の科目" : undefined}>
-					<input
-						type="text"
-						list={listId}
-						value={draft.courseName}
-						disabled={disabled}
-						onChange={(e) => onChange({ courseName: e.target.value })}
-						className={inputClass}
-					/>
-					<datalist id={listId}>
-						{courses.map((c) => (
-							<option key={c.id} value={c.name} />
-						))}
-					</datalist>
-				</Field>
-				<Field label="種類">
-					<select
-						value={draft.category}
-						disabled={disabled}
-						onChange={(e) => onChange({ category: e.target.value as Category })}
-						className={inputClass}
-					>
-						{CATEGORY_OPTIONS.map((o) => (
-							<option key={o.value} value={o.value}>
-								{o.label}
-							</option>
-						))}
-					</select>
-				</Field>
+				<CoursePicker
+					courses={courses}
+					selectedId={courseId}
+					valueLabel={draft.courseName}
+					disabled={disabled}
+					error={draft.courseName.trim() !== "" && !courseKnown ? "未登録の科目" : undefined}
+					onSelect={(course) => onChange({ courseName: course?.name ?? "" })}
+				/>
+				<TaskTypeSelect
+					value={taskTypeValue(draft)}
+					disabled={disabled}
+					onChange={(value) => onChange(taskTypePatch(value))}
+				/>
 			</div>
 
 			{/* 候補が取れていない(読み込み前・失敗)ときは欄ごと出さない */}

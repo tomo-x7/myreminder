@@ -1,13 +1,15 @@
 import type { Course, Task, TaskPatch } from "core/api/types";
 import { TITLE_MAX } from "core/domain/draft";
-import { CATEGORY_OPTIONS, type TaskKind } from "core/domain/draft-types";
+import { taskTypeValue } from "core/domain/draft-types";
 import { STATUS_LABEL, STATUS_ORDER, type TaskStatus } from "core/domain/task-status";
 import { NOTE_MAX, useTaskForm } from "core/forms/task";
 import { useEstimateReference } from "core/queries/estimates";
 import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, ErrorNotice, Field, inputClass } from "../../components/ui";
+import { CoursePicker } from "./CoursePicker";
 import { EstimateHistory } from "./EstimateHistory";
+import { TaskTypeSelect } from "./TaskTypeSelect";
 
 type Props = {
 	task: Task;
@@ -20,7 +22,7 @@ type Props = {
 
 /** タスクの全項目の編集フォーム */
 export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
-	const { form, set, problems, submit } = useTaskForm(task);
+	const { form, set, setType, problems, submit } = useTaskForm(task);
 	const reference = useEstimateReference({
 		category: form.category,
 		courseId: form.courseId,
@@ -36,18 +38,6 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 			}}
 		>
 			{form.dueAt !== null && <DueLabel dueAt={form.dueAt} now={now} size="lg" />}
-
-			<Field label="項目">
-				<select
-					aria-label="項目"
-					value={form.taskKind}
-					onChange={(e) => set("taskKind", e.target.value as TaskKind)}
-					className={inputClass}
-				>
-					<option value="work">課題</option>
-					<option value="note">メモ</option>
-				</select>
-			</Field>
 
 			<Field label="状態">
 				<select
@@ -78,33 +68,13 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 			</Field>
 
 			<div className="grid grid-cols-2 gap-2">
-				<Field label="科目">
-					<select
-						value={form.courseId ?? ""}
-						onChange={(e) => set("courseId", e.target.value || null)}
-						className={inputClass}
-					>
-						<option value="">なし</option>
-						{courses.map((c) => (
-							<option key={c.id} value={c.id}>
-								{c.name}
-							</option>
-						))}
-					</select>
-				</Field>
-				<Field label="種類">
-					<select
-						value={form.category}
-						onChange={(e) => set("category", e.target.value as Task["category"])}
-						className={inputClass}
-					>
-						{CATEGORY_OPTIONS.map((o) => (
-							<option key={o.value} value={o.value}>
-								{o.label}
-							</option>
-						))}
-					</select>
-				</Field>
+				<CoursePicker
+					courses={courses}
+					selectedId={form.courseId}
+					disabled={saving}
+					onSelect={(course) => set("courseId", course?.id ?? null)}
+				/>
+				<TaskTypeSelect value={taskTypeValue(form)} disabled={saving} onChange={setType} />
 			</div>
 
 			{form.taskKind !== "note" && (

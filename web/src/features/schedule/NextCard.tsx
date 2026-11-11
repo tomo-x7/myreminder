@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { DueLabel } from "../../components/DueLabel";
 import { btnPrimary, btnSecondary, ErrorNotice, Notice } from "../../components/ui";
-import { QuietCompleteAction } from "../tasks/QuietCompleteAction";
+import { CompleteAction } from "../tasks/CompleteAction";
 import { RISK_STYLE } from "./risk-style";
 import { SnoozeSheet } from "./SnoozeSheet";
 
@@ -50,32 +50,29 @@ export function NextCard({ task, course, now }: { task: PlanTask; course: Course
 			{task.needsFullEffort && <Notice tone="danger">普段のペースでは間に合わない</Notice>}
 			<StartDeadline task={task} now={now} />
 			{actions.error && <ErrorNotice>{actions.error}</ErrorNotice>}
-			<div className="flex gap-1.5">
+			<div className="flex flex-wrap gap-1.5">
 				<button
 					type="button"
-					disabled={actions.startDisabled}
+					disabled={actions.startDisabled || actions.updating}
 					onClick={actions.start}
-					className={`${btnPrimary} flex-1`}
+					className={`${btnPrimary} min-h-11 flex-1`}
 				>
 					{actions.working ? "作業中" : "始める"}
 				</button>
+				<CompleteAction
+					title={task.title}
+					disabled={actions.updating}
+					onComplete={(silent) => actions.setStatus("done", silent)}
+				/>
 				<button
 					type="button"
 					disabled={actions.updating}
-					onClick={() => actions.setStatus("done")}
-					className={btnSecondary}
+					onClick={() => setSnoozing(true)}
+					className={`${btnSecondary} min-h-11`}
 				>
-					完了
-				</button>
-				<button type="button" onClick={() => setSnoozing(true)} className={btnSecondary}>
 					いつに回す?
 				</button>
 			</div>
-			<QuietCompleteAction
-				title={task.title}
-				disabled={actions.updating}
-				onComplete={() => actions.setStatus("done", true)}
-			/>
 			{snoozing && <SnoozeSheet target={task} onClose={() => setSnoozing(false)} />}
 		</section>
 	);

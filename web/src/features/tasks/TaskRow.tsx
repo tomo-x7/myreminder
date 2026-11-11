@@ -3,7 +3,7 @@ import { taskRowView } from "core/domain/task-list";
 import { Link } from "wouter";
 import { DueLabel } from "../../components/DueLabel";
 import { btnSecondary, Tag } from "../../components/ui";
-import { QuietCompleteAction } from "./QuietCompleteAction";
+import { CompleteAction } from "./CompleteAction";
 
 type Props = {
 	task: Task;
@@ -50,28 +50,20 @@ export function TaskRow({ task, course, repeat, now, onStart, onComplete, workin
 								type="button"
 								disabled={busy || working}
 								onClick={() => onStart?.(task)}
-								className={btnSecondary}
+								className={`${btnSecondary} min-h-11`}
 								aria-label={`${task.title}を開始`}
 							>
 								{working ? "作業中" : "開始"}
 							</button>
 						)}
-						<button
-							type="button"
-							disabled={busy}
-							onClick={() => onComplete?.(task)}
-							className={btnSecondary}
-							aria-label={`${task.title}を完了`}
-						>
-							完了
-						</button>
-						{onComplete && task.taskKind !== "note" && (
-							<QuietCompleteAction
-								title={task.title}
-								disabled={busy}
-								onComplete={() => onComplete(task, true)}
-							/>
-						)}
+						<CompleteAction
+							title={task.title}
+							disabled={busy || !onComplete}
+							canQuiet={
+								Boolean(onComplete) && task.taskKind !== "note" && task.completionNotify !== false
+							}
+							onComplete={(silent) => onComplete?.(task, silent)}
+						/>
 					</div>
 				)}
 			</div>

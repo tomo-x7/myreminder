@@ -6,9 +6,9 @@ import { useEveningList, useEveningTask } from "core/screens/evening";
 import { useState } from "react";
 import { Link } from "wouter";
 import { DueLabel } from "../components/DueLabel";
-import { btnPrimary, btnSecondary, Empty, ErrorNotice, listClass, PageHeader, QueryState } from "../components/ui";
+import { btnSecondary, Empty, ErrorNotice, listClass, PageHeader, QueryState } from "../components/ui";
 import { SnoozeSheet } from "../features/schedule";
-import { QuietCompleteAction } from "../features/tasks/QuietCompleteAction";
+import { CompleteAction } from "../features/tasks/CompleteAction";
 
 function EveningRow({
 	task,
@@ -31,22 +31,30 @@ function EveningRow({
 				<DueLabel dueAt={task.dueAt} now={now} />
 			</Link>
 			{error && <ErrorNotice>{error}</ErrorNotice>}
-			<div className="flex items-center justify-between gap-2">
+			<div className="flex flex-wrap items-center justify-between gap-2">
 				<span className="text-xs text-sub">{plannedText(task)}</span>
 				{done ? (
 					<span className="text-sm font-semibold">完了</span>
 				) : (
-					<div className="flex shrink-0 gap-1.5">
-						<button type="button" disabled={pending} onClick={() => finish()} className={btnPrimary}>
-							終わった
-						</button>
-						<button type="button" onClick={onSnooze} className={btnSecondary}>
+					<div className="flex flex-wrap gap-1.5">
+						<CompleteAction
+							title={task.title}
+							disabled={pending}
+							primary
+							label="終わった"
+							onComplete={finish}
+						/>
+						<button
+							type="button"
+							disabled={pending}
+							onClick={onSnooze}
+							className={`${btnSecondary} min-h-11`}
+						>
 							いつに回す?
 						</button>
 					</div>
 				)}
 			</div>
-			{!done && <QuietCompleteAction title={task.title} disabled={pending} onComplete={() => finish(true)} />}
 		</li>
 	);
 }

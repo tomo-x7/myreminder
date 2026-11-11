@@ -1,7 +1,7 @@
 // タスクの編集フォーム。日時は epoch ms か null で持つ(datetime-local の文字列との変換は画面の層)
 import { useState } from "react";
 import type { Task, TaskPatch } from "../api/types";
-import type { Category, TaskKind } from "../domain/draft-types";
+import { type Category, type TaskKind, type TaskType, taskTypePatch } from "../domain/draft-types";
 import { errorText } from "../domain/errors";
 import { seriesLine } from "../domain/recurrence";
 import { emptyRepeat, patchRepeat, type RepeatDraft, repeatToInput, validateRepeat } from "../domain/repeat-draft";
@@ -84,17 +84,19 @@ export function toTaskPatch(f: TaskForm, task: Task): TaskPatch {
 export function useTaskForm(task: Task) {
 	const [form, setForm] = useState<TaskForm>(() => taskToForm(task));
 	const [problems, setProblems] = useState<TaskFormProblems>({});
-	const set = <K extends keyof TaskForm>(key: K, value: TaskForm[K]) =>
+	const update = (patch: Partial<TaskForm>) =>
 		setForm((f) => {
-			const next = { ...f, [key]: value };
-			if (key === "taskKind" && value === "note" && f.status === "doing") next.status = "todo";
-			if (key === "taskKind" && value === "work" && f.taskKind === "note" && Number(f.estimateMin) === 0) {
+			const next = { ...f, ...patch };
+			if (patch.taskKind === "note" && f.status === "doing") next.status = "todo";
+			if (patch.taskKind === "work" && f.taskKind === "note" && Number(f.estimateMin) === 0) {
 				next.estimateMin = "60";
 				next.minBlockMin = "30";
 				next.completionNotify = true;
 			}
 			return next;
 		});
+	const set = <K extends keyof TaskForm>(key: K, value: TaskForm[K]) => update({ [key]: value });
+	const setType = (value: TaskType) => update(taskTypePatch(value));
 
 	function submit(onSave: (patch: TaskPatch) => void) {
 		const found = validateTaskForm(form);
@@ -102,7 +104,7 @@ export function useTaskForm(task: Task) {
 		if (isValid(found)) onSave(toTaskPatch(form, task));
 	}
 
-	return { form, set, problems, submit };
+	return { form, set, setType, problems, submit };
 }
 
 /** 詳細画面の保存と削除。保存したあとの「保存済み」の表示もここで持つ */
