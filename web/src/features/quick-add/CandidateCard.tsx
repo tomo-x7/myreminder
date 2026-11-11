@@ -141,6 +141,7 @@ export function CandidateCard({
 					courses={courses}
 					selectedId={courseId}
 					valueLabel={draft.courseName}
+					onInput={(text) => onChange({ courseName: text })}
 					disabled={disabled}
 					error={draft.courseName.trim() !== "" && !courseKnown ? "未登録の科目" : undefined}
 					onSelect={(course) => onChange({ courseName: course?.name ?? "" })}
