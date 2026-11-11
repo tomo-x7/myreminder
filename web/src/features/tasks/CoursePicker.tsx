@@ -27,6 +27,7 @@ export function CoursePicker({ courses, selectedId, valueLabel, disabled, error,
 	const wrapperRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const pointerInside = useRef(false);
+	const pointerOutside = useRef(false);
 	const composing = useRef(false);
 	const pendingSelection = useRef(false);
 	const inputId = useId();
@@ -57,18 +58,32 @@ export function CoursePicker({ courses, selectedId, valueLabel, disabled, error,
 
 	useEffect(() => {
 		const outside = (event: PointerEvent) => {
-			if (event.target instanceof Node && !wrapperRef.current?.contains(event.target)) setOpen(false);
+			pointerOutside.current = event.target instanceof Node && !wrapperRef.current?.contains(event.target);
+		};
+		const clicked = (event: MouseEvent) => {
+			pointerOutside.current = false;
+			// 候補はフォームの高さに含まれる。押下中に閉じると保存などの位置がずれてクリックを失う。
+			// クリアボタンはクリック中に消えるため、変更前の伝播経路で内外を判定する。
+			const wrapper = wrapperRef.current;
+			if (wrapper && !event.composedPath().includes(wrapper)) setOpen(false);
 		};
 		const release = () => {
 			pointerInside.current = false;
 		};
+		const cancel = () => {
+			release();
+			if (pointerOutside.current) setOpen(false);
+			pointerOutside.current = false;
+		};
 		document.addEventListener("pointerdown", outside);
+		document.addEventListener("click", clicked);
 		document.addEventListener("pointerup", release);
-		document.addEventListener("pointercancel", release);
+		document.addEventListener("pointercancel", cancel);
 		return () => {
 			document.removeEventListener("pointerdown", outside);
+			document.removeEventListener("click", clicked);
 			document.removeEventListener("pointerup", release);
-			document.removeEventListener("pointercancel", release);
+			document.removeEventListener("pointercancel", cancel);
 		};
 	}, []);
 
@@ -160,6 +175,7 @@ export function CoursePicker({ courses, selectedId, valueLabel, disabled, error,
 						setFocused(false);
 						if (
 							pointerInside.current ||
+							pointerOutside.current ||
 							(event.relatedTarget instanceof Node && wrapperRef.current?.contains(event.relatedTarget))
 						)
 							return;

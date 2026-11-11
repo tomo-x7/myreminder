@@ -46,6 +46,7 @@ export type ExistingItem = {
 
 export type LinkedTask = {
 	id: string;
+	taskKind?: "work" | "note";
 	title: string;
 	dueAt: Ms;
 	status: "todo" | "doing" | "done" | "submitted" | "dismissed";
@@ -258,16 +259,18 @@ export function planIngest({ now, existing, snapshot, tasks }: PlanInput): Inges
 					// 早まった: 見落とすと危ないので、すぐ反映して知らせる
 					changeFor(state.id).set.dueAt = next.dueAt;
 					changeFor(state.id).dueHistory.push({ oldDueAt: state.dueAt, newDueAt: next.dueAt });
-					plan.notifications.push({
-						kind: "due_change",
-						taskId: state.id,
-						priority: 1,
-						payload: {
-							title: `締切変更: ${state.title}`,
-							body: `${fmtJst(state.dueAt)} → ${fmtJst(next.dueAt)}`,
-							url: `/tasks/${state.id}`,
-						},
-					});
+					if (state.taskKind !== "note") {
+						plan.notifications.push({
+							kind: "due_change",
+							taskId: state.id,
+							priority: 1,
+							payload: {
+								title: `締切変更: ${state.title}`,
+								body: `${fmtJst(state.dueAt)} → ${fmtJst(next.dueAt)}`,
+								url: `/tasks/${state.id}`,
+							},
+						});
+					}
 					state.dueAt = next.dueAt;
 					delete pending.dueAt;
 				} else if (next.dueAt > state.dueAt) {
@@ -297,16 +300,18 @@ export function planIngest({ now, existing, snapshot, tasks }: PlanInput): Inges
 					c.set.status = "todo";
 					c.set.submittedAt = null;
 					state.status = "todo";
-					plan.notifications.push({
-						kind: "inbox",
-						taskId: state.id,
-						priority: 1,
-						payload: {
-							title: `提出取消: ${state.title}`,
-							body: `未提出に戻した・締切 ${fmtDue(state.dueAt, now)}`,
-							url: `/tasks/${state.id}`,
-						},
-					});
+					if (state.taskKind !== "note") {
+						plan.notifications.push({
+							kind: "inbox",
+							taskId: state.id,
+							priority: 1,
+							payload: {
+								title: `提出取消: ${state.title}`,
+								body: `未提出に戻した・締切 ${fmtDue(state.dueAt, now)}`,
+								url: `/tasks/${state.id}`,
+							},
+						});
+					}
 				}
 			}
 

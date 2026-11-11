@@ -362,3 +362,23 @@ describe("autoIgnoreReason", () => {
 		expect(autoIgnoreReason({ dueAt: null, remoteState: "CREATED" }, NOW)).toBeNull();
 	});
 });
+
+describe("メモの取り込み通知", () => {
+	it("締切は反映するが、メモの締切前倒し通知は作らない", () => {
+		const dueAt = NOW + DAY;
+		const p = run([linkedRow()], [item({ dueAt })], [task({ taskKind: "note" })]);
+		expect(p.notifications).toEqual([]);
+		expect(p.taskChanges[0].set).toEqual({ dueAt });
+		expect(p.taskChanges[0].dueHistory).toHaveLength(1);
+	});
+
+	it("完了メモの提出取消も状態だけ反映し、通知しない", () => {
+		const p = run(
+			[linkedRow({ remoteState: "TURNED_IN" })],
+			[item({ remoteState: "RECLAIMED_BY_STUDENT" })],
+			[task({ taskKind: "note", status: "done" })],
+		);
+		expect(p.notifications).toEqual([]);
+		expect(p.taskChanges[0].set).toEqual({ status: "todo", submittedAt: null });
+	});
+});

@@ -17,6 +17,7 @@ const ERROR_TEXT: Record<string, string> = {
 	// タスク・科目・予定・計画
 	invalid_course: "科目が見つからない",
 	invalid_task: "タスクが見つからない",
+	task_changed: "課題が更新されたため保存できません。再読み込みしてください",
 	already_repeating: "すでに繰り返し",
 	invalid_busy_block: "予定が不正",
 	invalid_week: "週が不正",

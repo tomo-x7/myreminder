@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lt } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import * as v from "valibot";
@@ -14,6 +14,7 @@ import { courseExists, INVALID_COURSE, idParamSchema, NOT_FOUND } from "../servi
 import { createSeriesFromTask, repeatIssues } from "../services/series";
 import { closeWorkOnTask } from "../services/status";
 import { normalizeTaskKind } from "../services/task-kind";
+import { nextTaskUpdatedAt } from "../services/task-write";
 import { validate } from "../services/validate";
 
 // これらにしたら、そのタスクの作業は終わり
@@ -109,15 +110,35 @@ export const tasks = new Hono<Env>()
 			return c.json({ error: "invalid_input" as const, issues: ["status: メモは作業開始できない"] }, 400);
 		}
 		const becomingNote = taskKind === "note" && current.taskKind !== "note";
-		const patch = normalizeTaskKind({
+		// 有効値は検証に使うだけ。省略された項目を再保存しない。
+		// 別の更新が先に保存した見積もり・種類を古い値で巻き戻さないため。
+		const normalized = normalizeTaskKind({ ...rawPatch, taskKind, estimateMin });
+		const patch = {
 			...rawPatch,
-			taskKind,
-			estimateMin,
-			...(taskKind === "note" ? { releaseAt: null, minBlockMin: 1 } : {}),
+			...(taskKind === "note"
+				? {
+						// メモへの変換時は全制約を保存し、既存メモでは指定された項目だけ正規化する。
+						...(becomingNote || rawPatch.estimateMin !== undefined
+							? { estimateMin: normalized.estimateMin }
+							: {}),
+						...(becomingNote || rawPatch.completionNotify !== undefined
+							? { completionNotify: normalized.completionNotify }
+							: {}),
+						...(becomingNote || rawPatch.plannedStartAt !== undefined
+							? { plannedStartAt: normalized.plannedStartAt }
+							: {}),
+						...(becomingNote || rawPatch.releaseAt !== undefined
+							? { releaseAt: normalized.releaseAt }
+							: {}),
+						...(becomingNote || rawPatch.minBlockMin !== undefined
+							? { minBlockMin: normalized.minBlockMin }
+							: {}),
+					}
+				: {}),
 			...(becomingNote && current.status === "doing" && rawPatch.status === undefined
 				? { status: "todo" as const }
 				: {}),
-		});
+		};
 		if (patch.courseId && !(await courseExists(db, patch.courseId))) return c.json(INVALID_COURSE, 400);
 
 		const now = Date.now();
@@ -130,8 +151,18 @@ export const tasks = new Hono<Env>()
 		}
 		const update = db
 			.update(tasksTable)
-			.set({ ...patch, submittedAt, updatedAt: now })
-			.where(eq(tasksTable.id, id))
+			.set({ ...patch, submittedAt, updatedAt: nextTaskUpdatedAt(now) })
+			.where(
+				and(
+					eq(tasksTable.id, id),
+					eq(tasksTable.taskKind, current.taskKind),
+					patch.status !== undefined || becomingNote ? eq(tasksTable.status, current.status) : undefined,
+					patch.status !== undefined || becomingNote
+						? eq(tasksTable.updatedAt, current.updatedAt)
+						: undefined,
+					patch.dueAt !== undefined ? eq(tasksTable.dueAt, current.dueAt) : undefined,
+				),
+			)
 			.returning();
 
 		// 更新と同じバッチで原子的に: 締切が変わったら履歴に残す。
@@ -140,13 +171,20 @@ export const tasks = new Hono<Env>()
 		const extra: BatchItem<"sqlite">[] = [];
 		if (patch.dueAt !== undefined && patch.dueAt !== current.dueAt) {
 			extra.push(
-				db.insert(taskDueHistory).values({
-					taskId: id,
-					oldDueAt: current.dueAt,
-					newDueAt: patch.dueAt,
-					changedAt: now,
-					cause: "manual",
-				}),
+				db.insert(taskDueHistory).select(
+					db
+						.select({
+							id: sql<string>`${crypto.randomUUID()}`.as("id"),
+							taskId: tasksTable.id,
+							oldDueAt: sql<number>`${current.dueAt}`.as("old_due_at"),
+							newDueAt: sql<number>`${patch.dueAt}`.as("new_due_at"),
+							changedAt: sql<number>`${now}`.as("changed_at"),
+							cause: sql`'manual'`.as("cause"),
+						})
+						.from(tasksTable)
+						// UPDATE直後に実行し、競合で更新できなかった要求の履歴は残さない。
+						.where(and(eq(tasksTable.id, id), sql`changes() > 0`)),
+				),
 			);
 		}
 		if (
@@ -156,6 +194,7 @@ export const tasks = new Hono<Env>()
 			extra.push(...closeWorkOnTask(db, id, now));
 		}
 		const [[row]] = await db.batch([update, ...extra]);
+		if (!row) return c.json({ error: "task_changed" as const }, 409);
 		if (becomingNote) await clearNoteReminders(db, id);
 		triggerReplan(c);
 		// 完了へ遷移したときだけ Discord / Slack に報告する(再送はしない)

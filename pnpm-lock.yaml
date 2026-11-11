@@ -302,6 +302,9 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0(typescript@6.0.3)
     devDependencies:
+      '@types/node':
+        specifier: ^24.13.3
+        version: 24.19.1
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
