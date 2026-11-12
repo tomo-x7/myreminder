@@ -1,13 +1,15 @@
 import type { Course, Task, TaskPatch } from "core/api/types";
-import { FIRST_STEP_MAX, TITLE_MAX } from "core/domain/draft";
-import { CATEGORY_OPTIONS } from "core/domain/draft-types";
-import { referenceText } from "core/domain/estimate-reference";
+import { TITLE_MAX } from "core/domain/draft";
+import { taskTypeValue } from "core/domain/draft-types";
 import { STATUS_LABEL, STATUS_ORDER, type TaskStatus } from "core/domain/task-status";
 import { NOTE_MAX, useTaskForm } from "core/forms/task";
 import { useEstimateReference } from "core/queries/estimates";
 import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
-import { btnPrimary, ErrorNotice, Field, inputClass, Notice } from "../../components/ui";
+import { btnPrimary, ErrorNotice, Field, inputClass } from "../../components/ui";
+import { CoursePicker } from "./CoursePicker";
+import { EstimateHistory } from "./EstimateHistory";
+import { TaskTypeSelect } from "./TaskTypeSelect";
 
 type Props = {
 	task: Task;
@@ -20,16 +22,12 @@ type Props = {
 
 /** タスクの全項目の編集フォーム */
 export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
-	const { form, set, problems, notice, submit } = useTaskForm(task);
-	const courseName = courses.find((c) => c.id === form.courseId)?.name ?? null;
+	const { form, set, setType, problems, submit } = useTaskForm(task);
 	const reference = useEstimateReference({
 		category: form.category,
 		courseId: form.courseId,
 		seriesId: task.seriesId,
 	});
-	const refLine = reference.data ? referenceText(reference.data, { category: form.category, courseName }) : null;
-	const estimateHint =
-		[task.estimateSource === "ai" ? "AI の見積もり" : null, refLine].filter(Boolean).join(" ・ ") || undefined;
 
 	return (
 		<form
@@ -47,14 +45,13 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 					onChange={(e) => set("status", e.target.value as TaskStatus)}
 					className={inputClass}
 				>
-					{STATUS_ORDER.map((s) => (
+					{STATUS_ORDER.filter((s) => form.taskKind !== "note" || s !== "doing").map((s) => (
 						<option key={s} value={s}>
 							{STATUS_LABEL[s]}
 						</option>
 					))}
 				</select>
 			</Field>
-			{notice && <Notice tone="warn">{notice}</Notice>}
 
 			<Field label="タイトル" error={problems.title}>
 				<input
@@ -71,87 +68,73 @@ export function TaskForm({ task, courses, now, saving, error, onSave }: Props) {
 			</Field>
 
 			<div className="grid grid-cols-2 gap-2">
-				<Field label="科目">
-					<select
-						value={form.courseId ?? ""}
-						onChange={(e) => set("courseId", e.target.value || null)}
-						className={inputClass}
-					>
-						<option value="">なし</option>
-						{courses.map((c) => (
-							<option key={c.id} value={c.id}>
-								{c.name}
-							</option>
-						))}
-					</select>
-				</Field>
-				<Field label="種類">
-					<select
-						value={form.category}
-						onChange={(e) => set("category", e.target.value as Task["category"])}
-						className={inputClass}
-					>
-						{CATEGORY_OPTIONS.map((o) => (
-							<option key={o.value} value={o.value}>
-								{o.label}
-							</option>
-						))}
-					</select>
-				</Field>
-			</div>
-
-			<div className="grid grid-cols-2 gap-2">
-				<Field label="見積もり(分)" error={problems.estimateMin} hint={estimateHint}>
-					<input
-						type="number"
-						inputMode="numeric"
-						min={1}
-						value={form.estimateMin}
-						onChange={(e) => set("estimateMin", e.target.value)}
-						className={inputClass}
-					/>
-				</Field>
-				<Field label="最小単位(分)" error={problems.minBlockMin}>
-					<input
-						type="number"
-						inputMode="numeric"
-						min={1}
-						value={form.minBlockMin}
-						onChange={(e) => set("minBlockMin", e.target.value)}
-						className={inputClass}
-					/>
-				</Field>
-			</div>
-
-			<Field label="最初の一歩">
-				<input
-					type="text"
-					value={form.firstStep}
-					maxLength={FIRST_STEP_MAX}
-					onChange={(e) => set("firstStep", e.target.value)}
-					className={inputClass}
+				<CoursePicker
+					courses={courses}
+					selectedId={form.courseId}
+					disabled={saving}
+					onSelect={(course) => set("courseId", course?.id ?? null)}
 				/>
-			</Field>
-
-			<div className="grid grid-cols-2 gap-2">
-				<Field label="着手時刻">
-					<DatetimeInput
-						value={form.plannedStartAt}
-						onChange={(v) => set("plannedStartAt", v)}
-						className={inputClass}
-					/>
-				</Field>
-
-				<Field label="公開日時">
-					<DatetimeInput
-						value={form.releaseAt}
-						onChange={(v) => set("releaseAt", v)}
-						className={inputClass}
-					/>
-				</Field>
+				<TaskTypeSelect value={taskTypeValue(form)} disabled={saving} onChange={setType} />
 			</div>
 
-			<Field label="メモ">
+			{form.taskKind !== "note" && (
+				<>
+					<div className="grid grid-cols-2 gap-2">
+						<Field label="見積もり(分)" error={problems.estimateMin}>
+							<input
+								type="number"
+								inputMode="numeric"
+								min={1}
+								value={form.estimateMin}
+								onChange={(e) => set("estimateMin", e.target.value)}
+								className={inputClass}
+							/>
+						</Field>
+						<Field label="最小単位(分)" error={problems.minBlockMin}>
+							<input
+								type="number"
+								inputMode="numeric"
+								min={1}
+								value={form.minBlockMin}
+								onChange={(e) => set("minBlockMin", e.target.value)}
+								className={inputClass}
+							/>
+						</Field>
+					</div>
+
+					{reference.data && <EstimateHistory reference={reference.data} />}
+
+					<div className="grid grid-cols-2 gap-2">
+						<Field label="着手時刻">
+							<DatetimeInput
+								value={form.plannedStartAt}
+								onChange={(v) => set("plannedStartAt", v)}
+								className={inputClass}
+							/>
+						</Field>
+
+						<Field label="公開日時">
+							<DatetimeInput
+								value={form.releaseAt}
+								onChange={(v) => set("releaseAt", v)}
+								className={inputClass}
+							/>
+						</Field>
+					</div>
+
+					<label className="flex items-center gap-2">
+						<input
+							type="checkbox"
+							checked={form.completionNotify}
+							disabled={saving}
+							onChange={(e) => set("completionNotify", e.target.checked)}
+						/>
+						完了を通知
+					</label>
+				</>
+			)}
+
+			<Field label="備考">
 				<textarea
 					rows={3}
 					value={form.note}

@@ -1,12 +1,13 @@
 // ステータス(plan.md §3.7)。有効なステータスの決定と、「作業中」の開始・終了、消し忘れ対策。
 // 純粋な部分(resolveEffectiveStatus など)は DB に触れず、service.test.ts 側でテストする
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, isNotNull, isNull, or, type SQL, sql } from "drizzle-orm";
 import type { Db } from "../db";
 import { busyBlocks, notifications, sessions, tasks, type UserMode, userStatus } from "../db/schema";
 import { formatDuration } from "../notify/format";
 import { expandBusyBlocks } from "../planner/busy";
 import { DAY, JST_OFFSET, MINUTE, type Ms, type SleepWindow } from "../planner/types";
 import { getSettings } from "../settings";
+import { nextTaskUpdatedAt } from "./task-write";
 
 // ---------- 純粋関数 ----------
 
@@ -135,7 +136,20 @@ const setUserStatus = (db: Db, values: { mode: UserMode; taskId: string | null; 
 		.onConflictDoUpdate({ target: userStatus.id, set: values });
 
 /** 開いている実績の終了を now にする文。開始より前の時刻にならないようにする。taskId があればそのタスクの分だけ */
-const closeOpenSessions = (db: Db, now: Ms, only?: { taskId: string }) =>
+const taskIsClosed = (db: Db, taskId: string) =>
+	exists(
+		db
+			.select({ one: sql`1` })
+			.from(tasks)
+			.where(
+				and(
+					eq(tasks.id, taskId),
+					or(eq(tasks.taskKind, "note"), inArray(tasks.status, ["done", "submitted", "dismissed"])),
+				),
+			),
+	);
+
+const closeOpenSessions = (db: Db, now: Ms, only?: { taskId: string; requireClosed?: boolean }, when?: SQL) =>
 	db
 		.update(sessions)
 		.set({ endAt: sql`max(${sessions.startAt}, ${now})` })
@@ -144,6 +158,8 @@ const closeOpenSessions = (db: Db, now: Ms, only?: { taskId: string }) =>
 				eq(sessions.kind, "actual"),
 				isNull(sessions.endAt),
 				only ? eq(sessions.taskId, only.taskId) : undefined,
+				only?.requireClosed ? taskIsClosed(db, only.taskId) : undefined,
+				when,
 			),
 		);
 
@@ -153,11 +169,18 @@ const closeOpenSessions = (db: Db, now: Ms, only?: { taskId: string }) =>
  */
 export const closeWorkOnTask = (db: Db, taskId: string, now: Ms) =>
 	[
-		closeOpenSessions(db, now, { taskId }),
+		closeOpenSessions(db, now, { taskId, requireClosed: true }),
 		db
 			.update(userStatus)
 			.set({ mode: "normal", taskId: null, until: null })
-			.where(and(eq(userStatus.id, 1), eq(userStatus.mode, "working"), eq(userStatus.taskId, taskId))),
+			.where(
+				and(
+					eq(userStatus.id, 1),
+					eq(userStatus.mode, "working"),
+					eq(userStatus.taskId, taskId),
+					taskIsClosed(db, taskId),
+				),
+			),
 	] as const;
 
 /** 作業中(未終了)の実績。通常は高々1件 */
@@ -213,22 +236,64 @@ export type StartWorkingResult =
 
 /**
  * 作業を始める。開いている記録は進捗なしで閉じてから、新しい記録を作る。todo のタスクは doing にする。
- * 提出済み・取り下げのタスクでは始められない(done は見直しで続けることがあるので許す)
+ * 完了・取り下げの課題では始められない。再開する場合は未着手に戻す
  */
 export async function startWorking(db: Db, taskId: string, now: Ms): Promise<StartWorkingResult> {
-	const [task] = await db.select({ id: tasks.id, status: tasks.status }).from(tasks).where(eq(tasks.id, taskId));
+	const [task] = await db
+		.select({ id: tasks.id, status: tasks.status, taskKind: tasks.taskKind })
+		.from(tasks)
+		.where(eq(tasks.id, taskId));
 	if (!task) return { ok: false, error: "task_not_found" };
-	if (task.status === "submitted" || task.status === "dismissed") return { ok: false, error: "task_closed" };
+	if (
+		task.taskKind === "note" ||
+		task.status === "done" ||
+		task.status === "submitted" ||
+		task.status === "dismissed"
+	)
+		return { ok: false, error: "task_closed" };
 	const sessionId = crypto.randomUUID();
-	await db.batch([
-		closeOpenSessions(db, now),
-		db.insert(sessions).values({ id: sessionId, taskId, kind: "actual", startAt: now, endAt: null }),
-		setUserStatus(db, { mode: "working", taskId, until: null }),
+	const openTask = and(eq(tasks.id, taskId), eq(tasks.taskKind, "work"), inArray(tasks.status, ["todo", "doing"]));
+	// read後に完了・メモ化されていても、前の作業を閉じたり新しい作業を作ったりしない。
+	const [, opened] = await db.batch([
+		closeOpenSessions(db, now, undefined, exists(db.select({ one: sql`1` }).from(tasks).where(openTask))),
+		db
+			.insert(sessions)
+			.select(
+				db
+					.select({
+						id: sql<string>`${sessionId}`.as("id"),
+						taskId: tasks.id,
+						kind: sql<"actual">`'actual'`.as("kind"),
+						startAt: sql<number>`${now}`.as("start_at"),
+						endAt: sql<null>`null`.as("end_at"),
+						progress: sql<null>`null`.as("progress"),
+						review: sql<"confirmed">`'confirmed'`.as("review"),
+						edited: sql<boolean>`0`.as("edited"),
+					})
+					.from(tasks)
+					.where(openTask),
+			)
+			.returning({ id: sessions.id }),
+		db
+			.insert(userStatus)
+			.select(
+				db
+					.select({
+						id: sql<number>`1`.as("id"),
+						mode: sql<"working">`'working'`.as("mode"),
+						taskId: tasks.id,
+						until: sql<null>`null`.as("until"),
+					})
+					.from(tasks)
+					.where(openTask),
+			)
+			.onConflictDoUpdate({ target: userStatus.id, set: { mode: "working", taskId, until: null } }),
 		db
 			.update(tasks)
-			.set({ status: "doing", updatedAt: now })
-			.where(and(eq(tasks.id, taskId), eq(tasks.status, "todo"))),
+			.set({ status: "doing", updatedAt: nextTaskUpdatedAt(now) })
+			.where(and(openTask, eq(tasks.status, "todo"))),
 	]);
+	if (opened.length === 0) return { ok: false, error: "task_closed" };
 	return { ok: true, sessionId };
 }
 

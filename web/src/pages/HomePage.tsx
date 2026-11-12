@@ -59,7 +59,7 @@ function HomeBody({ plan, courses }: { plan: Plan; courses: readonly Course[] })
 	const now = useNow();
 	const tasks = useTasks();
 	const inbox = useInboxTotal();
-	const { next, nextCourse, nothingToDo, awaitingSubmit, others, bottleneck, monday } = homeView(
+	const { next, nextCourse, nothingToDo, others, bottleneck, monday } = homeView(
 		plan,
 		tasks.data ?? [],
 		courses,
@@ -88,11 +88,7 @@ function HomeBody({ plan, courses }: { plan: Plan; courses: readonly Course[] })
 						<span className={bottleneck.short ? "text-danger" : ""}>{bottleneck.text}</span>
 					</Row>
 				)}
-				{awaitingSubmit > 0 && (
-					<Row label="未提出" href="/tasks?s=done" strong>
-						<span className="text-warn">{awaitingSubmit}件</span>
-					</Row>
-				)}
+
 				<Row label="一覧" href="/tasks">
 					{others > 0 && `ほか ${others}件`}
 				</Row>

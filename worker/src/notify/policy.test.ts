@@ -14,6 +14,7 @@ import {
 	summarizeDeferred,
 	taskClosedForNotify,
 } from "./policy";
+import type { TimingModel } from "./timing";
 
 const jst = (s: string) => Date.parse(`${s.replace(" ", "T")}:00+09:00`);
 const sleep = { startMin: 60, endMin: 480 }; // 1:00-8:00
@@ -59,6 +60,98 @@ const gen = (over: Partial<PolicyInput>) => generateNotifications(base(over));
 const individual = (list: DesiredNotification[]) => list.filter((n) => n.taskId !== null);
 const at = (n: DesiredNotification) => n.scheduledAt;
 
+const learnedTiming = (enabled = true): TimingModel => ({
+	enabled,
+	observations: 1000,
+	arms: Array.from({ length: 6 }, (_, arm) => ({
+		alpha: arm === 4 ? 1001 : 1,
+		beta: arm === 4 ? 1 : 1001,
+		count: 1000,
+		successes: arm === 4 ? 1000 : 0,
+	})),
+});
+
+describe("危険通知への時刻学習の組み込み", () => {
+	const fixture = (): Partial<PolicyInput> => ({
+		now: jst("2026-10-13 12:00"),
+		tasks: [
+			task({
+				dueAt: jst("2026-10-15 23:59"),
+				plan: plan({ risk: "danger", latestStartUsual: jst("2026-10-15 12:00") }),
+			}),
+		],
+		busy: [
+			{ start: jst("2026-10-13 12:30"), end: jst("2026-10-13 14:00") },
+			{ start: jst("2026-10-13 15:00"), end: jst("2026-10-13 16:00") },
+			{ start: jst("2026-10-13 17:30"), end: jst("2026-10-13 19:00") },
+		],
+	});
+	const risks = (list: DesiredNotification[]) => list.filter((n) => n.dedupeKey.startsWith("risk:"));
+
+	it("冷起動では従来と同じ先の切れ目を使い、学習後は安全な候補内で選ぶ", () => {
+		const input = fixture();
+		const legacy = gen(input);
+		expect(gen({ ...input, timing: learnedTiming(false) })).toEqual(legacy);
+		expect(risks(legacy).map(at)).toEqual([
+			jst("2026-10-13 14:00"),
+			jst("2026-10-13 19:00"),
+			jst("2026-10-14 08:00"),
+		]);
+		const selected = gen({ ...input, timing: learnedTiming() });
+		const times = risks(selected).map(at);
+		expect(times[0]).toBe(jst("2026-10-13 16:00"));
+		expect(times).toHaveLength(3);
+		const cal = makeCalendar(input.busy ?? [], sleep);
+		const safe = cal.breakpoints(input.now as number, jst("2026-10-15 12:00"));
+		for (const t of times) expect(safe).toContain(t);
+		for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(3 * HOUR);
+		expect(gen({ ...input, timing: learnedTiming() })).toEqual(selected);
+		// ダイジェストや安全網の固定通知には学習を適用しない。
+		expect(selected.filter((n) => !n.dedupeKey.startsWith("risk:"))).toEqual(
+			legacy.filter((n) => !n.dedupeKey.startsWith("risk:")),
+		);
+	});
+
+	it("本人指定時刻のある課題では学習後も従来の通知を維持する", () => {
+		const input = fixture();
+		input.tasks = [
+			(input.tasks as PolicyTask[])[0],
+			task({
+				id: "manual",
+				plannedStartAt: jst("2026-10-13 16:00"),
+				dueAt: jst("2026-10-15 23:59"),
+				plan: plan({ risk: "danger", latestStartUsual: jst("2026-10-15 12:00") }),
+			}),
+		];
+		const legacy = gen(input).filter((n) => n.taskId === "manual");
+		expect(gen({ ...input, timing: learnedTiming() }).filter((n) => n.taskId === "manual")).toEqual(legacy);
+	});
+
+	it("学習後も送信履歴ぶんの件数と最短間隔を差し引く", () => {
+		const input = fixture();
+		input.history = [
+			{ taskId: "t1", kind: "risk", dedupeKey: "risk:t1:0", at: jst("2026-10-13 11:00"), body: "前回" },
+		];
+		const selected = risks(gen({ ...input, timing: learnedTiming() }));
+		expect(selected).toHaveLength(2);
+		for (const n of selected) expect(at(n)).toBeGreaterThanOrEqual(jst("2026-10-13 14:00"));
+		input.history.push(
+			{ taskId: "t1", kind: "risk", dedupeKey: "risk:t1:1", at: jst("2026-10-13 08:00"), body: "前々回" },
+			{ taskId: "t1", kind: "risk", dedupeKey: "risk:t1:2", at: jst("2026-10-13 05:00"), body: "その前" },
+		);
+		expect(risks(gen({ ...input, timing: learnedTiming() }))).toHaveLength(0);
+	});
+
+	it("切れ目がないときの即時fallbackは学習前後で変えない", () => {
+		const input = fixture();
+		input.busy = [];
+		(input.tasks as PolicyTask[])[0].plan = plan({ risk: "danger", latestStartUsual: jst("2026-10-13 13:00") });
+		const legacy = risks(gen(input));
+		expect(legacy.map(at)).toEqual([input.now]);
+		expect(risks(gen({ ...input, timing: learnedTiming() }))).toEqual(legacy);
+	});
+});
+
 describe("makeCalendar", () => {
 	const busy = [{ start: jst("2026-10-13 13:00"), end: jst("2026-10-13 14:30") }];
 	const cal = makeCalendar(busy, sleep);
@@ -86,7 +179,7 @@ describe("リスク別の個別通知", () => {
 		expect(individual(list).every((n) => n.dedupeKey.startsWith("due:"))).toBe(true);
 	});
 
-	it("watch: 本人の着手時刻に1回。最初の一歩が付く", () => {
+	it("watch: 本人の着手時刻に1回。旧データの最初の一歩は通知しない", () => {
 		const ps = jst("2026-10-14 20:00");
 		const list = gen({
 			tasks: [
@@ -104,7 +197,7 @@ describe("リスク別の個別通知", () => {
 		const start = list.filter((n) => n.kind === "start");
 		expect(start).toHaveLength(1);
 		expect(at(start[0])).toBe(ps);
-		expect(start[0].payload.body).toContain("まず: テンプレを開く");
+		expect(start[0].payload.body).not.toContain("テンプレを開く");
 	});
 
 	it("watch: 着手時刻がなければおすすめ着手時刻。授業中なら授業の終わりに寄せる", () => {
@@ -175,7 +268,7 @@ describe("リスク別の個別通知", () => {
 		expect(at(start[0])).toBe(ps);
 		expect(start[0].dedupeKey).toBe(`start:t1:${ps}`);
 		expect(start[0].payload.body).toContain("着手予定");
-		expect(start[0].payload.body).toContain("まず: テンプレを開く");
+		expect(start[0].payload.body).not.toContain("テンプレを開く");
 		// 着手時刻がなければ送らない(おすすめ着手時刻は注意の話)
 		expect(gen({ tasks: [relaxed({})] }).filter((n) => n.kind === "start")).toHaveLength(0);
 		// 過ぎた着手時刻・着手デッドラインより後の着手時刻は送らない
@@ -246,7 +339,7 @@ describe("リスク別の個別通知", () => {
 			expect(n.payload.body).toContain("必要 2h");
 			expect(n.payload.body).toContain("締切 10/16(金) 23:59");
 			expect(n.payload.body).toContain("着手の限界");
-			expect(n.payload.body).toContain("まず: 見出しを書く");
+			expect(n.payload.body).not.toContain("見出しを書く");
 			expect(n.payload.body).not.toContain("約");
 		}
 
@@ -367,7 +460,7 @@ describe("taskClosedForNotify", () => {
 		expect(taskClosedForNotify({ status: "todo", dueAt: now }, now)).toBe(true);
 		expect(taskClosedForNotify({ status: "doing", dueAt: now - HOUR }, now)).toBe(true);
 		expect(taskClosedForNotify({ status: "todo", dueAt: now + 1 }, now)).toBe(false);
-		expect(taskClosedForNotify({ status: "done", dueAt: now + HOUR }, now)).toBe(false);
+		expect(taskClosedForNotify({ status: "done", dueAt: now + HOUR }, now)).toBe(true);
 	});
 });
 
@@ -424,17 +517,12 @@ describe("安全網(締切ベース)", () => {
 	});
 });
 
-describe("提出確認", () => {
-	it("完了にして未提出なら、30分後と締切の3時間前", () => {
-		const doneAt = jst("2026-10-13 11:50");
+describe("完了後の通知", () => {
+	it("完了した課題の締切通知・提出確認・ダイジェストを作らない", () => {
 		const due = jst("2026-10-14 15:00");
-		const list = gen({ tasks: [task({ status: "done", updatedAt: doneAt, dueAt: due, plan: undefined })] });
-		const sc = list.filter((n) => n.kind === "submit_check");
-		expect(sc.map(at)).toEqual([doneAt + 30 * MINUTE, due - 24 * HOUR, due - 3 * HOUR].sort((a, b) => a - b));
-		expect(list.some((n) => n.kind === "critical")).toBe(false);
-		expect(sc[0].payload.title).toBe("提出は?: 英語レポート");
-		expect(sc[0].payload.body).toBe("未提出・締切 10/14(水) 15:00・明日");
-		expect(sc[1].payload.body).toBe("未提出・締切 10/14(水) 15:00・明日・残り 24h");
+		const list = gen({ tasks: [task({ status: "done", dueAt: due, plan: undefined })] });
+		expect(list.some((n) => n.taskId !== null || n.payload.body.includes("英語レポート"))).toBe(false);
+		expect(list.some((n) => n.kind === "submit_check")).toBe(false);
 	});
 });
 
@@ -587,5 +675,29 @@ describe("送信時の判断", () => {
 		expect(s.body).toBe("A\nB");
 		expect(summarizeDeferred([{ title: "A" }], 5, "まとめ").title).toBe("まとめ 1件");
 		expect(summarizeDeferred(Array.from({ length: 7 }, (_, i) => ({ title: `T${i}` }))).body).toContain("ほか2件");
+	});
+});
+
+describe("メモの催促除外", () => {
+	it("通常課題へ送る通知やまとめを保ち、メモを個別・まとめ通知へ入れない", () => {
+		const ordinary = task({
+			id: "work",
+			dueAt: jst("2026-10-14 23:59"),
+			plannedStartAt: jst("2026-10-13 13:00"),
+			plan: plan({ risk: "danger", latestStartUsual: jst("2026-10-14 12:00") }),
+		});
+		const note = task({
+			id: "note",
+			title: "通知しないメモ",
+			taskKind: "note",
+			plannedStartAt: jst("2026-10-14 12:00"),
+			plan: plan({ risk: "danger", latestStartUsual: jst("2026-10-15 12:00") }),
+		});
+		const expected = gen({ tasks: [ordinary] });
+		expect(expected.length).toBeGreaterThan(0);
+		expect(gen({ tasks: [ordinary, note] })).toEqual(expected);
+		expect(
+			taskClosedForNotify({ status: "todo", dueAt: note.dueAt, taskKind: "note" }, jst("2026-10-13 12:00")),
+		).toBe(true);
 	});
 });

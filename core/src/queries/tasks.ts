@@ -29,9 +29,9 @@ export const useTaskOptions = () => {
 	return useQuery({
 		queryKey: [...queryKeys.tasks, "options"],
 		queryFn: async () =>
-			(await unwrap(await api.api.tasks.$get({ query: { status: "todo,doing,done,submitted" } }))).map(
-				(t): TaskOption => ({ id: t.id, title: t.title }),
-			),
+			(await unwrap(await api.api.tasks.$get({ query: { status: "todo,doing,done,submitted" } })))
+				.filter((t) => t.taskKind !== "note")
+				.map((t): TaskOption => ({ id: t.id, title: t.title })),
 	});
 };
 

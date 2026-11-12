@@ -29,6 +29,7 @@ export const ingest = new Hono<Env>()
 				taskTitle: tasks.title,
 				taskDueAt: tasks.dueAt,
 				taskStatus: tasks.status,
+				taskKind: tasks.taskKind,
 			})
 			.from(ingestItems)
 			.leftJoin(tasks, eq(ingestItems.taskId, tasks.id))
@@ -44,19 +45,18 @@ export const ingest = new Hono<Env>()
 					title: r.taskTitle,
 					dueAt: r.taskDueAt,
 					status: r.taskStatus,
+					taskKind: r.taskKind ?? "work",
 				});
 			}
 		}
 
 		const plan = planIngest({ now, existing, snapshot: items, tasks: linked });
-		await applyIngestPlan(db, source, plan, now);
+		const completedTaskIds = await applyIngestPlan(db, source, plan, now);
 
 		if (plan.taskChanges.length > 0) triggerReplan(c);
-		if (plan.submittedTaskIds.length > 0) {
+		if (completedTaskIds.length > 0) {
 			c.executionCtx.waitUntil(
-				Promise.all(
-					plan.submittedTaskIds.slice(0, MAX_SUBMITTED_REPORTS).map((id) => notifySubmitted(db, id, now)),
-				),
+				Promise.all(completedTaskIds.slice(0, MAX_SUBMITTED_REPORTS).map((id) => notifySubmitted(db, id, now))),
 			);
 		}
 		return c.json(plan.result, 200);

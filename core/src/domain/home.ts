@@ -13,8 +13,6 @@ export type HomeView = {
 	nextCourse: Course | undefined;
 	/** 期限切れもなく、次の1件もない */
 	nothingToDo: boolean;
-	/** 未提出(done)の数 */
-	awaitingSubmit: number;
 	/** 次の1件のほかの未完了の数 */
 	others: number;
 	/** 山場の表示と、余裕が負か */
@@ -22,14 +20,13 @@ export type HomeView = {
 	monday: boolean;
 };
 
-export function homeView(plan: Plan, tasks: readonly Task[], courses: readonly Course[], now: number): HomeView {
+export function homeView(plan: Plan, _tasks: readonly Task[], courses: readonly Course[], now: number): HomeView {
 	const next = pickNext(plan.tasks);
 	return {
 		next,
 		nextCourse: next ? courseById(courses, next.courseId) : undefined,
 		// 期限切れだけが残っているときは「未完了なし」と言わない(期限切れの欄が主役)
 		nothingToDo: !next && plan.overdue.length === 0,
-		awaitingSubmit: tasks.filter((t) => t.status === "done").length,
 		others: plan.tasks.length - (next ? 1 : 0),
 		bottleneck: plan.bottleneck
 			? { text: bottleneckText(plan.bottleneck, now), short: plan.bottleneck.slackUsual < 0 }

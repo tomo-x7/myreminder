@@ -17,18 +17,13 @@ export function useEveningList(tasks: readonly PlanTask[], now: number) {
 	};
 }
 
-/** 1件の「終わった」「提出済みにする」。終わったら onDone(一覧に残す) */
+/** 1件の「終わった」。終わったら onDone(一覧に残す) */
 export function useEveningTask(task: PlanTask, onDone: () => void) {
 	const update = useUpdateTask();
-	const set = (status: "done" | "submitted") =>
-		update.mutate({ id: task.id, patch: { status } }, { onSuccess: status === "done" ? onDone : undefined });
-
 	return {
-		finish: () => set("done"),
-		submit: () => set("submitted"),
+		finish: (silent = false) =>
+			update.mutate({ id: task.id, patch: { status: "done", silent } }, { onSuccess: onDone }),
 		pending: update.isPending,
 		error: update.isError ? errorText(update.error) : null,
-		/** 提出済みにできた */
-		submitted: update.isSuccess && update.variables.patch.status === "submitted",
 	};
 }

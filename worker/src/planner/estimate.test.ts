@@ -155,7 +155,7 @@ describe("fitEstimateModel: 段階", () => {
 		// 科目にサンプルがあり、繰り返しにはなければ科目の値
 		expect(planningMultiplier(model, key("A", "T"), 120)).toBe(planningMultiplier(model, key("A"), 120));
 		expect(estimateBasis(model, key("A", "T"))).toEqual({ level: "course", count: 20 });
-		expect(estimateBasis(model, key("A", "S"))).toEqual({ level: "series", count: 20 });
+		expect(estimateBasis(model, key("A", "S"))).toEqual({ level: "course", count: 20 });
 		// 科目なし・繰り返しなしのタスクは、その段階を飛ばす
 		expect(estimateBasis(model, NONE)).toEqual({ level: "category", count: 20 });
 	});
@@ -171,44 +171,32 @@ describe("fitEstimateModel: 段階", () => {
 		expect(b).toBeGreaterThan(Math.SQRT2);
 	});
 
-	it("科目のサンプルが少ないうちは種類に寄り、増えるにつれて科目の値に近づく", () => {
-		const base = many(40, 1);
-		// 科目の値(比率 3)までの ln の距離
-		const distance = (n: number, shrinkK = 5) => {
-			const model = fitEstimateModel([...base, ...many(n, 3, { courseId: "A" }, 100)], DEFAULT_PRIOR, {
-				shrinkK,
-			});
+	it("科目のサンプルが少ないうちは固定事前分布に寄り、増えるにつれて科目の値に近づく", () => {
+		const distance = (n: number) => {
+			const model = fitEstimateModel(many(n, 3, { courseId: "A" }));
 			return Math.log(3) - Math.log(center(model, key("A")));
 		};
-		// 1件だけなら、科目の値よりずっと種類(ほぼ 1.0)に近い
-		expect(distance(1)).toBeGreaterThan((Math.log(3) * 3) / 4);
-		expect(distance(1)).toBeLessThan(Math.log(3));
+		expect(distance(1)).toBeGreaterThan(0);
+		expect(distance(1)).toBeLessThan(Math.log(3 / 1.3));
 		expect(distance(5)).toBeLessThan(distance(1));
 		expect(distance(20)).toBeLessThan(distance(5));
 		expect(distance(20)).toBeGreaterThan(0);
-		// shrinkK が大きいほど種類に寄る
-		expect(distance(3, 20)).toBeGreaterThan(distance(3, 5));
-		expect(distance(3, 5)).toBeGreaterThan(distance(3, 1));
 	});
 
-	it("繰り返しのサンプルが少ないうちは科目に寄り、増えるにつれて繰り返しの値に近づく", () => {
-		const base = many(40, 1, { courseId: "A" });
-		const distance = (n: number, shrinkK = 5) => {
-			const model = fitEstimateModel(
-				[...base, ...many(n, 3, { courseId: "A", seriesId: "S" }, 100)],
-				DEFAULT_PRIOR,
-				{
-					shrinkK,
-				},
+	it("新しい他科目の実績が大量に増えても、同一科目の重み・回帰・予測は変わらない", () => {
+		const own = [
+			sample(0, 0.5, { courseId: "A", estimateMin: 60 }),
+			sample(1, 0.25, { courseId: "A", category: "quiz", estimateMin: 120 }),
+		];
+		const onlyOwn = fitEstimateModel(own);
+		const mixed = fitEstimateModel([...own, ...many(1000, 4, { courseId: "B", seriesId: "S" }, 100)]);
+		for (const estimate of [30, 120, 600]) {
+			expect(planningMultiplier(mixed, key("A", "S"), estimate)).toBe(
+				planningMultiplier(onlyOwn, key("A"), estimate),
 			);
-			return Math.log(3) - Math.log(center(model, key("A", "S")));
-		};
-		expect(distance(1)).toBeGreaterThan((Math.log(3) * 3) / 4);
-		expect(distance(1)).toBeLessThan(Math.log(3));
-		expect(distance(5)).toBeLessThan(distance(1));
-		expect(distance(20)).toBeLessThan(distance(5));
-		expect(distance(20)).toBeGreaterThan(0);
-		expect(distance(3, 20)).toBeGreaterThan(distance(3, 5));
+		}
+		expect(uncertainty(mixed, key("A", "S"))).toBe(uncertainty(onlyOwn, key("A")));
+		expect(estimateBasis(mixed, key("A", "S"))).toEqual({ level: "course", count: 2 });
 	});
 
 	it("科目 A の比率 0.5 と科目 B の比率 2.0 は、同じ種類でも倍率が分かれる", () => {
@@ -225,18 +213,18 @@ describe("fitEstimateModel: 段階", () => {
 		// 科目なしのタスクは種類の値で、両者の間
 		expect(center(model, NONE)).toBeGreaterThan(a);
 		expect(center(model, NONE)).toBeLessThan(b);
-		// 別の種類の同じ科目 id は、別の科目として扱う
-		expect(estimateBasis(model, key("A", null, "quiz"))).toEqual({ level: "global", count: 20 });
+		// 種類が違っても、同じ科目の実績と予測を共有する
+		expect(estimateBasis(model, key("A", null, "quiz"))).toEqual({ level: "course", count: 10 });
+		expect(center(model, key("A", null, "quiz"))).toBe(a);
 	});
 
-	it("同じシリーズの実績が3件あれば、同じ科目の別の課題より、そのシリーズの値に近い", () => {
+	it("同じシリーズの実績も同一科目の実績にまとめ、シリーズで上書きしない", () => {
 		const samples = [...many(10, 1, { courseId: "A" }), ...many(3, 2, { courseId: "A", seriesId: "S" }, 10)];
 		const model = fitEstimateModel(samples);
 		const series = center(model, key("A", "S"));
 		const course = center(model, key("A"));
-		expect(series).toBeGreaterThan(course);
-		expect(Math.abs(Math.log(series / 2))).toBeLessThan(Math.abs(Math.log(course / 2)));
-		expect(estimateBasis(model, key("A", "S"))).toEqual({ level: "series", count: 3 });
+		expect(series).toBe(course);
+		expect(estimateBasis(model, key("A", "S"))).toEqual({ level: "course", count: 13 });
 		expect(estimateBasis(model, key("A"))).toEqual({ level: "course", count: 13 });
 	});
 });
@@ -317,10 +305,10 @@ describe("予測", () => {
 		const mid = 30 * center(model, k, 30);
 		expect(mid).toBeLessThan(30);
 		expect(mid).toBeGreaterThan(30 * 0.5);
-		// P80 はそれより長い。ただし見積もりの 30m よりは短い(下限 ×1.0 はない)
+		// P80 は中心より長い。3件では不確かさが残るが、未学習の事前分布より短い
 		const p80 = 30 * planningMultiplier(model, k, 30);
 		expect(p80).toBeGreaterThan(mid);
-		expect(p80).toBeLessThan(30);
+		expect(p80).toBeLessThan(30 * planningMultiplier(fitEstimateModel([]), k, 30));
 		// 見積もりが同じなら、見積もりを変えても倍率は同じ(b = 1)
 		expect(planningMultiplier(model, k, 30)).toBe(planningMultiplier(model, k, 90));
 	});
@@ -332,7 +320,7 @@ describe("予測", () => {
 			...many(3, 1, { category: "quiz" }, 20),
 			sample(30, 1, { estimateMin: 0 }),
 		]);
-		expect(estimateBasis(model, key("A", "S"))).toEqual({ level: "series", count: 4 });
+		expect(estimateBasis(model, key("A", "S"))).toEqual({ level: "course", count: 6 });
 		expect(estimateBasis(model, key("A", "Z"))).toEqual({ level: "course", count: 6 });
 		expect(estimateBasis(model, key("B"))).toEqual({ level: "category", count: 6 });
 		expect(estimateBasis(model, key(null, null, "quiz"))).toEqual({ level: "category", count: 3 });
@@ -403,14 +391,14 @@ describe("referenceSamples", () => {
 	];
 	const ids = (r: { items: Row[] }) => r.items.map((x) => x.taskId);
 
-	it("series → course → category の順に探し、新しい順に limit 件", () => {
-		expect(referenceSamples(rows, key("A", "S"), 3)).toMatchObject({ level: "series" });
-		expect(ids(referenceSamples(rows, key("A", "S"), 3))).toEqual(["a6", "a5", "a2"]);
+	it("同一科目をシリーズ・種類より優先し、新しい順に limit 件", () => {
+		expect(referenceSamples(rows, key("A", "S"), 3)).toMatchObject({ level: "course" });
+		expect(ids(referenceSamples(rows, key("A", "S"), 3))).toEqual(["q1", "a6", "a5"]);
 		expect(referenceSamples(rows, key("A"), 3).level).toBe("course");
-		// 種類が違えば、同じ科目 id でも別
-		expect(ids(referenceSamples(rows, key("A"), 3))).toEqual(["a6", "a5", "a4"]);
+		// 種類をまたいで、同じ科目 id の実績を使う
+		expect(ids(referenceSamples(rows, key("A"), 3))).toEqual(["q1", "a6", "a5"]);
 		expect(referenceSamples(rows, key("A", "Z", "quiz"), 3).level).toBe("course");
-		expect(ids(referenceSamples(rows, key("A", "Z", "quiz"), 3))).toEqual(["q1"]);
+		expect(ids(referenceSamples(rows, key("A", "Z", "quiz"), 3))).toEqual(["q1", "a6", "a5"]);
 		const cat = referenceSamples(rows, key(null, null), 3);
 		expect(cat.level).toBe("category");
 		expect(ids(cat)).toEqual(["n1", "b1", "a6"]);
@@ -430,8 +418,25 @@ describe("referenceSamples", () => {
 	it("limit より少なければある分だけ。入力の並びに依らず、不正なサンプルは使わない。サンプルの中身はそのまま返す", () => {
 		const bad = row("bad", 99, { courseId: "A", seriesId: "S", actualMin: 0 });
 		const got = referenceSamples([...rows].reverse().concat(bad), key("A", "S"), 10);
-		expect(ids(got)).toEqual(["a6", "a5", "a2", "a1"]);
-		expect(got.items[0]).toBe(rows[5]);
+		expect(ids(got)).toEqual(["q1", "a6", "a5", "a4", "a3", "a2", "a1"]);
+		expect(got.items[0]).toBe(rows[8]);
 		expect(referenceSamples(rows, key(null, null, "quiz"), 0).items).toEqual([]);
+	});
+	it("科目がなければ科目なしの同じシリーズを使い、別科目のシリーズは混ぜない", () => {
+		const mixed = [row("own", 10, { seriesId: "S" }), row("other-course", 11, { courseId: "B", seriesId: "S" })];
+		expect(ids(referenceSamples(mixed, key(null, "S"), 3))).toEqual(["own"]);
+		expect(referenceSamples(mixed, key(null, "S"), 3).level).toBe("series");
+		const model = fitEstimateModel(mixed);
+		expect(estimateBasis(model, key(null, "S"))).toEqual({ level: "series", count: 1 });
+		expect(estimateBasis(model, key("B", "S"))).toEqual({ level: "course", count: 1 });
+	});
+
+	it("他科目に同じシリーズがあっても、同一科目の実績を最優先する", () => {
+		const mixed = [
+			row("own", 1, { courseId: "A", category: "quiz" }),
+			...Array.from({ length: 10 }, (_, i) => row(`other-${i}`, i + 10, { courseId: "B", seriesId: "S" })),
+		];
+		expect(referenceSamples(mixed, key("A", "S"), 3).level).toBe("course");
+		expect(ids(referenceSamples(mixed, key("A", "S"), 3))).toEqual(["own"]);
 	});
 });

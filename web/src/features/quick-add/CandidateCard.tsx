@@ -3,19 +3,20 @@ import {
 	type CourseOption,
 	type DraftPatch,
 	type DraftProblems,
-	FIRST_STEP_MAX,
 	resolveCourseId,
 	selectableStarts,
 	TITLE_MAX,
 	toggleStart,
 } from "core/domain/draft";
-import { CATEGORY_OPTIONS, type Category, type Draft } from "core/domain/draft-types";
-import { referenceText } from "core/domain/estimate-reference";
+import { type Draft, taskTypePatch, taskTypeValue } from "core/domain/draft-types";
 import { useEstimateReference } from "core/queries/estimates";
 import { DatetimeInput } from "../../components/DateTimeInputs";
 import { DueLabel } from "../../components/DueLabel";
 import { RepeatFields } from "../../components/RepeatFields";
 import { btnGhost, chipClass, Field, inputClass, Notice } from "../../components/ui";
+import { CoursePicker } from "../tasks/CoursePicker";
+import { EstimateHistory } from "../tasks/EstimateHistory";
+import { TaskTypeSelect } from "../tasks/TaskTypeSelect";
 
 type Props = {
 	draft: Draft;
@@ -59,10 +60,7 @@ export function CandidateCard({
 	const courseId = resolveCourseId(draft, courses);
 	const courseKnown = courseId !== null;
 	const reference = useEstimateReference({ category: draft.category, courseId, seriesId: null });
-	const courseName = courses.find((c) => c.id === courseId)?.name ?? null;
-	const refLine = reference.data ? referenceText(reference.data, { category: draft.category, courseName }) : null;
 	const chips = selectableStarts(startSuggestions, now, draft.dueAt);
-	const listId = `courses-${draft.key}`;
 	const titleField = (
 		<Field label="タイトル" error={showProblems ? problems.title : undefined}>
 			<input
@@ -83,7 +81,6 @@ export function CandidateCard({
 			<header className="flex items-start justify-between gap-2">
 				<div className="flex flex-col gap-0.5">
 					<DuePreview dueAt={draft.dueAt} now={now} error={showProblems ? problems.due : undefined} />
-					{draft.dueText && <p className="text-xs text-sub">AI の解釈: 「{draft.dueText}」</p>}
 				</div>
 				{onRemove && (
 					<button
@@ -111,7 +108,7 @@ export function CandidateCard({
 
 			{titleFirst && titleField}
 
-			<div className="grid grid-cols-[1fr_6rem] gap-2">
+			<div className={draft.taskKind === "note" ? "grid gap-2" : "grid grid-cols-[1fr_6rem] gap-2"}>
 				<Field label="締切">
 					<DatetimeInput
 						value={draft.dueAt}
@@ -120,76 +117,44 @@ export function CandidateCard({
 						className={inputClass}
 					/>
 				</Field>
-				<Field
-					label="見積もり(分)"
-					error={showProblems ? problems.estimate : undefined}
-					hint={refLine ?? undefined}
-				>
-					<input
-						type="number"
-						inputMode="numeric"
-						min={1}
-						value={draft.estimateMin}
-						disabled={disabled}
-						onChange={(e) => onChange({ estimateMin: e.target.value })}
-						className={inputClass}
-					/>
-				</Field>
+				{draft.taskKind !== "note" && (
+					<Field label="見積もり(分)" error={showProblems ? problems.estimate : undefined}>
+						<input
+							type="number"
+							inputMode="numeric"
+							min={1}
+							value={draft.estimateMin}
+							disabled={disabled}
+							onChange={(e) => onChange({ estimateMin: e.target.value })}
+							className={inputClass}
+						/>
+					</Field>
+				)}
 			</div>
+
+			{draft.taskKind !== "note" && reference.data && <EstimateHistory reference={reference.data} />}
 
 			{!titleFirst && titleField}
 
 			<div className="grid grid-cols-2 gap-2">
-				<Field
-					label="科目"
-					hint={
-						draft.courseName.trim() !== "" &&
-						!courseKnown && <span className="text-warn">未登録(科目なしで保存)</span>
-					}
-				>
-					<input
-						type="text"
-						list={listId}
-						value={draft.courseName}
-						disabled={disabled}
-						onChange={(e) => onChange({ courseName: e.target.value })}
-						className={inputClass}
-					/>
-					<datalist id={listId}>
-						{courses.map((c) => (
-							<option key={c.id} value={c.name} />
-						))}
-					</datalist>
-				</Field>
-				<Field label="種類">
-					<select
-						value={draft.category}
-						disabled={disabled}
-						onChange={(e) => onChange({ category: e.target.value as Category })}
-						className={inputClass}
-					>
-						{CATEGORY_OPTIONS.map((o) => (
-							<option key={o.value} value={o.value}>
-								{o.label}
-							</option>
-						))}
-					</select>
-				</Field>
+				<CoursePicker
+					courses={courses}
+					selectedId={courseId}
+					valueLabel={draft.courseName}
+					onInput={(text) => onChange({ courseName: text })}
+					disabled={disabled}
+					error={draft.courseName.trim() !== "" && !courseKnown ? "未登録の科目" : undefined}
+					onSelect={(course) => onChange({ courseName: course?.name ?? "" })}
+				/>
+				<TaskTypeSelect
+					value={taskTypeValue(draft)}
+					disabled={disabled}
+					onChange={(value) => onChange(taskTypePatch(value))}
+				/>
 			</div>
 
-			<Field label="最初の一歩" error={showProblems ? problems.firstStep : undefined}>
-				<input
-					type="text"
-					value={draft.firstStep}
-					maxLength={FIRST_STEP_MAX}
-					disabled={disabled}
-					onChange={(e) => onChange({ firstStep: e.target.value })}
-					className={inputClass}
-				/>
-			</Field>
-
 			{/* 候補が取れていない(読み込み前・失敗)ときは欄ごと出さない */}
-			{startSuggestions.length > 0 && (
+			{draft.taskKind !== "note" && startSuggestions.length > 0 && (
 				<fieldset className="flex flex-col gap-1">
 					<legend className="mb-1 text-xs text-sub">いつ始める?</legend>
 					<div className="flex flex-wrap gap-1.5">
@@ -213,6 +178,18 @@ export function CandidateCard({
 						{chips.length === 0 && <p className="text-xs text-faint">候補なし</p>}
 					</div>
 				</fieldset>
+			)}
+
+			{draft.taskKind !== "note" && (
+				<label className="flex items-center gap-2">
+					<input
+						type="checkbox"
+						checked={draft.completionNotify}
+						disabled={disabled}
+						onChange={(e) => onChange({ completionNotify: e.target.checked })}
+					/>
+					完了を通知
+				</label>
 			)}
 
 			{!hideRepeat && (

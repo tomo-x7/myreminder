@@ -25,7 +25,7 @@ export { formatDuration };
 export const taskLabel = (task: { title: string; courseName?: string | null }): string =>
 	task.courseName ? `${task.courseName} ${task.title}` : task.title;
 
-/** `✅ 情報倫理 レポート 提出(作業 2h10m / 見積もり 1h30m)`。作業記録がなければ作業の部分を省く */
+/** `✅ 情報倫理 レポート 完了(作業 2h10m / 見積もり 1h30m)`。作業記録がなければ作業の部分を省く */
 export function formatSubmitted(
 	task: { title: string; courseName?: string | null },
 	actualMin: number | null,
@@ -34,7 +34,7 @@ export function formatSubmitted(
 	const parts: string[] = [];
 	if (actualMin !== null && actualMin > 0) parts.push(`作業 ${formatDuration(actualMin)}`);
 	parts.push(`見積もり ${formatDuration(estimateMin)}`);
-	return `✅ ${taskLabel(task)} 提出(${parts.join(" / ")})`;
+	return `✅ ${taskLabel(task)} 完了(${parts.join(" / ")})`;
 }
 
 export type DailyRow = { title: string; courseName?: string | null; minutes: number };
@@ -138,14 +138,34 @@ export function formatNotificationForWebhook(
  * 提出済みの報告。fire-and-forget で呼んでよい(例外は投げない)。
  * 作業時間は確定済みの actual 記録の合計(終了していないものは数えない)
  */
-export async function notifySubmitted(db: Db, taskId: string, _now: number): Promise<void> {
+export function shouldNotifyCompletion(
+	task: { status: string; completionNotify?: boolean; taskKind?: "work" | "note" },
+	silent = false,
+): boolean {
+	return (
+		(task.status === "done" || task.status === "submitted") &&
+		!silent &&
+		task.completionNotify !== false &&
+		task.taskKind !== "note"
+	);
+}
+
+export async function notifySubmitted(db: Db, taskId: string, _now: number, silent = false): Promise<void> {
+	if (silent) return;
 	try {
 		const [row] = await db
-			.select({ title: tasks.title, estimateMin: tasks.estimateMin, courseName: courses.name })
+			.select({
+				title: tasks.title,
+				estimateMin: tasks.estimateMin,
+				courseName: courses.name,
+				completionNotify: tasks.completionNotify,
+				taskKind: tasks.taskKind,
+				status: tasks.status,
+			})
 			.from(tasks)
 			.leftJoin(courses, eq(tasks.courseId, courses.id))
 			.where(eq(tasks.id, taskId));
-		if (!row) return;
+		if (!row || !shouldNotifyCompletion(row, silent)) return;
 		const spans = await db
 			.select({ startAt: sessions.startAt, endAt: sessions.endAt })
 			.from(sessions)

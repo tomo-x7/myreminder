@@ -6,6 +6,7 @@ import { FILTERS, type StatusFilter } from "core/domain/task-status";
 import { useNow } from "core/hooks/use-now";
 import { useCourses } from "core/queries/courses";
 import { useSeries } from "core/queries/series";
+import { useStartWorking, useStatus } from "core/queries/status";
 import { useTasks, useUpdateTask } from "core/queries/tasks";
 import { useState } from "react";
 import { useSearchParams } from "wouter";
@@ -28,9 +29,12 @@ function TaskList({
 }) {
 	const now = useNow();
 	const update = useUpdateTask();
+	const start = useStartWorking();
+	const status = useStatus();
 	const rows = listTasks(tasks, filter);
 	return (
 		<>
+			{start.isError && <ErrorNotice>開始失敗: {errorText(start.error)}</ErrorNotice>}
 			{update.isError && <ErrorNotice>更新失敗: {errorText(update.error)}</ErrorNotice>}
 			{rows.length === 0 ? (
 				<Empty>なし</Empty>
@@ -43,8 +47,12 @@ function TaskList({
 							course={courseById(courses, t.courseId)}
 							repeat={t.seriesId ? repeats.get(t.seriesId) : undefined}
 							now={now}
-							busy={update.isPending}
-							onSubmit={(task) => update.mutate({ id: task.id, patch: { status: "submitted" } })}
+							busy={update.isPending || start.isPending}
+							working={status.data?.mode === "working" && status.data.taskId === t.id}
+							onStart={(task) => start.mutate(task.id)}
+							onComplete={(task, silent = false) =>
+								update.mutate({ id: task.id, patch: { status: "done", silent } })
+							}
 						/>
 					))}
 				</ul>

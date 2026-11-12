@@ -22,10 +22,11 @@ export function emptyDraft(title = ""): Draft {
 		courseName: "",
 		aiCourse: null,
 		category: "other",
+		taskKind: "work",
+		completionNotify: true,
 		dueAt: null,
 		estimateMin: "60",
 		estimateTouched: false,
-		firstStep: "",
 		plannedStartAt: null,
 		repeat: emptyRepeat(),
 		dueText: null,
@@ -42,10 +43,11 @@ export function candidateToDraft(c: ParsedCandidate): Draft {
 		courseName: c.courseName ?? "",
 		aiCourse: c.courseId && c.courseName ? { id: c.courseId, name: c.courseName } : null,
 		category: c.category ?? "other",
+		taskKind: c.taskKind ?? "work",
+		completionNotify: c.completionNotify ?? true,
 		dueAt: c.dueAt,
 		estimateMin: String(c.estimateMin),
 		estimateTouched: false,
-		firstStep: c.firstStep ?? "",
 		plannedStartAt: null,
 		repeat: repeatFromCandidate(c.repeat),
 		dueText: c.dueText,
@@ -70,7 +72,6 @@ export function resolveCourseId(draft: Draft, courses: readonly CourseOption[]):
 
 /** worker の taskCreateSchema の上限 */
 export const TITLE_MAX = 200;
-export const FIRST_STEP_MAX = 200;
 
 /** AI で解析する入力方法。line=1行、text=告知文の貼り付け */
 export type ParseMode = "line" | "text";
@@ -84,16 +85,15 @@ export function draftTitle(mode: ParseMode, text: string): string {
 	return line.trim().slice(0, TITLE_MAX);
 }
 
-export type DraftProblems = RepeatProblems & { title?: string; due?: string; estimate?: string; firstStep?: string };
+export type DraftProblems = RepeatProblems & { title?: string; due?: string; estimate?: string };
 
 export function validateDraft(d: Draft): DraftProblems {
 	const problems: DraftProblems = {};
 	if (!d.title.trim()) problems.title = "タイトルが未入力";
 	else if (d.title.trim().length > TITLE_MAX) problems.title = `${TITLE_MAX}字まで`;
-	if (d.firstStep.trim().length > FIRST_STEP_MAX) problems.firstStep = `${FIRST_STEP_MAX}字まで`;
 	if (d.dueAt === null) problems.due = "締切が未入力";
 	const est = Number(d.estimateMin);
-	if (!Number.isInteger(est) || est < 1) problems.estimate = "1以上の整数";
+	if (d.taskKind !== "note" && (!Number.isInteger(est) || est < 1)) problems.estimate = "1以上の整数";
 	return { ...problems, ...validateRepeat(d.repeat, d.dueAt) };
 }
 
@@ -106,18 +106,31 @@ export function draftToInput(d: Draft, courses: readonly CourseOption[]): TaskCr
 		title: d.title.trim(),
 		courseId: resolveCourseId(d, courses),
 		category: d.category,
+		taskKind: d.taskKind,
+		completionNotify: d.taskKind === "note" ? false : d.completionNotify,
 		dueAt: d.dueAt as number,
-		estimateMin: Number(d.estimateMin),
-		estimateSource: d.fromAi && !d.estimateTouched ? "ai" : "manual",
-		firstStep: d.firstStep.trim() || null,
-		plannedStartAt: d.plannedStartAt,
+		estimateMin: d.taskKind === "note" ? 0 : Number(d.estimateMin),
+		...(d.taskKind === "note" ? { minBlockMin: 1 } : {}),
+		estimateSource: d.taskKind !== "note" && d.fromAi && !d.estimateTouched ? "ai" : "manual",
+		firstStep: null,
+		plannedStartAt: d.taskKind === "note" ? null : d.plannedStartAt,
 		...(repeat ? { repeat } : {}),
 	};
 }
 
 /** 確認カードで直せる項目 */
 export type DraftPatch = Partial<
-	Pick<Draft, "title" | "courseName" | "category" | "dueAt" | "estimateMin" | "firstStep" | "plannedStartAt">
+	Pick<
+		Draft,
+		| "title"
+		| "courseName"
+		| "category"
+		| "taskKind"
+		| "completionNotify"
+		| "dueAt"
+		| "estimateMin"
+		| "plannedStartAt"
+	>
 > & { repeat?: Partial<RepeatDraft> };
 
 /** カードの編集を適用する。直した項目に付随する更新もここでする */
@@ -125,6 +138,11 @@ export function patchDraft(d: Draft, patch: DraftPatch): Draft {
 	const { repeat, ...rest } = patch;
 	const next: Draft = { ...d, ...rest };
 	if (repeat) next.repeat = patchRepeat(d.repeat, repeat);
+	// 既存メモを課題へ変更したら通常の入力値へ戻す。切替前に入力した値は保持する。
+	if (patch.taskKind === "work" && d.taskKind === "note" && Number(d.estimateMin) === 0) {
+		next.estimateMin = "60";
+		next.completionNotify = true;
+	}
 	// 見積もりを本人が直したら "manual" で保存する
 	if (patch.estimateMin !== undefined) next.estimateTouched = true;
 	// 締切を着手の合図より前にしたら、合図は外す(締切の後に鳴らさない)

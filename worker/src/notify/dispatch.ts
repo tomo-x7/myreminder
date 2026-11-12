@@ -49,6 +49,8 @@ export type NotificationPayload = {
 	carriedAt?: number;
 	/** 上限でまとめた通知を送る「まとめ」 */
 	cappedCarry?: boolean;
+	/** 上限まとめの作成時刻。保留解除で scheduledAt を更新しても元通知との対応を保つ */
+	cappedAt?: number;
 	/** 保留が明けて「保留」にまとめた先 */
 	mergedInto?: string;
 	attempts?: number;
@@ -274,16 +276,24 @@ async function setStatus(
 }
 
 /** 通知を送る意味がなくなったタスクの ID: 提出済み・取り下げ、または締切後 */
-async function loadClosedTaskIds(db: Db, taskIds: string[], now: Ms): Promise<Set<string>> {
+async function loadTaskNotifyState(
+	db: Db,
+	taskIds: string[],
+	now: Ms,
+): Promise<{ closed: Set<string>; notes: Set<string> }> {
 	const closed = new Set<string>();
+	const notes = new Set<string>();
 	for (let i = 0; i < taskIds.length; i += CHUNK) {
 		const rows = await db
-			.select({ id: tasks.id, status: tasks.status, dueAt: tasks.dueAt })
+			.select({ id: tasks.id, status: tasks.status, dueAt: tasks.dueAt, taskKind: tasks.taskKind })
 			.from(tasks)
 			.where(inArray(tasks.id, taskIds.slice(i, i + CHUNK)));
-		for (const r of rows) if (taskClosedForNotify(r, now)) closed.add(r.id);
+		for (const r of rows) {
+			if (taskClosedForNotify(r, now)) closed.add(r.id);
+			if (r.taskKind === "note") notes.add(r.id);
+		}
 	}
-	return closed;
+	return { closed, notes };
 }
 
 /** 今日(JST)に送った通知 */
@@ -310,14 +320,16 @@ async function releaseDeferred(db: Db, now: Ms): Promise<void> {
 	if (held.length === 0) return;
 
 	const taskIds = [...new Set(held.flatMap((h) => (h.taskId ? [h.taskId] : [])))];
-	const closed = await loadClosedTaskIds(db, taskIds, now);
+	const { closed, notes } = await loadTaskNotifyState(db, taskIds, now);
 
 	const drop: string[] = [];
 	const digests: Row[] = [];
 	const rest: Row[] = [];
 	for (const h of held) {
 		const stale = h.scheduledAt < now - DEFERRED_EXPIRY;
-		const done = h.taskId !== null && closed.has(h.taskId) && TASK_BOUND_KINDS.includes(h.kind as AnyKind);
+		const done =
+			h.taskId !== null &&
+			(notes.has(h.taskId) || (closed.has(h.taskId) && TASK_BOUND_KINDS.includes(h.kind as AnyKind)));
 		if (stale || done) drop.push(h.id);
 		else if (isDigestKind(h.kind)) digests.push(h);
 		else rest.push(h);
@@ -328,7 +340,13 @@ async function releaseDeferred(db: Db, now: Ms): Promise<void> {
 	for (let i = 0; i < release.length; i += CHUNK) {
 		await db
 			.update(notifications)
-			.set({ status: "pending", scheduledAt: now })
+			.set({
+				status: "pending",
+				scheduledAt: now,
+				payload: sql`CASE WHEN json_extract(${notifications.payload}, '$.cappedCarry') = 1
+					THEN json_set(${notifications.payload}, '$.cappedAt', coalesce(json_extract(${notifications.payload}, '$.cappedAt'), ${notifications.scheduledAt}))
+					ELSE ${notifications.payload} END`,
+			})
 			.where(
 				and(
 					eq(notifications.status, "deferred"),
@@ -376,7 +394,7 @@ async function selectByPolicy(db: Db, now: Ms, due: ReturnType<typeof and>, limi
 	if (candidates.length === 0) return [];
 
 	const taskIds = [...new Set(candidates.flatMap((c) => (c.taskId ? [c.taskId] : [])))];
-	const closed = await loadClosedTaskIds(db, taskIds, now);
+	const { closed, notes } = await loadTaskNotifyState(db, taskIds, now);
 
 	const sentToday = await loadSentToday(db, now);
 	const sentRows = sentToday.map(asRow);
@@ -390,7 +408,8 @@ async function selectByPolicy(db: Db, now: Ms, due: ReturnType<typeof and>, limi
 		const row = asRow(c);
 		const staleOrClosed =
 			(!isStillWorkingRow(row) && c.scheduledAt < now - STALE_MS && !asPayload(c.payload).attempts) ||
-			(c.taskId !== null && closed.has(c.taskId) && TASK_BOUND_KINDS.includes(c.kind as AnyKind));
+			(c.taskId !== null &&
+				(notes.has(c.taskId) || (closed.has(c.taskId) && TASK_BOUND_KINDS.includes(c.kind as AnyKind))));
 		if (staleOrClosed || isDuplicate(row, sentRows)) {
 			skip.push(c.id);
 			continue;
@@ -456,6 +475,7 @@ async function scheduleCombinedIfNoDigest(db: Db, now: Ms): Promise<void> {
 			url: "/",
 			combined: true,
 			cappedCarry: true,
+			cappedAt: now,
 		},
 	});
 	// 文面は上のダイジェストの payload に入れたので、すぐ持ち越し済みにしてよい
@@ -474,6 +494,7 @@ async function uncarried(db: Db): Promise<{ id: string; title: string }[]> {
 			and(
 				eq(notifications.status, "merged"),
 				sql`json_extract(${notifications.payload}, '$.capped') = 1 AND json_extract(${notifications.payload}, '$.carriedAt') IS NULL`,
+				sql`NOT EXISTS (SELECT 1 FROM tasks WHERE tasks.id = ${notifications.taskId} AND tasks.task_kind = 'note')`,
 			),
 		);
 	return rows.map((r) => ({ id: r.id, title: asPayload(r.payload).title ?? DEFAULT_TITLES[r.kind] }));

@@ -9,6 +9,7 @@ import { DAY, HOUR, type Interval, MINUTE, type Minutes, type Ms, type Risk, typ
 import { activityDayKey, activityDayOf } from "../services/planning-helpers";
 import { sleepWindowAt } from "../services/status";
 import { formatDuration, formatHours } from "./format";
+import { selectRiskBreakpoints, type TimingModel } from "./timing";
 
 // ---------- 型 ----------
 
@@ -29,8 +30,9 @@ export type PolicyTask = {
 	id: string;
 	title: string;
 	dueAt: Ms;
-	/** 提出済み・取り下げは渡さない。done は「終わったが未提出」 */
+	/** 完了・取り下げは渡さない。done は旧呼び出しとの互換用 */
 	status: "todo" | "doing" | "done";
+	taskKind?: "work" | "note";
 	plannedStartAt: Ms | null;
 	firstStep: string | null;
 	createdAt: Ms;
@@ -68,6 +70,8 @@ export type PolicyInput = {
 	inboxPending: number;
 	/** これより先の通知は作らない(次の再計画で作る)。既定 48h */
 	horizonMs?: Ms;
+	/** 4週間の運用後に、時刻を調整できる危険通知の切れ目だけに使う。 */
+	timing?: TimingModel;
 };
 
 export type DesiredNotification = {
@@ -89,7 +93,6 @@ const RISK_MAX_PER_DAY = 3;
 /** 同じタスクの通知がこれより近いときは、優先度の高い方だけ残す */
 const PROXIMITY = 30 * MINUTE;
 /** 完了にしてから提出確認までの時間 */
-const SUBMIT_CHECK_DELAY = 30 * MINUTE;
 const CATCH_UP_WINDOW = 2 * HOUR;
 
 // ---------- 時刻の表示(JST) ----------
@@ -206,8 +209,6 @@ type RiskCtx = {
 const joinFacts = (sep: string, parts: (string | null)[]): string =>
 	parts.filter((p): p is string => p !== null).join(sep);
 
-const withFirst = (body: string, first: string | null): string => (first ? `${body}\nまず: ${first}` : body);
-
 /**
  * 危険の本文。同じタスクで続けて同じ文面にならないよう、事実は同じで先頭と並べ方だけ変えた型を順番に使う。
  * 事実が2つ(限界なし)でも3型が別の文字列になるよう、最後の型は改行で区切る
@@ -232,13 +233,14 @@ const FULL_EFFORT_VARIANTS: Variant[] = [
 
 type Candidate = { n: DesiredNotification; rank: number };
 /** 近い通知の優先度(小さいほど優先) */
-const RANK = { critical: 0, start: 1, submit: 2, safety: 3, danger: 4 } as const;
+const RANK = { critical: 0, start: 1, safety: 3, danger: 4 } as const;
 
 const taskUrl = (id: string) => `/tasks/${id}`;
 
 // ---------- 本体 ----------
 
 export function generateNotifications(input: PolicyInput): DesiredNotification[] {
+	input = { ...input, tasks: input.tasks.filter((t) => t.status !== "done" && t.taskKind !== "note") };
 	const { now } = input;
 	const horizonEnd = now + (input.horizonMs ?? DEFAULT_HORIZON);
 	const cal = makeCalendar(input.busy, input.sleep);
@@ -322,8 +324,6 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 	if (due <= now) return []; // 期限切れはダイジェストの件数だけ
 	const out: Candidate[] = [];
 	const plan = task.plan;
-	const isDone = task.status === "done";
-	const first = task.firstStep?.trim() || null;
 	const url = taskUrl(task.id);
 
 	// 1. 締切ベースの安全網(計画とは独立): 24時間前・3時間前(致命のときは1時間前も)
@@ -331,7 +331,7 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 		{ off: 24 * HOUR, tag: "24h" },
 		{ off: 3 * HOUR, tag: "3h" },
 	];
-	if (!isDone && plan?.risk === "critical") thresholds.push({ off: HOUR, tag: "1h" });
+	if (plan?.risk === "critical") thresholds.push({ off: HOUR, tag: "1h" });
 	let latestPast: (typeof thresholds)[number] | null = null;
 	for (const th of thresholds) {
 		const t = due - th.off;
@@ -343,27 +343,10 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 
 	function pushSafety(th: (typeof thresholds)[number], t: Ms) {
 		const critical = th.tag !== "24h";
-		const at = critical && !isDone ? critTime(input, t, due) : cal.snapForward(t);
+		const at = critical ? critTime(input, t, due) : cal.snapForward(t);
 		if (at >= due || (th.tag === "24h" && at > due - 3 * HOUR)) return;
 		const dueFacts = `締切 ${fmtDue(due, at)}・残り ${fmtSpan(due - at)}`;
-		if (isDone) {
-			out.push({
-				rank: RANK.submit,
-				n: {
-					dedupeKey: `due:${task.id}:${due}:${th.tag}`,
-					kind: "submit_check",
-					taskId: task.id,
-					scheduledAt: at,
-					priority: th.tag === "24h" ? 0 : 1,
-					payload: {
-						title: `提出は?: ${task.title}`,
-						body: `未提出・${dueFacts}`,
-						url,
-					},
-				},
-			});
-			return;
-		}
+
 		out.push({
 			rank: critical ? RANK.critical : RANK.safety,
 			n: {
@@ -374,37 +357,11 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 				priority: critical ? 2 : 0,
 				payload: {
 					title: critical ? `至急: ${task.title}` : `締切 ${th.tag}前: ${task.title}`,
-					body: withFirst(dueFacts, first),
+					body: dueFacts,
 					url,
 				},
 			},
 		});
-	}
-
-	// 2. 完了にしたのに未提出: 30分後に確認
-	if (isDone) {
-		const t = task.updatedAt + SUBMIT_CHECK_DELAY;
-		if (t >= now - CATCH_UP_WINDOW) {
-			const at = cal.snapForward(Math.max(t, now));
-			if (at < due) {
-				out.push({
-					rank: RANK.submit,
-					n: {
-						dedupeKey: `submit:${task.id}:30m`,
-						kind: "submit_check",
-						taskId: task.id,
-						scheduledAt: at,
-						priority: 0,
-						payload: {
-							title: `提出は?: ${task.title}`,
-							body: `未提出・締切 ${fmtDue(due, at)}`,
-							url,
-						},
-					},
-				});
-			}
-		}
-		return out;
 	}
 
 	if (!plan) return out;
@@ -436,14 +393,11 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 					priority: 0,
 					payload: {
 						title: `着手: ${task.title}`,
-						body: withFirst(
-							joinFacts("・", [
-								planned ? "着手予定" : null,
-								`必要 ${fmtNeed(plan.remainingP80)}`,
-								`締切 ${fmtDue(due, at)}`,
-							]),
-							first,
-						),
+						body: joinFacts("・", [
+							planned ? "着手予定" : null,
+							`必要 ${fmtNeed(plan.remainingP80)}`,
+							`締切 ${fmtDue(due, at)}`,
+						]),
 						url,
 					},
 				},
@@ -451,18 +405,12 @@ function taskCandidates(task: PolicyTask, input: PolicyInput, cal: Calendar): Ca
 		}
 	}
 
-	if (plan.risk === "danger") out.push(...dangerCandidates(task, plan, input, cal, first));
+	if (plan.risk === "danger") out.push(...dangerCandidates(task, plan, input, cal));
 	return out;
 }
 
 /** 危険: 切れ目ごとに、着手デッドラインまで。3時間以上あけて、24時間で最大3件。文面は毎回変える */
-function dangerCandidates(
-	task: PolicyTask,
-	plan: PolicyPlanTask,
-	input: PolicyInput,
-	cal: Calendar,
-	first: string | null,
-): Candidate[] {
+function dangerCandidates(task: PolicyTask, plan: PolicyPlanTask, input: PolicyInput, cal: Calendar): Candidate[] {
 	const { now } = input;
 	const due = task.dueAt;
 	const prefix = `risk:${task.id}:`;
@@ -483,15 +431,14 @@ function dangerCandidates(
 	const earliest = Math.max(now, lastAt + RISK_MIN_GAP);
 
 	const bps = cal.breakpoints(earliest, windowEnd, task.plannedStartAt ? [task.plannedStartAt] : []);
-	const times: Ms[] = [];
-	let cursor = earliest;
-	for (const bp of bps) {
-		if (times.length >= quota) break;
-		if (bp >= cursor) {
-			times.push(bp);
-			cursor = bp + RISK_MIN_GAP;
-		}
-	}
+	// 本人が決めた着手時刻がある課題は、従来どおり先の切れ目から選ぶ。
+	const times = selectRiskBreakpoints(
+		bps,
+		quota,
+		task.plannedStartAt === null ? input.timing : undefined,
+		`${task.id}:${due}:${nextIndex}:${jstDayIndex(now)}`,
+		RISK_MIN_GAP,
+	);
 	if (times.length === 0) {
 		// 窓の中に切れ目がない(もう過ぎている・すぐ終わる)ときは、次に空いた時刻に1回
 		const t = cal.snapForward(earliest);
@@ -512,10 +459,10 @@ function dangerCandidates(
 		};
 		// 使い終えた文面は避ける(直近の文面・この回で使った文面と同じにしない)
 		let idx = (nextIndex + i) % variants.length;
-		let body = withFirst(variants[idx](ctx), first);
+		let body = variants[idx](ctx);
 		for (let tries = 0; tries < variants.length && (recentBodies.has(body) || used.has(body)); tries++) {
 			idx = (idx + 1) % variants.length;
-			body = withFirst(variants[idx](ctx), first);
+			body = variants[idx](ctx);
 		}
 		used.add(body);
 		out.push({
@@ -555,7 +502,6 @@ function digestNotifications(input: PolicyInput, cal: Calendar): DesiredNotifica
 	const { now, tasks, digest } = input;
 	const out: DesiredNotification[] = [];
 	const open = tasks.filter((t) => t.status !== "done");
-	const doneUnsubmitted = tasks.filter((t) => t.status === "done");
 	let firstMorning = true;
 
 	for (let d = 0; d < 3; d++) {
@@ -600,17 +546,9 @@ function digestNotifications(input: PolicyInput, cal: Calendar): DesiredNotifica
 				const week = tasks.filter((t) => t.dueAt >= dayStart && t.dueAt < dayStart + 7 * DAY);
 				lines.push(`今週の締切 ${week.length > 0 ? `${week.length}件` : "なし"}`);
 			}
-			if (doneUnsubmitted.length > 0) lines.push(`未提出: ${listTitles(doneUnsubmitted)}`);
 			if (input.overdue.length > 0) lines.push(`期限切れ ${input.overdue.length}件`);
 			if (input.inboxPending > 0) lines.push(`受信箱 ${input.inboxPending}件`);
-			if (
-				lines.length > 0 &&
-				(todays.length > 0 ||
-					soon.length > 0 ||
-					doneUnsubmitted.length > 0 ||
-					input.inboxPending > 0 ||
-					outlook)
-			) {
+			if (lines.length > 0 && (todays.length > 0 || soon.length > 0 || input.inboxPending > 0 || outlook)) {
 				out.push({
 					dedupeKey: `digest:morning:${dateKey}`,
 					kind: monday ? "weekly" : "digest",
@@ -632,10 +570,9 @@ function digestNotifications(input: PolicyInput, cal: Calendar): DesiredNotifica
 		if (eveningAt < endOfDay && eveningAt >= now) {
 			const dueToday = open.filter((t) => t.dueAt >= dayStart && t.dueAt < endOfDay);
 			const plannedToday = [...todays, ...dueToday.filter((t) => !todays.includes(t))];
-			if (plannedToday.length > 0 || doneUnsubmitted.length > 0) {
+			if (plannedToday.length > 0) {
 				const lines: string[] = [];
 				if (plannedToday.length > 0) lines.push(`今日の予定: ${listTitles(plannedToday)}`);
-				if (doneUnsubmitted.length > 0) lines.push(`未提出: ${listTitles(doneUnsubmitted)}`);
 				out.push({
 					dedupeKey: `digest:evening:${dateKey}`,
 					kind: "evening",
@@ -714,8 +651,14 @@ export function isDuplicate(row: RowLike, sentToday: RowLike[]): boolean {
 }
 
 /** タスクに結びついた通知を送る意味がなくなったか: 提出済み・取り下げ、または締切を過ぎた(「至急」を締切後に届けない) */
-export function taskClosedForNotify(task: { status: string; dueAt: Ms }, now: Ms): boolean {
-	return task.status === "submitted" || task.status === "dismissed" || task.dueAt <= now;
+export function taskClosedForNotify(task: { status: string; dueAt: Ms; taskKind?: "work" | "note" }, now: Ms): boolean {
+	return (
+		task.taskKind === "note" ||
+		task.status === "done" ||
+		task.status === "submitted" ||
+		task.status === "dismissed" ||
+		task.dueAt <= now
+	);
 }
 
 /** 保留が明けたときの1通にまとめた文面。タイトルは「保留 N件」(label で変える)、本文は通知のタイトルを並べる */

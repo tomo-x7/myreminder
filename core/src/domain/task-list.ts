@@ -5,12 +5,13 @@ import { isStatusFilter, matchesFilter, STATUS_LABEL, type StatusFilter } from "
 import { formatDuration } from "./time-input";
 
 /** URL の `?s=` などの値 → 絞り込み。不明なら未完了 */
-export const parseStatusFilter = (raw: string | null): StatusFilter => (isStatusFilter(raw) ? raw : "open");
+export const parseStatusFilter = (raw: string | null): StatusFilter =>
+	raw === "submitted" ? "done" : isStatusFilter(raw) ? raw : "open";
 
-/** 一覧に出す行。締切が早い順。提出済みだけ新しい順(直近のものが上) */
+/** 一覧に出す行。締切が早い順。完了だけ新しい順(直近のものが上) */
 export function listTasks(tasks: readonly Task[], filter: StatusFilter): Task[] {
 	const rows = tasks.filter((t) => matchesFilter(t, filter)).sort((a, b) => a.dueAt - b.dueAt);
-	if (filter === "submitted") rows.reverse();
+	if (filter === "done" || filter === "submitted") rows.reverse();
 	return rows;
 }
 
@@ -18,9 +19,7 @@ export const courseById = (courses: readonly Course[], id: string | null): Cours
 	courses.find((c) => c.id === id);
 
 export type TaskRowView = {
-	/** 未提出(done)。目立たせる */
-	awaitingSubmit: boolean;
-	/** 提出済み・取り下げ。控えめにする */
+	/** 完了・取り下げ。控えめにする */
 	finished: boolean;
 	/** 未着手のときは出さない */
 	statusLabel: string | null;
@@ -31,12 +30,13 @@ export type TaskRowView = {
 };
 
 export function taskRowView(task: Task, course: Course | undefined): TaskRowView {
-	const finished = task.status === "submitted" || task.status === "dismissed";
+	const finished = task.status === "done" || task.status === "submitted" || task.status === "dismissed";
 	return {
-		awaitingSubmit: task.status === "done",
 		finished,
 		statusLabel: task.status === "todo" ? null : STATUS_LABEL[task.status],
 		closedDue: finished ? `締切 ${formatJstDateTime(task.dueAt)}` : null,
-		meta: [course?.name, formatDuration(task.estimateMin)].filter(Boolean).join(" ・ "),
+		meta: [course?.name, task.taskKind === "note" ? null : formatDuration(task.estimateMin)]
+			.filter(Boolean)
+			.join(" ・ "),
 	};
 }

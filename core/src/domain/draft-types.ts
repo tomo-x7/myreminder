@@ -1,6 +1,8 @@
 import type { TaskCreate } from "../api/types";
 import type { RepeatDraft } from "./repeat-draft";
 
+export type TaskKind = "work" | "note";
+
 export type Category = NonNullable<TaskCreate["category"]>;
 
 export const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
@@ -11,6 +13,17 @@ export const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
 	{ value: "other", label: "その他" },
 ];
 
+/** 画面では課題の分類とメモを一つの種類として選ぶ。API上の二つの値は保持する。 */
+export type TaskType = Category | "note";
+export const TASK_TYPE_OPTIONS: { value: TaskType; label: string }[] = [
+	...CATEGORY_OPTIONS,
+	{ value: "note", label: "メモ" },
+];
+export const taskTypeValue = (task: { taskKind: TaskKind; category: Category }): TaskType =>
+	task.taskKind === "note" ? "note" : task.category;
+export const taskTypePatch = (value: TaskType): { taskKind: TaskKind; category?: Category } =>
+	value === "note" ? { taskKind: "note" } : { taskKind: "work", category: value };
+
 /** 確認カード1枚分の、編集中の値。入力欄に合わせて文字列で持つ */
 export type Draft = {
 	key: string;
@@ -20,12 +33,13 @@ export type Draft = {
 	/** AI が結びつけた科目 id と、そのときの名前。名前を変えたら使わない */
 	aiCourse: { id: string; name: string } | null;
 	category: Category;
+	taskKind: TaskKind;
+	completionNotify: boolean;
 	/** 締切(epoch ms)。未入力なら null。入力欄の文字列との変換は画面の層でする */
 	dueAt: number | null;
 	estimateMin: string;
 	/** 本人が見積もりを直したら "manual" で保存する */
 	estimateTouched: boolean;
-	firstStep: string;
 	plannedStartAt: number | null;
 	/** 繰り返し。手入力のカードは「なし」、AI は文に書いてあれば既定値に入れる */
 	repeat: RepeatDraft;

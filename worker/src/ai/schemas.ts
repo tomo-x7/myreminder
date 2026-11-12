@@ -112,7 +112,6 @@ export const candidatesJsonSchema = {
 					due: nullable("string"),
 					dueText: nullable("string"),
 					estimateMin: nullable("number"),
-					firstStep: nullable("string"),
 					repeat: {
 						anyOf: [
 							{
@@ -128,17 +127,7 @@ export const candidatesJsonSchema = {
 					},
 					confidence: { type: "number" },
 				},
-				required: [
-					"title",
-					"courseName",
-					"category",
-					"due",
-					"dueText",
-					"estimateMin",
-					"firstStep",
-					"repeat",
-					"confidence",
-				],
+				required: ["title", "courseName", "category", "due", "dueText", "estimateMin", "repeat", "confidence"],
 			},
 		},
 	},
