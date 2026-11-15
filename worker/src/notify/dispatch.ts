@@ -1,7 +1,7 @@
 // notifications テーブルの「送る時刻が来た pending」を FCM に流す。
 // 送る前にステータスと上限を見る(#16): 作業中・取り込み中・おやすみは保留(deferred)、保留が明けたら1通にまとめる(merged)、
 // 致命以外の個別通知は1日の上限を超えたらまとめる。判断そのものは policy.ts の純粋関数
-import { and, asc, desc, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, inArray, lte, or, sql } from "drizzle-orm";
 import { startOfJstDay } from "../ai/jst";
 import { type Db, getDb } from "../db";
 import { type NOTIFICATION_KINDS, notifications, pushTokens, tasks } from "../db/schema";
@@ -375,20 +375,44 @@ async function releaseDeferred(db: Db, now: Ms): Promise<void> {
 	if (rest.length >= 2) {
 		const titles = rest.map((r) => ({ title: asPayload(r.payload).title ?? DEFAULT_TITLES[r.kind] }));
 		const id = crypto.randomUUID();
-		await db.insert(notifications).values({
-			id,
-			kind: "digest",
-			priority: 0,
-			scheduledAt: now,
-			status: "pending",
-			payload: { ...summarizeDeferred(titles), url: "/" },
-		});
-		await setStatus(
-			db,
-			rest.map((r) => r.id),
-			"merged",
-			{ mergedInto: id },
-		);
+		// 読み取り後に別の実行が一部でも取得・削除したら、古い集合ではまとめない。
+		// IDは1個のJSONパラメータにして、100件を超えてもD1の束縛上限を超えない。
+		const ids = JSON.stringify(rest.map((r) => r.id));
+		const sourceIds = sql`${notifications.id} IN (SELECT value FROM json_each(${ids}))`;
+		const allDeferred = sql`(SELECT count(*) FROM notifications source
+   WHERE source.status = 'deferred'
+   AND source.id IN (SELECT value FROM json_each(${ids}))) = ${rest.length}`;
+		const payload = JSON.stringify({ ...summarizeDeferred(titles), url: "/" });
+		await db.batch([
+			db.insert(notifications).select(
+				db
+					.select({
+						id: sql<string>`${id}`.as("id"),
+						taskId: sql<null>`null`.as("task_id"),
+						kind: sql<"digest">`'digest'`.as("kind"),
+						priority: sql<number>`0`.as("priority"),
+						scheduledAt: sql<number>`${now}`.as("scheduled_at"),
+						status: sql<"pending">`'pending'`.as("status"),
+						payload: sql`${payload}`.as("payload"),
+					})
+					.from(notifications)
+					.where(and(eq(notifications.status, "deferred"), sourceIds, allDeferred))
+					.limit(1),
+			),
+			db
+				.update(notifications)
+				.set({
+					status: "merged",
+					payload: sql`json_patch(coalesce(${notifications.payload}, '{}'), ${JSON.stringify({ mergedInto: id })})`,
+				})
+				.where(
+					and(
+						eq(notifications.status, "deferred"),
+						sourceIds,
+						exists(db.select({ one: sql`1` }).from(notifications).where(eq(notifications.id, id))),
+					),
+				),
+		]);
 	}
 }
 
