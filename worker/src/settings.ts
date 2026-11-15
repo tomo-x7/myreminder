@@ -1,6 +1,6 @@
 // 設定(key/value の settings テーブル)。通知やプランナーはここから読む。
 // 1キー1行・値は JSON。保存されていない/形が壊れているキーは既定値にフォールバックする
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 import type { Db } from "./db";
 import { settings } from "./db/schema";
@@ -34,7 +34,7 @@ const KEYS = Object.keys(SETTINGS_DEFAULTS) as (keyof Settings)[];
 
 /** 全設定を返す。未保存・不正な値は既定値 */
 export async function getSettings(db: Db): Promise<Settings> {
-	const rows = await db.select().from(settings);
+	const rows = await db.select().from(settings).where(inArray(settings.key, KEYS));
 	const stored = new Map(rows.map((r) => [r.key, r.value]));
 	const result: Record<string, unknown> = {};
 	for (const key of KEYS) {
@@ -55,4 +55,17 @@ export async function updateSettings(db: Db, partial: SettingsUpdateInput): Prom
 	);
 	if (first) await db.batch([first, ...rest]);
 	return getSettings(db);
+}
+
+/** cron一回の中でだけ設定を共有する。失敗した取得は次のステップで再試行できる。 */
+export type SettingsLoader = () => Promise<Settings>;
+export function createSettingsLoader(db: Db): SettingsLoader {
+	let pending: Promise<Settings> | undefined;
+	return () => {
+		pending ??= getSettings(db).catch((error) => {
+			pending = undefined;
+			throw error;
+		});
+		return pending;
+	};
 }
