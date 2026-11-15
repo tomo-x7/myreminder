@@ -6,7 +6,7 @@ import { courses, sessions, settings, tasks, type WebhookEvent, webhooks as webh
 import { MINUTE } from "../planner/types";
 import type { WebhookKind } from "../schemas/webhook";
 import { activityDayKey, activityDayOf, activityDayStart } from "../services/planning-helpers";
-import { getSettings } from "../settings";
+import { getSettings, type SettingsLoader } from "../settings";
 import { formatDuration } from "./format";
 
 const DISCORD_LIMIT = 2000;
@@ -243,9 +243,13 @@ export function decideDailySummary(
  * 作業中の記録があれば終わるまで待つ(睡眠の始まりまで)。作業がなければ送らずに、その日は済みの印だけ付ける
  * (夜の時刻のあとに始めた作業を、始めたばかりの「1m」で報告しないため)
  */
-export async function sendDailySummaryIfDue(db: Db, now: number): Promise<void> {
+export async function sendDailySummaryIfDue(
+	db: Db,
+	now: number,
+	loadSettings: SettingsLoader = () => getSettings(db),
+): Promise<void> {
 	try {
-		const cfg = await getSettings(db);
+		const cfg = await loadSettings();
 		const wakeMin = cfg.sleep.endMin;
 		const day = activityDayOf(now, wakeMin);
 		const dayStart = activityDayStart(day, wakeMin);

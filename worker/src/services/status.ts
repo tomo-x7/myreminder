@@ -6,7 +6,7 @@ import { busyBlocks, notifications, sessions, tasks, type UserMode, userStatus }
 import { formatDuration } from "../notify/format";
 import { expandBusyBlocks } from "../planner/busy";
 import { DAY, JST_OFFSET, MINUTE, type Ms, type SleepWindow } from "../planner/types";
-import { getSettings } from "../settings";
+import { getSettings, type Settings, type SettingsLoader } from "../settings";
 import { nextTaskUpdatedAt } from "./task-write";
 
 // ---------- 純粋関数 ----------
@@ -122,9 +122,8 @@ export function remainingEstimateMin(estimateMin: number, lastProgress: number |
 
 // ---------- DB ----------
 
-/** user_status の行(id=1)。なければ作る */
+/** user_status の行(id=1)。未保存なら通常として扱う。 */
 async function readUserStatus(db: Db): Promise<ManualStatus> {
-	await db.insert(userStatus).values({ id: 1 }).onConflictDoNothing();
 	const [row] = await db.select().from(userStatus).where(eq(userStatus.id, 1));
 	return { mode: row?.mode ?? "normal", taskId: row?.taskId ?? null, until: row?.until ?? null };
 }
@@ -199,11 +198,11 @@ export async function findOpenSessions(db: Db) {
 		.orderBy(desc(sessions.startAt));
 }
 
-export async function getEffectiveStatus(db: Db, now: Ms): Promise<EffectiveStatus> {
+export async function getEffectiveStatus(db: Db, now: Ms, cfg?: Promise<Settings>): Promise<EffectiveStatus> {
 	const [manual, [open], settings, blocks] = await Promise.all([
 		readUserStatus(db),
 		findOpenSessions(db),
-		getSettings(db),
+		cfg ?? getSettings(db),
 		db.select().from(busyBlocks),
 	]);
 	// 終わりを正しく出すため、now で区切らずに先の1日まで展開する
@@ -350,11 +349,12 @@ export const STATUS_URL = "/status";
 export async function checkWorkingSessions(
 	db: Db,
 	now: Ms,
+	loadSettings: SettingsLoader = () => getSettings(db),
 ): Promise<{ notified: string[]; markedForReview: string[] }> {
 	const open = await findOpenSessions(db);
 	const result = { notified: [] as string[], markedForReview: [] as string[] };
 	if (open.length === 0) return result;
-	const { sleep } = await getSettings(db);
+	const { sleep } = await loadSettings();
 	const sleeping = sleepWindowAt(sleep, now);
 
 	for (const s of open) {

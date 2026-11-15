@@ -5,6 +5,7 @@ import { replanNotifications } from "./notify/replan";
 import { sendDailySummaryIfDue } from "./notify/webhook";
 import { materializeSeries } from "./services/series";
 import { checkWorkingSessions } from "./services/status";
+import { createSettingsLoader } from "./settings";
 
 /**
  * 毎分の cron から呼ばれる。ステップごとに try/catch して、1つが落ちても残りを動かす。
@@ -13,20 +14,22 @@ import { checkWorkingSessions } from "./services/status";
  */
 export async function runScheduled(event: ScheduledController, env: Bindings, _ctx: ExecutionContext): Promise<void> {
 	const now = event.scheduledTime;
+	const db = getDb(env);
+	const loadSettings = createSettingsLoader(db);
 	const steps: { name: string; run: () => Promise<unknown> }[] = [
 		// 作業中の消し忘れ確認が作る通知を、同じ回で送れるよう先に動かす
-		{ name: "checkWorkingSessions", run: () => checkWorkingSessions(getDb(env), now) },
+		{ name: "checkWorkingSessions", run: () => checkWorkingSessions(db, now, loadSettings) },
 		// 時間の経過でリスクや切れ目が変わるので、毎時0分に作り直す(JST は +9:00 固定なので UTC の分と同じ)
 		...(new Date(now).getUTCMinutes() === 0
 			? [
 					// 繰り返しの先の回を作ってから再計画する
-					{ name: "materializeSeries", run: () => materializeSeries(getDb(env), now) },
-					{ name: "replanNotifications", run: () => replanNotifications(getDb(env), now) },
+					{ name: "materializeSeries", run: () => materializeSeries(db, now) },
+					{ name: "replanNotifications", run: () => replanNotifications(db, now) },
 				]
 			: []),
-		{ name: "dispatchDueNotifications", run: () => dispatchDueNotifications(env, now) },
+		{ name: "dispatchDueNotifications", run: () => dispatchDueNotifications(env, now, { db, loadSettings }) },
 		// Discord / Slack へのその日の作業時間の報告(夜のダイジェストの時刻以降、1日1回)
-		{ name: "sendDailySummaryIfDue", run: () => sendDailySummaryIfDue(getDb(env), now) },
+		{ name: "sendDailySummaryIfDue", run: () => sendDailySummaryIfDue(db, now, loadSettings) },
 	];
 	for (const step of steps) {
 		try {

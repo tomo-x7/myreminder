@@ -1,14 +1,14 @@
 // notifications テーブルの「送る時刻が来た pending」を FCM に流す。
 // 送る前にステータスと上限を見る(#16): 作業中・取り込み中・おやすみは保留(deferred)、保留が明けたら1通にまとめる(merged)、
 // 致命以外の個別通知は1日の上限を超えたらまとめる。判断そのものは policy.ts の純粋関数
-import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte, or, sql } from "drizzle-orm";
 import { startOfJstDay } from "../ai/jst";
 import { type Db, getDb } from "../db";
 import { type NOTIFICATION_KINDS, notifications, pushTokens, tasks } from "../db/schema";
 import type { Bindings } from "../env";
 import { DAY, HOUR, type Ms } from "../planner/types";
 import { getEffectiveStatus } from "../services/status";
-import { getSettings } from "../settings";
+import { getSettings, type SettingsLoader } from "../settings";
 import { DEFAULT_APP_ORIGIN, isFcmConfigured, type PushMessage, sendToToken } from "./fcm";
 import {
 	type AnyKind,
@@ -107,7 +107,7 @@ function buildMessage(n: {
 export async function dispatchDueNotifications(
 	env: Bindings,
 	now: number,
-	opts: { onlyIds?: string[] } = {},
+	opts: { onlyIds?: string[]; db?: Db; loadSettings?: SettingsLoader } = {},
 ): Promise<DispatchSummary> {
 	if (!isFcmConfigured(env)) {
 		// 設定前に貯まった通知を、後から一斉に送らないよう pending のまま残して何もしない
@@ -115,7 +115,22 @@ export async function dispatchDueNotifications(
 		return { configured: false, notifications: [] };
 	}
 
-	const db = getDb(env);
+	const db = opts.db ?? getDb(env);
+	// 通知も保留もない回は、宛先・設定・状態・予定を組み立てない。
+	// deferredだけが残った回は、保留解除の判定へ進める。
+	if (!opts.onlyIds) {
+		const [queued] = await db
+			.select({ id: notifications.id })
+			.from(notifications)
+			.where(
+				or(
+					and(eq(notifications.status, "pending"), lte(notifications.scheduledAt, now)),
+					eq(notifications.status, "deferred"),
+				),
+			)
+			.limit(1);
+		if (!queued) return { configured: true, notifications: [] };
+	}
 	const tokens = (await db.select({ token: pushTokens.token }).from(pushTokens)).map((t) => t.token);
 	// 「すべての通知」の webhook(プッシュと同じ内容を一緒に送る先)。実行の最初に1回だけ読む
 	const mirrorTargets = await loadMirrorTargets(db);
@@ -145,7 +160,7 @@ export async function dispatchDueNotifications(
 	const limit = Math.max(1, Math.floor(MAX_SENDS_PER_RUN / Math.max(1, tokens.length + mirrorTargets.length)));
 	let selected: (typeof notifications.$inferSelect)[];
 	if (policy) {
-		selected = await selectByPolicy(db, now, due, limit);
+		selected = await selectByPolicy(db, now, due, limit, opts.loadSettings);
 	} else {
 		selected = await db
 			.select()
@@ -381,8 +396,15 @@ async function releaseDeferred(db: Db, now: Ms): Promise<void> {
  * 時刻が来た pending のうち、いま送るものを選ぶ。送らないものは状態を変える:
  * 古い・提出済みのタスク・重複 → skipped、ステータスで保留 → deferred、1日の上限超え → merged(capped)
  */
-async function selectByPolicy(db: Db, now: Ms, due: ReturnType<typeof and>, limit: number): Promise<Row[]> {
-	const [status, cfg] = await Promise.all([getEffectiveStatus(db, now), getSettings(db)]);
+async function selectByPolicy(
+	db: Db,
+	now: Ms,
+	due: ReturnType<typeof and>,
+	limit: number,
+	loadSettings: SettingsLoader = () => getSettings(db),
+): Promise<Row[]> {
+	const settings = loadSettings();
+	const [status, cfg] = await Promise.all([getEffectiveStatus(db, now, settings), settings]);
 	if (status.mode === "normal") await releaseDeferred(db, now);
 
 	const candidates = await db
