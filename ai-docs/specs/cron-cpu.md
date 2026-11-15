@@ -27,3 +27,13 @@ SQLite/D1ラッパーで、作業・通知・保留なし、日次集計前、�
 同じローカルSQLite、ダミーFCM設定、宛先1件、作業・通知なし、12:01 JSTで旧mainと変更後を比較した。100回×4組の通常回で、D1操作は12→3回（75%減）。ウォーム側のローカルCPUは約0.74→0.22ms/回だった。外部通信は例外に置換して禁止した。これはローカルNodeの参考値であり、Cloudflare本番のCPUや10ms以内の完走保証ではない。デプロイ後はWorkers AnalyticsのCPU超過件数・CPU分布で効果を確認する。
 
 本番DB・設定の変更、実通知、デプロイはこの作業では行わない。
+
+## 自動実行ログの抑制
+
+Workers Logs に毎分出る `* * * * *` は Cron のスケジュール文字列を持つ自動 invocation log。Cron の頻度や処理は変えず、`worker/wrangler.jsonc` の `observability.logs.invocation_logs` を `false` にして、この自動ログを無効にする。HTTP リクエストを含む自動 invocation log 全体が対象となる。
+
+`observability.enabled`、`observability.logs.enabled` は `true`、サンプリング率は `1` を維持する。アプリが明示的に出す `console.error` / `console.warn` などは引き続き収集する。障害調査に必要なエラーログを削除したり、全ログを無効化したりしない。
+
+この設定により、自動 invocation log に含まれる各実行の結果・所要時間などの履歴は Workers Logs に新たに保存されなくなる。既存ログの削除操作ではなく、反映後の自動ログ生成を止める変更である。CPU 時間・実行回数・エラー率などの集計は Workers Analytics で引き続き確認する。ログの抑制だけで CPU 超過が解決したとは判断せず、処理の改善は別途計測する。
+
+同梱 Wrangler の `config-schema.json` は `observability.logs.invocation_logs` を boolean と定義し、`false` で invocation logs を無効化すると説明している。ローカル設定の変更だけでは本番に反映されず、マージ後のデプロイで有効になる。

@@ -26,6 +26,12 @@
 	"ai": { "binding": "AI" },
 	"observability": {
 		"enabled": true,
-		"head_sampling_rate": 1
+		"head_sampling_rate": 1,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			// 毎分の Cron を含む自動実行ログだけ止め、console.error/warn は残す
+			"invocation_logs": false
+		}
 	}
 }
