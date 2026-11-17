@@ -30,6 +30,10 @@ export class LocalD1 {
 	prepare(query: string) {
 		const statement = this.sqlite.prepare(query);
 		let params: SQLInputValue[] = [];
+		const execute = () => {
+			statement.setReturnArrays(false);
+			return { success: true, results: statement.all(...params) };
+		};
 		return {
 			query,
 			bind(...values: SQLInputValue[]) {
@@ -41,9 +45,9 @@ export class LocalD1 {
 				statement.setReturnArrays(true);
 				return statement.all(...params);
 			},
+			execute,
 			async all() {
-				statement.setReturnArrays(false);
-				return { success: true, results: statement.all(...params) };
+				return execute();
 			},
 			async run() {
 				return { success: true, results: [], meta: statement.run(...params) };
@@ -69,7 +73,8 @@ export class LocalD1 {
 		this.sqlite.exec("BEGIN");
 		try {
 			const results = [];
-			for (const statement of statements) results.push(await statement.all());
+			// D1 batchは途中に他の要求のSQLを挟まない。SQLiteでも同期に実行する。
+			for (const statement of statements) results.push(statement.execute());
 			this.sqlite.exec("COMMIT");
 			return results;
 		} catch (error) {
